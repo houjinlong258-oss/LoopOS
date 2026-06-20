@@ -98,6 +98,25 @@ LoopOS should own its internal contracts:
 
 Adapters may translate to and from third-party systems, but the core runtime should never depend on their private implementation details.
 
+## Hermes Agent
+
+### What to Reuse
+
+- Persist successful and failed trajectories separately so skill extraction can require proven completion.
+- Compress only bounded middle history while preserving initial intent and final actions.
+- Treat skill discovery as a cached registry with deterministic duplicate handling and explicit reload.
+- Bind edit approval to one run/session and keep sensitive paths outside auto-approval.
+
+### What Not to Reuse
+
+- Do not import the Hermes agent loop, gateway, provider matrix, or terminal backends.
+- Do not store conversational scratchpads or model chain-of-thought in LoopOS traces.
+- Do not use Hermes skill text as LoopOS internal protocol; LoopOS skills remain structured AIL steps.
+
+### Integration Strategy
+
+Apply these patterns inside LoopOS-owned TraceStore, SkillProposal, Context Compiler, and approval signals. Keep the Hermes source snapshot ignored and reference-only.
+
 ## Shortest Path to MVP
 
 Build the native Python loop first, with mock LLM/planner behavior. Add terminal execution only after safety policy exists. Add memory governance before any persistent memory writes. Add optional integrations last.

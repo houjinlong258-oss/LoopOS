@@ -7,6 +7,7 @@
 - `letta-0.16.8/letta-0.16.8`: Letta Python source snapshot with agents, schemas, memory-oriented services, CLI, adapters, and server code.
 - `zep-main/zep-main`: Zep source snapshot with memory-related integrations, examples, ontology assets, benchmarks, and MCP/plugin material.
 - `projectmem-0.1.5/projectmem-0.1.5`: Project memory CLI/server package with models, storage, search, precheck, commands, and tests.
+- `hermes-agent-2026.6.19/hermes-agent-2026.6.19`: local Hermes Agent source snapshot used only to study trajectory compression, skill lifecycle, and session-scoped edit approval.
 - `loopos`: previously contained only project documents. This MVP adds the actual Python package under the same directory.
 
 ## Detected Projects
@@ -18,6 +19,7 @@
 | Letta | Python | `letta/agents`, `letta/schemas`, `letta/services` | agent state, working/archival memory concepts, tool calling |
 | Zep | Python, TypeScript, docs/assets | `integrations/`, `benchmarks/`, `mcp/` | temporal and graph-like memory patterns, session/user scoped memory |
 | projectmem | Python | `src/projectmem`, `tests` | event-sourced project memory, pre-action checks, compact context injection |
+| Hermes Agent | Python, optional services | `run_agent.py`, `agent/`, `trajectory_compressor.py` | trajectory compression, skill bundles, memory providers, terminal backends, edit approval |
 
 ## Language/Runtime Summary
 
@@ -31,6 +33,7 @@ The root LoopOS project is now Python-only for the MVP. Third-party snapshots in
 - Memory: borrow Letta's working versus archival memory, Zep's temporal/session memory, and projectmem's event-sourced pre-action judgement.
 - MCP/tool protocol: borrow protocol-shaped tool specs and router boundaries; do not depend on a full MCP SDK in the MVP.
 - Event/log system: use JSONL events first for debuggability and deterministic tests.
+- Trajectory/skill lifecycle: borrow Hermes' completed/failed trace separation, bounded compression, registry caching, and session-scoped approval without copying its runtime.
 
 ## Risk Areas
 
@@ -39,6 +42,7 @@ The root LoopOS project is now Python-only for the MVP. Third-party snapshots in
 - LangGraph should be optional because the MVP loop is simpler and easier to test directly.
 - Memory writes can pollute future context unless governance enforces confidence, provenance, dedupe, versioning, and status.
 - Terminal execution is the highest risk area and must remain behind policy checks.
+- Hermes is a large independent runtime and must remain an ignored reference snapshot, not a LoopOS dependency.
 
 ## Recommended MVP Path
 

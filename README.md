@@ -2,6 +2,8 @@
 
 LoopOS is a Python MVP for a terminal-native agent runtime. It is not a chatbot shell. The runtime converts goals into structured AI-ISA instructions, executes them through a state machine, gates terminal actions through a safety policy, records events, and writes long-term memory through governance.
 
+The current upgrade target is a deterministic Agent OS Kernel: runs behave as managed processes, external actions are syscalls, scheduling is explicit, and traces can be replayed without repeating side effects.
+
 ## Current MVP
 
 - Typed AI-ISA schema with validation and JSON round-tripping.
@@ -16,6 +18,7 @@ LoopOS is a Python MVP for a terminal-native agent runtime. It is not a chatbot 
 - MCP-like tool registry/router abstraction.
 - CLI/FLI commands with Typer/Rich support and standard-library fallback.
 - Optional adapters for OpenHands, LangGraph, Letta, Zep, and projectmem.
+- Kernel process, scheduler, syscall, trace, replay, and approval primitives are the next compatibility-preserving layer.
 
 ## Quickstart
 
@@ -73,6 +76,8 @@ See `docs/safety.md` for details.
 - `docs/ai-isa.md`
 - `docs/LoopOS_Fusion_Codex_Prompts.md`
 - `docs/LoopOS_Policy_OS.md`
+- `docs/LoopOS_Kernel_Level_Codex_Prompt.md`
+- `docs/architecture-kernel.md`
 - `docs/memory.md`
 - `docs/memory-governance.md`
 - `docs/llm-provider.md`

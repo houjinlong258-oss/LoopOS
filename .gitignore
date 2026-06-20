@@ -18,3 +18,10 @@ langgraph-1.2.6/
 letta-0.16.8/
 zep-main/
 projectmem-0.1.5/
+hermes-agent-*/
+hermes-agent-*.zip
+
+# Local execution-planning notes.
+task_plan.md
+findings.md
+progress.md

@@ -61,6 +61,9 @@ loopos/
   memory/
   mcp/
   policy_os/
+  kernel/
+  context/
+  syscalls/
   integrations/
 policies/
 tests/
@@ -73,15 +76,24 @@ Goal
 -> compile into AIL runtime context
 -> compile context
 -> apply Policy OS constraints
--> compile or plan next AI-ISA instruction
--> validate AI-ISA / AIL instruction
--> execute instruction
+-> compile or plan next AIL / AI-ISA instruction
+-> validate and normalize the instruction
+-> schedule the instruction
+-> route external actions through a syscall
 -> observe output
 -> evaluate progress
--> update state
+-> apply an explicit state transition
 -> write governed memory/event
 -> continue or terminate
 ```
+
+Kernel invariants:
+- every external action is a syscall
+- every syscall is policy checked
+- every state transition is logged
+- every durable memory or skill write is governed
+- every loop is bounded and schedulable
+- every run is replayable without repeating side effects
 
 ## AIL Rules
 
@@ -102,6 +114,8 @@ Rules:
 - `CALL_TOOL` requires routing or policy metadata.
 - `STORE_MEMORY` cannot write durable memory directly; it must create a proposal or explicit write request.
 - AIL codec adapters must preserve AI-ISA round-tripping.
+- Kernel AIL operations use dotted names such as `GOAL.SET`, `TERM.EXEC`, and `LOOP.HALT`.
+- Legacy AI-ISA operation names are accepted only through compatibility adapters.
 
 ## AI-ISA Minimum Instructions
 
@@ -169,6 +183,7 @@ Dangerous examples:
 
 All terminal commands must pass through a permission policy.
 Policy OS decisions must not be bypassed by terminal, file, git, memory, or MCP paths.
+Dry-run and replay paths must never execute a syscall adapter with side effects.
 
 ## Memory Rules
 
