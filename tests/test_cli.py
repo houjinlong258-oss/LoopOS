@@ -228,6 +228,48 @@ class CliTests(unittest.TestCase):
             self.assertEqual(review.returncode, 0)
             self.assertIn('"high_risk": true', review.stdout)
 
+            todo = self.run_cli(
+                "tasks",
+                "todo",
+                task["id"],
+                "--text",
+                "Run checks",
+                "--data-dir",
+                tmp,
+            )
+            self.assertEqual(todo.returncode, 0)
+            todo_payload = json.loads(todo.stdout)
+            todo_id = todo_payload["todos"][0]["id"]
+
+            done = self.run_cli(
+                "tasks",
+                "done",
+                task["id"],
+                "--text",
+                todo_id,
+                "--data-dir",
+                tmp,
+            )
+            self.assertEqual(done.returncode, 0)
+            self.assertIn('"status": "done"', done.stdout)
+
+            report = self.run_cli(
+                "tasks",
+                "report",
+                task["id"],
+                "--content",
+                "All checks passed.",
+                "--ready",
+                "--data-dir",
+                tmp,
+            )
+            self.assertEqual(report.returncode, 0)
+            self.assertIn('"type": "report"', report.stdout)
+
+            artifacts = self.run_cli("tasks", "artifacts", task["id"], "--data-dir", tmp)
+            self.assertEqual(artifacts.returncode, 0)
+            self.assertIn("All checks passed.", artifacts.stdout)
+
     def test_provider_and_gateway_cli_commands(self) -> None:
         providers = self.run_cli("providers", "list")
         self.assertEqual(providers.returncode, 0)

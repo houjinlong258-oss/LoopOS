@@ -170,10 +170,10 @@ The Kernel prompt is stored in `docs/LoopOS_Kernel_Level_Codex_Prompt.md`. Herme
 
 ## Kernel Builder / Outer Loop Additions
 
-- `loopos/tasks/`: persistent JSON task queue with quick-win selection.
+- `loopos/tasks/`: persistent JSON task queue with quick-win selection, todos, and delivery artifacts for reports, patches, and PR drafts.
 - `loopos/triggers/`: deterministic trigger kernel; triggers create tasks only and do not execute work.
-- `loopos/worktree/`: worktree planning records with branch naming and conflict detection.
-- `loopos/review/`: Producer, Verifier, and Reviewer separation for high-risk/code tasks.
+- `loopos/worktree/`: worktree planning records with branch naming, conflict detection, stale/cleanup state, and task linking.
+- `loopos/review/`: Producer, Verifier, and Reviewer separation for high-risk/code tasks; code tasks require a planned worktree before review.
 - `loopos/skills/`: compatibility exports for the governed skill kernel.
 - `loopos/model_kernel/`: provider profiles, capability routing, mock client, and multi-model role scheduler.
 - `loopos/gateway/`: ChatOps/mobile mock adapters and message-to-RunSpec conversion.

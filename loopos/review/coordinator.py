@@ -57,6 +57,8 @@ class ReviewCoordinator:
         reviewer: str = "reviewer",
     ) -> ReviewRecord:
         high_risk = task.requires_worktree or task.type == "code_change"
+        if task.requires_worktree and not task.worktree_id:
+            raise ValueError("code-changing tasks require a planned worktree before review")
         if high_risk and len({producer, verifier, reviewer}) != 3:
             raise ValueError("high-risk work requires separate producer, verifier, and reviewer")
         review = ReviewRecord(
@@ -84,4 +86,3 @@ class ReviewCoordinator:
             raise ValueError("only the assigned verifier can record verification")
         review.verification_notes.append(note)
         return self.store.save(review)
-

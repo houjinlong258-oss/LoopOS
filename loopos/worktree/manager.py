@@ -92,3 +92,9 @@ class WorktreeManager:
         record.status = "stale"
         return self.store.save(record)
 
+    def mark_cleaned(self, worktree_id: str) -> WorktreeRecord:
+        record = self.store.load(worktree_id)
+        if record.status != "stale":
+            raise ValueError("only stale worktrees can be marked cleaned")
+        record.status = "cleaned"
+        return self.store.save(record)

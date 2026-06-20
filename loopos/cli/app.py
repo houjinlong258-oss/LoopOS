@@ -35,7 +35,7 @@ from loopos.policy_os.audit import PolicyAuditLog
 from loopos.policy_os.engine import PolicyEngine
 from loopos.review import ReviewCoordinator, ReviewStore
 from loopos.syscalls import create_default_syscall_router
-from loopos.tasks import TaskStore
+from loopos.tasks import TaskArtifactStore, TaskRecord, TaskStore
 from loopos.triggers import TriggerKernel
 from loopos.worktree import WorktreeManager, WorktreeStore
 
@@ -76,6 +76,7 @@ def _paths(data_dir: str | Path) -> dict[str, Path]:
         "beliefs": base / "beliefs.jsonl",
         "policy_audit": base / "policy_audit.jsonl",
         "tasks": base / "tasks.json",
+        "task_artifacts": base / "task_artifacts.json",
         "worktrees": base / "worktrees.json",
         "reviews": base / "reviews.json",
     }
@@ -486,8 +487,16 @@ def tasks_command(
     data_dir: str | Path = ".loopos",
     quick_win: bool = False,
     json_output: bool = False,
+    goal: str | None = None,
+    task_type: str = "coordination",
+    text: str | None = None,
+    content: str | None = None,
+    title: str | None = None,
+    requires_worktree: bool = False,
+    ready: bool = False,
 ) -> int:
     store = TaskStore(_paths(data_dir)["tasks"])
+    artifacts = TaskArtifactStore(_paths(data_dir)["task_artifacts"])
     if action == "list":
         tasks = store.list()
         if json_output:
@@ -506,6 +515,25 @@ def tasks_command(
             return 0
         print(next_task.model_dump_json(indent=2))
         return 0
+    if action == "create":
+        if not arg:
+            print("tasks create requires TITLE.", file=sys.stderr)
+            return 1
+        try:
+            task = store.create(
+                TaskRecord(
+                    title=arg,
+                    goal=goal or arg,
+                    type=task_type,  # type: ignore[arg-type]
+                    quick_win=quick_win,
+                    requires_worktree=requires_worktree or task_type == "code_change",
+                )
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(task.model_dump_json(indent=2))
+        return 0
     if action == "show":
         if not arg:
             print("tasks show requires TASK_ID.", file=sys.stderr)
@@ -516,6 +544,50 @@ def tasks_command(
             print(str(exc), file=sys.stderr)
             return 1
         print(task.model_dump_json(indent=2))
+        return 0
+    if action == "todo":
+        if not arg or not text:
+            print("tasks todo requires TASK_ID and --text TEXT.", file=sys.stderr)
+            return 1
+        try:
+            task = store.add_todo(arg, text)
+        except KeyError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(task.model_dump_json(indent=2))
+        return 0
+    if action == "done":
+        if not arg or not text:
+            print("tasks done requires TASK_ID and --text TODO_ID.", file=sys.stderr)
+            return 1
+        try:
+            task = store.complete_todo(arg, text)
+        except KeyError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(task.model_dump_json(indent=2))
+        return 0
+    if action in {"report", "patch", "pr"}:
+        if not arg or not content:
+            print(f"tasks {action} requires TASK_ID and --content TEXT.", file=sys.stderr)
+            return 1
+        try:
+            store.load(arg)
+            artifact = artifacts.create(
+                task_id=arg,
+                artifact_type=action,  # type: ignore[arg-type]
+                title=title or f"{action} for {arg}",
+                content=content,
+                ready=ready,
+            )
+        except (KeyError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(artifact.model_dump_json(indent=2))
+        return 0
+    if action == "artifacts":
+        rows = artifacts.list(task_id=arg)
+        print(json.dumps([item.model_dump(mode="json") for item in rows], ensure_ascii=False, indent=2))
         return 0
     print(f"Unknown tasks action: {action}", file=sys.stderr)
     return 1
@@ -562,8 +634,35 @@ def worktrees_command(
             print("worktrees plan requires TASK_ID.", file=sys.stderr)
             return 1
         try:
-            task = TaskStore(paths["tasks"]).load(task_id)
+            task_store = TaskStore(paths["tasks"])
+            task = task_store.load(task_id)
             record = WorktreeManager(store).plan_for_task(task)
+            if record.status == "planned":
+                task.worktree_id = record.id
+                task.status = "ready"
+                task_store.save(task)
+        except (KeyError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(record.model_dump_json(indent=2))
+        return 0
+    if action == "stale":
+        if not task_id:
+            print("worktrees stale requires WORKTREE_ID.", file=sys.stderr)
+            return 1
+        try:
+            record = WorktreeManager(store).mark_stale(task_id)
+        except KeyError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(record.model_dump_json(indent=2))
+        return 0
+    if action == "cleanup":
+        if not task_id:
+            print("worktrees cleanup requires WORKTREE_ID.", file=sys.stderr)
+            return 1
+        try:
+            record = WorktreeManager(store).mark_cleaned(task_id)
         except (KeyError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             return 1
@@ -1097,6 +1196,13 @@ if _HAS_TUI:
         data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
         quick_win: bool = typer_mod.Option(False, "--quick-win"),
         json_output: bool = typer_mod.Option(False, "--json"),
+        goal: str | None = typer_mod.Option(None, "--goal"),
+        task_type: str = typer_mod.Option("coordination", "--type"),
+        text: str | None = typer_mod.Option(None, "--text"),
+        content: str | None = typer_mod.Option(None, "--content"),
+        title: str | None = typer_mod.Option(None, "--title"),
+        requires_worktree: bool = typer_mod.Option(False, "--requires-worktree"),
+        ready: bool = typer_mod.Option(False, "--ready"),
     ) -> None:
         raise typer_mod.Exit(
             tasks_command(
@@ -1105,6 +1211,13 @@ if _HAS_TUI:
                 data_dir=data_dir,
                 quick_win=quick_win,
                 json_output=json_output,
+                goal=goal,
+                task_type=task_type,
+                text=text,
+                content=content,
+                title=title,
+                requires_worktree=requires_worktree,
+                ready=ready,
             )
         )
 
@@ -1291,6 +1404,13 @@ def _argparse_main(argv: list[str] | None = None) -> int:
     tasks_parser.add_argument("--data-dir", default=".loopos")
     tasks_parser.add_argument("--quick-win", action="store_true")
     tasks_parser.add_argument("--json", dest="json_output", action="store_true")
+    tasks_parser.add_argument("--goal")
+    tasks_parser.add_argument("--type", dest="task_type", default="coordination")
+    tasks_parser.add_argument("--text")
+    tasks_parser.add_argument("--content")
+    tasks_parser.add_argument("--title")
+    tasks_parser.add_argument("--requires-worktree", action="store_true")
+    tasks_parser.add_argument("--ready", action="store_true")
 
     triggers_parser = sub.add_parser("triggers")
     triggers_parser.add_argument("action", nargs="?", default="list")
@@ -1423,6 +1543,13 @@ def _argparse_main(argv: list[str] | None = None) -> int:
             data_dir=args.data_dir,
             quick_win=args.quick_win,
             json_output=args.json_output,
+            goal=args.goal,
+            task_type=args.task_type,
+            text=args.text,
+            content=args.content,
+            title=args.title,
+            requires_worktree=args.requires_worktree,
+            ready=args.ready,
         )
     if args.command == "triggers":
         return triggers_command(args.action, args.trigger_id, data_dir=args.data_dir)

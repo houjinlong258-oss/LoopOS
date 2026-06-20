@@ -59,7 +59,10 @@ python -m loopos.cli.app tools list
 python -m loopos.cli.app skills
 python -m loopos.cli.app triggers fire daily-maintenance
 python -m loopos.cli.app tasks next --quick-win
+python -m loopos.cli.app tasks todo TASK_ID --text "Run checks"
+python -m loopos.cli.app tasks report TASK_ID --content "All checks passed." --ready
 python -m loopos.cli.app worktrees list
+python -m loopos.cli.app worktrees stale WORKTREE_ID
 python -m loopos.cli.app review list
 python -m loopos.cli.app providers route coding
 python -m loopos.cli.app gateway simulate telegram "run tests"

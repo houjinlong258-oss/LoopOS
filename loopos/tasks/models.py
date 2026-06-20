@@ -21,6 +21,9 @@ TaskStatus = Literal[
 ]
 TaskType = Literal["code_change", "maintenance", "audit", "review", "report", "coordination"]
 TaskRole = Literal["producer", "verifier", "reviewer"]
+TodoStatus = Literal["pending", "done"]
+TaskArtifactType = Literal["report", "patch", "pr"]
+TaskArtifactStatus = Literal["draft", "ready"]
 
 
 def utc_now() -> datetime:
@@ -48,6 +51,7 @@ class TaskRecord(BaseModel):
     assigned_roles: dict[TaskRole, str] = Field(default_factory=dict)
     tags: list[str] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
+    todos: list["TaskTodo"] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -64,3 +68,35 @@ class TaskRecord(BaseModel):
         clone.updated_at = utc_now()
         return clone
 
+
+class TaskTodo(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    text: str
+    status: TodoStatus = "pending"
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+    @field_validator("text")
+    @classmethod
+    def required_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("todo text is required")
+        return value
+
+
+class TaskArtifact(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    task_id: str
+    type: TaskArtifactType
+    title: str
+    content: str
+    status: TaskArtifactStatus = "draft"
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+    @field_validator("task_id", "title", "content")
+    @classmethod
+    def required_artifact_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("artifact fields cannot be empty")
+        return value

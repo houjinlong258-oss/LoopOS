@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 from loopos.review import ReviewCoordinator, ReviewStore
-from loopos.tasks import TaskStore
+from loopos.tasks import TaskArtifactStore, TaskStore
 from loopos.triggers import TriggerKernel
 from loopos.worktree import WorktreeManager, WorktreeStore
 
@@ -39,8 +39,16 @@ class OuterLoopTests(unittest.TestCase):
 
     def test_review_requires_role_separation_for_code_change(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            task = TriggerKernel(TaskStore(Path(tmp) / "tasks.json")).fire("code-improvement")
+            task_store = TaskStore(Path(tmp) / "tasks.json")
+            task = TriggerKernel(task_store).fire("code-improvement")
             coordinator = ReviewCoordinator(ReviewStore(Path(tmp) / "reviews.json"))
+
+            with self.assertRaises(ValueError):
+                coordinator.start(task, producer="producer", verifier="verifier", reviewer="reviewer")
+
+            record = WorktreeManager(WorktreeStore(Path(tmp) / "worktrees.json")).plan_for_task(task)
+            task.worktree_id = record.id
+            task_store.save(task)
 
             with self.assertRaises(ValueError):
                 coordinator.start(task, producer="same", verifier="same", reviewer="same")
@@ -48,6 +56,27 @@ class OuterLoopTests(unittest.TestCase):
             review = coordinator.start(task, producer="producer", verifier="verifier", reviewer="reviewer")
             self.assertTrue(review.high_risk)
             self.assertEqual(review.status, "in_review")
+
+    def test_task_todos_and_artifacts_are_persistent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            task_store = TaskStore(Path(tmp) / "tasks.json")
+            artifact_store = TaskArtifactStore(Path(tmp) / "artifacts.json")
+            task = TriggerKernel(task_store).fire("daily-maintenance")
+
+            task = task_store.add_todo(task.id, "Run tests")
+            todo_id = task.todos[0].id
+            task = task_store.complete_todo(task.id, todo_id)
+            report = artifact_store.create(
+                task_id=task.id,
+                artifact_type="report",
+                title="Maintenance report",
+                content="All checks passed.",
+                ready=True,
+            )
+
+            self.assertEqual(task.todos[0].status, "done")
+            self.assertEqual(artifact_store.list(task_id=task.id)[0].id, report.id)
+            self.assertEqual(report.status, "ready")
 
 
 if __name__ == "__main__":
