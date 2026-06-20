@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Literal
 
@@ -10,8 +11,9 @@ from loopos.memory.belief_store import BeliefStore, MemoryItem, MemoryStatus
 from loopos.memory.event_log import EventLog
 from loopos.memory.governance import GovernanceDecision, MemoryGovernance
 from loopos.memory.proposals import MemoryProposal, ProposalStatus
+from loopos.memory.skill_proposals import SkillProposal, SkillProposalStatus
 from loopos.memory.retrieval import MemoryRetriever
-from loopos.memory.skill_store import SkillStore
+from loopos.memory.skill_store import Skill, SkillStore
 from loopos.memory.sqlite_store import SQLiteMemoryIndex
 from loopos.memory.state_store import StateStore
 from loopos.policy_os.engine import PolicyEngine
@@ -136,6 +138,83 @@ class MemoryRepository:
             self.index.upsert_skill(skill)
             counts["skills"] += 1
         return counts
+
+    def propose_skill(self, proposal: SkillProposal) -> SkillProposal:
+        self.index.upsert_skill_proposal(proposal)
+        return proposal
+
+    def list_skill_proposals(
+        self, *, status: SkillProposalStatus | None = None
+    ) -> list[SkillProposal]:
+        return self.index.list_skill_proposals(status=status)
+
+    def commit_skill_proposal(self, proposal_id: str) -> SkillProposal:
+        proposal = self.index.get_skill_proposal(proposal_id)
+        skill = proposal.proposed_skill
+        policy = self.policy_engine.evaluate(
+            "skill.write",
+            subject=skill.model_dump(mode="json"),
+            tags=["memory", "skill", *skill.trigger_tags],
+            risk_level="low",
+        )
+        if not policy.allowed:
+            proposal.status = "rejected"
+            proposal.decision_reasons.extend(policy.reason_codes)
+            proposal.decided_at = utc_now()
+            self.index.upsert_skill_proposal(proposal)
+            return proposal
+
+        memory = MemoryItem(
+            type="skill",
+            layer="skill",
+            scope="project",
+            content=json.dumps(
+                {"name": skill.name, "trigger_tags": skill.trigger_tags, "steps": skill.steps},
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+            confidence=skill.confidence,
+            source="skill_extractor",
+            tags=["skill", *skill.trigger_tags],
+            metadata={"skill_id": skill.id, "proposal_id": proposal.id},
+        )
+        governance = self.governance.review(memory, existing=self.list_memory(status="active"))
+        duplicate = self._matching_skill(skill)
+        if governance.action == "reject":
+            proposal.status = "rejected"
+            proposal.decision_reasons.extend(governance.reasons)
+        elif duplicate is not None:
+            duplicate.success_count += skill.success_count
+            duplicate.failure_count += skill.failure_count
+            total = duplicate.success_count + duplicate.failure_count
+            duplicate.success_rate = duplicate.success_count / total if total else 0.0
+            duplicate.confidence = max(duplicate.confidence, skill.confidence)
+            duplicate.version += 1
+            duplicate.source_runs = list(dict.fromkeys([*duplicate.source_runs, *skill.source_runs]))
+            duplicate.updated_at = utc_now()
+            self.skills.upsert(duplicate)
+            self.index.upsert_skill(duplicate)
+            proposal.status = "merged"
+            proposal.decision_reasons.extend(governance.reasons)
+        else:
+            self.beliefs.add(memory)
+            self.index.upsert_memory_item(memory)
+            self.skills.upsert(skill)
+            self.index.upsert_skill(skill)
+            proposal.status = "accepted"
+            proposal.decision_reasons.extend(governance.reasons)
+        proposal.decided_at = utc_now()
+        self.index.upsert_skill_proposal(proposal)
+        return proposal
+
+    def _matching_skill(self, candidate: Skill) -> Skill | None:
+        candidate_tags = set(candidate.trigger_tags)
+        for skill in self.skills.list():
+            if skill.name.strip().lower() == candidate.name.strip().lower() and set(
+                skill.trigger_tags
+            ) == candidate_tags:
+                return skill
+        return None
 
     def set_profile(self, key: str, value: str) -> None:
         self.index.set_profile(key, value, updated_at=str(utc_now()))

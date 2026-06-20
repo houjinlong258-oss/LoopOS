@@ -7,13 +7,17 @@ import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loopos.core.state import LoopState
 from loopos.memory.belief_store import MemoryItem, MemoryStatus
 from loopos.memory.event_log import Event
 from loopos.memory.proposals import MemoryProposal, ProposalStatus
+from loopos.memory.skill_proposals import SkillProposal, SkillProposalStatus
 from loopos.memory.skill_store import Skill
+
+if TYPE_CHECKING:
+    from loopos.kernel.trace import TraceEvent
 
 
 class SQLiteMemoryIndex:
@@ -90,6 +94,22 @@ class SQLiteMemoryIndex:
                     name TEXT NOT NULL,
                     trigger_tags TEXT NOT NULL,
                     confidence REAL NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'active',
+                    success_count INTEGER NOT NULL DEFAULT 0,
+                    failure_count INTEGER NOT NULL DEFAULT 0,
+                    success_rate REAL NOT NULL DEFAULT 0,
+                    payload TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS skill_proposals (
+                    id TEXT PRIMARY KEY,
+                    status TEXT NOT NULL,
+                    source_run_id TEXT NOT NULL,
+                    source_event_ids TEXT NOT NULL,
+                    rationale TEXT NOT NULL,
+                    decision_reasons TEXT NOT NULL,
+                    proposed_skill_id TEXT NOT NULL,
+                    created_at TEXT,
+                    decided_at TEXT,
                     payload TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS memory_proposals (
@@ -114,6 +134,27 @@ class SQLiteMemoryIndex:
                 );
                 """
             )
+            self._ensure_columns(
+                conn,
+                "events",
+                {
+                    "schema_version": "INTEGER NOT NULL DEFAULT 1",
+                    "kind": "TEXT",
+                    "instruction_id": "TEXT",
+                    "syscall_id": "TEXT",
+                    "policy_decision_id": "TEXT",
+                },
+            )
+            self._ensure_columns(
+                conn,
+                "skills",
+                {
+                    "status": "TEXT NOT NULL DEFAULT 'active'",
+                    "success_count": "INTEGER NOT NULL DEFAULT 0",
+                    "failure_count": "INTEGER NOT NULL DEFAULT 0",
+                    "success_rate": "REAL NOT NULL DEFAULT 0",
+                },
+            )
 
     def reset_index(self) -> None:
         with self.connection() as conn:
@@ -123,6 +164,7 @@ class SQLiteMemoryIndex:
                 DELETE FROM events;
                 DELETE FROM memory_items;
                 DELETE FROM skills;
+                DELETE FROM skill_proposals;
                 DELETE FROM memory_proposals;
                 DELETE FROM user_profile;
                 """
@@ -166,6 +208,31 @@ class SQLiteMemoryIndex:
                     event.type,
                     json.dumps(payload["payload"], ensure_ascii=False),
                     str(payload.get("created_at", "")),
+                ),
+            )
+
+    def upsert_trace_event(self, event: TraceEvent) -> None:
+        payload = event.model_dump(mode="json")
+        with self.connection() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO events(
+                    id, run_id, step_index, type, payload, created_at,
+                    schema_version, kind, instruction_id, syscall_id, policy_decision_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event.id,
+                    event.run_id,
+                    event.step,
+                    event.type or event.kind or "run",
+                    json.dumps(payload["payload"], ensure_ascii=False),
+                    str(payload.get("created_at", "")),
+                    event.schema_version,
+                    event.kind,
+                    event.instruction_id,
+                    event.syscall_id,
+                    event.policy_decision_id,
                 ),
             )
 
@@ -244,17 +311,84 @@ class SQLiteMemoryIndex:
         with self.connection() as conn:
             conn.execute(
                 """
-                INSERT OR REPLACE INTO skills(id, name, trigger_tags, confidence, payload)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT OR REPLACE INTO skills(
+                    id, name, trigger_tags, confidence, status,
+                    success_count, failure_count, success_rate, payload
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     skill.id,
                     skill.name,
                     json.dumps(skill.trigger_tags, ensure_ascii=False),
                     skill.confidence,
+                    skill.status,
+                    skill.success_count,
+                    skill.failure_count,
+                    skill.success_rate,
                     json.dumps(payload, ensure_ascii=False),
                 ),
             )
+
+    def list_skills(self, *, status: str | None = None) -> list[Skill]:
+        query = "SELECT payload FROM skills"
+        params: list[Any] = []
+        if status is not None:
+            query += " WHERE status = ?"
+            params.append(status)
+        query += " ORDER BY name ASC"
+        with self.connection() as conn:
+            return [
+                Skill.model_validate(json.loads(row["payload"]))
+                for row in conn.execute(query, params)
+            ]
+
+    def upsert_skill_proposal(self, proposal: SkillProposal) -> None:
+        payload = proposal.model_dump(mode="json")
+        with self.connection() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO skill_proposals(
+                    id, status, source_run_id, source_event_ids, rationale,
+                    decision_reasons, proposed_skill_id, created_at, decided_at, payload
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    proposal.id,
+                    proposal.status,
+                    proposal.source_run_id,
+                    json.dumps(proposal.source_event_ids, ensure_ascii=False),
+                    proposal.rationale,
+                    json.dumps(proposal.decision_reasons, ensure_ascii=False),
+                    proposal.proposed_skill.id,
+                    str(payload.get("created_at", "")),
+                    str(payload.get("decided_at", "") or ""),
+                    json.dumps(payload, ensure_ascii=False),
+                ),
+            )
+
+    def list_skill_proposals(
+        self, *, status: SkillProposalStatus | None = None
+    ) -> list[SkillProposal]:
+        query = "SELECT payload FROM skill_proposals"
+        params: list[Any] = []
+        if status is not None:
+            query += " WHERE status = ?"
+            params.append(status)
+        query += " ORDER BY created_at ASC"
+        with self.connection() as conn:
+            return [
+                SkillProposal.model_validate(json.loads(row["payload"]))
+                for row in conn.execute(query, params)
+            ]
+
+    def get_skill_proposal(self, proposal_id: str) -> SkillProposal:
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT payload FROM skill_proposals WHERE id = ?", (proposal_id,)
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"skill proposal not found: {proposal_id}")
+        return SkillProposal.model_validate(json.loads(row["payload"]))
 
     def upsert_proposal(self, proposal: MemoryProposal) -> None:
         payload = proposal.model_dump(mode="json")
@@ -322,6 +456,17 @@ class SQLiteMemoryIndex:
     def get_profile(self) -> dict[str, str]:
         with self.connection() as conn:
             return {row["key"]: row["value"] for row in conn.execute("SELECT key, value FROM user_profile")}
+
+    @staticmethod
+    def _ensure_columns(
+        conn: sqlite3.Connection,
+        table: str,
+        columns: dict[str, str],
+    ) -> None:
+        existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+        for name, declaration in columns.items():
+            if name not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {declaration}")
 
     @staticmethod
     def normalize(content: str) -> str:

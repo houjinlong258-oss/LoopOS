@@ -5,6 +5,7 @@ from loopos.memory.event_log import Event, EventLog
 from loopos.memory.governance import MemoryGovernance
 from loopos.memory.proposals import MemoryProposal
 from loopos.memory.repository import MemoryRepository
+from loopos.memory.skill_proposals import SkillProposal
 from loopos.memory.skill_store import Skill, SkillStore
 
 __all__ = [
@@ -16,5 +17,6 @@ __all__ = [
     "MemoryProposal",
     "MemoryRepository",
     "Skill",
+    "SkillProposal",
     "SkillStore",
 ]

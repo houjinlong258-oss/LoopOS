@@ -5,10 +5,10 @@ from __future__ import annotations
 import json
 import builtins
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Literal, Sequence
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from loopos.core.state import utc_now
 from loopos.memory.event_log import Event
@@ -21,8 +21,14 @@ class Skill(BaseModel):
     trigger_tags: list[str] = Field(default_factory=list)
     steps: list[dict[str, Any]] = Field(default_factory=list)
     source_run_id: str | None = None
+    source_runs: list[str] = Field(default_factory=list)
     confidence: float = 0.8
+    status: Literal["active", "disabled", "superseded"] = "active"
+    success_count: int = Field(default=1, ge=0)
+    failure_count: int = Field(default=0, ge=0)
+    success_rate: float = Field(default=1.0, ge=0.0, le=1.0)
     created_at: object = Field(default_factory=utc_now)
+    updated_at: object = Field(default_factory=utc_now)
     version: int = 1
 
     @field_validator("confidence")
@@ -39,6 +45,16 @@ class Skill(BaseModel):
             raise ValueError("value cannot be empty")
         return value
 
+    @model_validator(mode="after")
+    def synchronize_stats(self) -> "Skill":
+        if self.source_run_id and self.source_run_id not in self.source_runs:
+            self.source_runs.append(self.source_run_id)
+        if self.source_run_id is None and self.source_runs:
+            self.source_run_id = self.source_runs[0]
+        total = self.success_count + self.failure_count
+        self.success_rate = self.success_count / total if total else 0.0
+        return self
+
 
 class SkillStore:
     """JSONL-backed reusable skill store."""
@@ -52,22 +68,30 @@ class SkillStore:
             handle.write(skill.model_dump_json() + "\n")
         return skill
 
+    def upsert(self, skill: Skill) -> Skill:
+        """Append a new version; list() resolves the latest row per id."""
+
+        return self.add(skill)
+
     def list(self) -> list[Skill]:
         if not self.path.exists():
             return []
-        skills: list[Skill] = []
+        skills: dict[str, Skill] = {}
         with self.path.open("r", encoding="utf-8") as handle:
             for line in handle:
                 if line.strip():
-                    skills.append(Skill.model_validate(json.loads(line)))
-        return skills
+                    skill = Skill.model_validate(json.loads(line))
+                    skills[skill.id] = skill
+        return list(skills.values())
 
     def find_by_tags(self, tags: Sequence[str], *, min_confidence: float = 0.5) -> builtins.list[Skill]:
         tag_set: set[str] = set(tags)
         return [
             skill
             for skill in self.list()
-            if skill.confidence >= min_confidence and tag_set.intersection(skill.trigger_tags)
+            if skill.status == "active"
+            and skill.confidence >= min_confidence
+            and tag_set.intersection(skill.trigger_tags)
         ]
 
 

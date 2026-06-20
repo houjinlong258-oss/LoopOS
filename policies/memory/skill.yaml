@@ -1,0 +1,28 @@
+id: skill-governance
+name: Skill Governance Policy
+version: 0.1.0
+description: Structured skill commits derived from successful traces.
+priority: 850
+rules:
+  - id: skill.deny.low_confidence
+    scope: skill.write
+    priority: 900
+    severity: high
+    tags: [memory, skill]
+    conditions:
+      - field: confidence
+        operator: lt
+        value: 0.5
+    actions:
+      - type: deny
+        reason_code: skill.low_confidence
+        audit_required: true
+  - id: skill.default.allow
+    scope: skill.write
+    priority: 100
+    severity: info
+    tags: [memory, skill]
+    conditions: []
+    actions:
+      - type: allow
+        reason_code: skill.structured_trace_allow

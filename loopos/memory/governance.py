@@ -77,6 +77,13 @@ class MemoryGovernance:
             )
             tag_overlap = set(prior.tags).intersection(item.tags)
             if same_content:
+                if item.type == "skill":
+                    return GovernanceDecision(
+                        action="merge",
+                        reasons=["duplicate skill memory should update statistics"],
+                        existing_id=prior.id,
+                        item=item,
+                    )
                 return GovernanceDecision(
                     action="reject",
                     reasons=["duplicate active memory"],

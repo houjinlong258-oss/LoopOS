@@ -1,6 +1,5 @@
-"""Compatibility exports for the standalone context package."""
+"""Context memory manager."""
 
 from loopos.context.compiler import AgentContext, ContextCompiler, PolicyContext
 
 __all__ = ["AgentContext", "ContextCompiler", "PolicyContext"]
-
