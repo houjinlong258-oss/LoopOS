@@ -24,6 +24,15 @@ LoopOS benchmarks are JSON task definitions that can run against the determinist
 - `skill_reuse_count`
 - `token_estimate`
 
+## Current Tasks
+
+- deterministic loop completion
+- prepared workspace file presence
+- memory recall
+- repeated failure avoidance
+- skill reuse
+- user preference context injection
+
 ## Running from Python
 
 ```python

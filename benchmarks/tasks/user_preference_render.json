@@ -1,0 +1,16 @@
+{
+  "id": "user_preference_render",
+  "name": "User Preference Context",
+  "goal": "include user model in policy context",
+  "workspace_setup": {
+    "expected": "concise",
+    "profile": {
+      "tone": "concise"
+    }
+  },
+  "expected_files": [],
+  "expected_commands": [],
+  "success_checks": ["user model enters context"],
+  "max_steps": 1,
+  "tags": ["user-profile-context"]
+}

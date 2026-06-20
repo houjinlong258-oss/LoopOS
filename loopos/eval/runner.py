@@ -9,8 +9,15 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
+from loopos.core.context import ContextCompiler
+from loopos.core.isa import make_instruction
 from loopos.core.loop_engine import LoopEngine
+from loopos.core.state import LoopState
 from loopos.eval.metrics import EvalMetrics, compute_metrics
+from loopos.memory.belief_store import MemoryItem
+from loopos.memory.pre_action_gate import PreActionGate
+from loopos.memory.repository import MemoryRepository
+from loopos.memory.skill_store import Skill
 
 
 class BenchmarkTask(BaseModel):
@@ -57,7 +64,73 @@ class EvalRunner:
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp)
             self._setup_workspace(workspace, task.workspace_setup)
-            engine = LoopEngine.with_local_stores(workspace / ".loopos")
+            repo = self._setup_memory(workspace / ".loopos", task.workspace_setup)
+
+            if "memory-recall" in task.tags:
+                query = str(task.workspace_setup.get("query", ""))
+                retrieved = repo.retrieve(query_text=query, tags=query.split(), limit=5)
+                success = any(query.lower() in item.content.lower() for item in retrieved)
+                return EvalTaskResult(
+                    task_id=task.id,
+                    success=success,
+                    status="succeeded" if success else "failed",
+                    steps=0,
+                    command_count=0,
+                    details={"retrieved": [item.content for item in retrieved]},
+                )
+
+            if "repeated-failure" in task.tags:
+                command = str(task.workspace_setup.get("command", "bad"))
+                gate = PreActionGate(events=repo.events.list())
+                decision = gate.before(make_instruction("EXEC_TERMINAL", "benchmark", {"cmd": command}))
+                success = decision.action == "block"
+                return EvalTaskResult(
+                    task_id=task.id,
+                    success=success,
+                    status="succeeded" if success else "failed",
+                    steps=0,
+                    command_count=0,
+                    blocked_dangerous_actions=1 if success else 0,
+                    repeated_failure_count=1 if success else 0,
+                    details={"gate_action": decision.action, "reasons": decision.reasons},
+                )
+
+            if "skill-reuse" in task.tags:
+                command = str(task.workspace_setup.get("command", "pytest"))
+                gate = PreActionGate(skills=repo.skills.list())
+                decision = gate.before(make_instruction("EXEC_TERMINAL", "benchmark", {"cmd": command}))
+                success = decision.action == "substitute_skill"
+                return EvalTaskResult(
+                    task_id=task.id,
+                    success=success,
+                    status="succeeded" if success else "failed",
+                    steps=0,
+                    command_count=0,
+                    skill_reuse_count=1 if success else 0,
+                    details={"gate_action": decision.action, "skill_id": decision.skill_id},
+                )
+
+            if "user-profile-context" in task.tags:
+                context = ContextCompiler().compile(
+                    state=LoopState(goal=task.goal),
+                    memories=repo.list_memory(layer="user_model"),
+                    skills=[],
+                )
+                expected = str(task.workspace_setup.get("expected", ""))
+                success = any(
+                    expected.lower() in item["content"].lower()
+                    for item in context.user_model_snippets
+                )
+                return EvalTaskResult(
+                    task_id=task.id,
+                    success=success,
+                    status="succeeded" if success else "failed",
+                    steps=0,
+                    command_count=0,
+                    details={"user_model": context.user_model_snippets},
+                )
+
+            engine = LoopEngine.with_local_stores(workspace / ".loopos", memory_repository=repo)
             state = engine.run(task.goal, max_steps=task.max_steps)
             files_ok = all((workspace / expected).exists() for expected in task.expected_files)
             commands = [item.command for item in state.tool_history if item.command]
@@ -100,3 +173,32 @@ class EvalRunner:
                 target = workspace / str(relative_path)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text(str(content), encoding="utf-8")
+
+    @staticmethod
+    def _setup_memory(base_dir: Path, setup: dict[str, Any]) -> MemoryRepository:
+        repo = MemoryRepository(base_dir)
+        for item_data in setup.get("memory_items", []):
+            if isinstance(item_data, dict):
+                repo.write_memory(MemoryItem.model_validate(item_data))
+        for skill_data in setup.get("skills", []):
+            if isinstance(skill_data, dict):
+                skill = Skill.model_validate(skill_data)
+                repo.skills.add(skill)
+                repo.index.upsert_skill(skill)
+        for failed in setup.get("failed_events", []):
+            if isinstance(failed, dict):
+                event = repo.events.append(
+                    "observation",
+                    str(failed.get("run_id", "benchmark")),
+                    int(failed.get("step_index", 0)),
+                    {
+                        "command": failed.get("command"),
+                        "success": False,
+                    },
+                )
+                repo.index.upsert_event(event)
+        profile = setup.get("profile", {})
+        if isinstance(profile, dict):
+            for key, value in profile.items():
+                repo.set_profile(str(key), str(value))
+        return repo

@@ -115,6 +115,18 @@ This document maps the requested LoopOS prompt phases to the MVP files now prese
 - `docs/memory-design-from-sources.md`
 - Tests cover retrieval ranking, low-confidence filtering, repeated failure blocking, and skill substitution.
 
+## Memory-first Alpha Additions
+
+- `loopos/memory/repository.py`
+- `loopos/memory/sqlite_store.py`
+- `loopos/memory/proposals.py`
+- `loopos/memory/extractor.py`
+- `loopos/llm/providers.py`
+- `docs/memory-governance.md`
+- `docs/llm-provider.md`
+
+Added JSONL + SQLite memory indexing, governed memory proposals, user profile storage, layered context compilation, mock/OpenAI-compatible memory proposal extraction, memory/profile CLI commands, and memory-focused benchmark tasks.
+
 ## Verification
 
 The MVP was verified with:

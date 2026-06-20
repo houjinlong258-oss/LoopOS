@@ -1,0 +1,17 @@
+{
+  "id": "repeated_failure_avoidance",
+  "name": "Repeated Failure Avoidance",
+  "goal": "block a repeated failed command",
+  "workspace_setup": {
+    "command": "bad",
+    "failed_events": [
+      {"run_id": "benchmark", "step_index": 1, "command": "bad"},
+      {"run_id": "benchmark", "step_index": 2, "command": "bad"}
+    ]
+  },
+  "expected_files": [],
+  "expected_commands": [],
+  "success_checks": ["gate action is block"],
+  "max_steps": 1,
+  "tags": ["repeated-failure"]
+}

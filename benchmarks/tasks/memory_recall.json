@@ -1,0 +1,24 @@
+{
+  "id": "memory_recall",
+  "name": "Memory Recall",
+  "goal": "retrieve a relevant memory",
+  "workspace_setup": {
+    "query": "pytest",
+    "memory_items": [
+      {
+        "type": "belief",
+        "layer": "semantic",
+        "scope": "project",
+        "content": "Use pytest for LoopOS tests.",
+        "confidence": 0.9,
+        "source": "benchmark",
+        "tags": ["pytest", "testing"]
+      }
+    ]
+  },
+  "expected_files": [],
+  "expected_commands": [],
+  "success_checks": ["retrieved memory contains query"],
+  "max_steps": 1,
+  "tags": ["memory-recall"]
+}

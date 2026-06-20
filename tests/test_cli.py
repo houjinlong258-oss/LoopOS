@@ -46,6 +46,49 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertIn('"llm": "mock-only"', result.stdout)
 
+    def test_memory_reindex_and_search(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            reindex = self.run_cli("memory", "reindex", "--data-dir", tmp)
+            self.assertEqual(reindex.returncode, 0)
+            self.assertIn('"memory_items": 0', reindex.stdout)
+
+            search = self.run_cli("memory", "search", "missing", "--data-dir", tmp)
+            self.assertEqual(search.returncode, 0)
+            self.assertIn("[]", search.stdout)
+
+    def test_memory_propose_accept_reject(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            run = self.run_cli("run", "demo", "--max-steps", "3", "--data-dir", tmp)
+            self.assertEqual(run.returncode, 0)
+            run_files = list((Path(tmp) / "runs").glob("*.json"))
+            self.assertEqual(len(run_files), 1)
+            run_id = run_files[0].stem
+
+            propose = self.run_cli("memory", "propose", "--from-run", run_id, "--data-dir", tmp)
+            self.assertEqual(propose.returncode, 0)
+            proposal_id = propose.stdout.strip().split()[-1]
+
+            review = self.run_cli("memory", "review", "--data-dir", tmp)
+            self.assertEqual(review.returncode, 0)
+            self.assertIn(proposal_id, review.stdout)
+
+            accept = self.run_cli("memory", "accept", proposal_id, "--data-dir", tmp)
+            self.assertEqual(accept.returncode, 0)
+            self.assertIn("accepted", accept.stdout)
+
+    def test_profile_show_set(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            show = self.run_cli("profile", "show", "--data-dir", tmp)
+            self.assertEqual(show.returncode, 0)
+            self.assertIn("No user profile", show.stdout)
+
+            set_result = self.run_cli("profile", "set", "tone", "direct", "--data-dir", tmp)
+            self.assertEqual(set_result.returncode, 0)
+
+            show_again = self.run_cli("profile", "show", "--data-dir", tmp)
+            self.assertEqual(show_again.returncode, 0)
+            self.assertIn('"tone": "direct"', show_again.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

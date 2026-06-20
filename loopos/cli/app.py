@@ -11,8 +11,9 @@ from typing import Any
 from loopos.core.loop_engine import LoopEngine
 from loopos.core.policy import DeterministicDemoPolicy
 from loopos.core.state import LoopState
-from loopos.memory.belief_store import BeliefStore
+from loopos.llm.providers import LLMProvider, MockLLMProvider, OpenAICompatibleProvider
 from loopos.memory.event_log import EventLog
+from loopos.memory.repository import MemoryRepository
 from loopos.memory.skill_store import SkillStore
 from loopos.memory.state_store import StateStore
 
@@ -101,6 +102,9 @@ def run_command(
     yes: bool = False,
     verbose: bool = False,
     data_dir: str | Path = ".loopos",
+    memory: str = "on",
+    propose_memory: bool = False,
+    llm_provider: str = "mock",
 ) -> int:
     if dry_run:
         state = LoopState(goal=goal)
@@ -109,7 +113,17 @@ def run_command(
         return 0
 
     paths = _paths(data_dir)
-    engine = LoopEngine.with_local_stores(paths["base"])
+    if memory == "off":
+        engine = LoopEngine(
+            event_log=EventLog(paths["events"]),
+            state_store=StateStore(paths["runs"]),
+        )
+    else:
+        engine = LoopEngine.with_local_stores(
+            paths["base"],
+            propose_memory=propose_memory,
+            llm_provider=_llm_provider(llm_provider),
+        )
     state = engine.run(goal, max_steps=max_steps)
     _print_state(state, verbose=verbose)
     return 0 if state.status == "succeeded" else 1
@@ -163,13 +177,93 @@ def skills_command(*, data_dir: str | Path = ".loopos") -> int:
     return 0
 
 
-def memory_command(*, data_dir: str | Path = ".loopos") -> int:
-    items = BeliefStore(_paths(data_dir)["beliefs"]).list(status="active")
-    if not items:
-        print("No active memory.")
+def memory_command(
+    action: str = "list",
+    arg: str | None = None,
+    *,
+    from_run: str | None = None,
+    data_dir: str | Path = ".loopos",
+    verbose: bool = False,
+) -> int:
+    repo = MemoryRepository(_paths(data_dir)["base"])
+    if action == "list":
+        items = repo.list_memory(status="active")
+        if not items:
+            print("No active memory.")
+            return 0
+        print(json.dumps([item.model_dump(mode="json") for item in items], ensure_ascii=False, indent=2))
         return 0
-    print(json.dumps([item.model_dump(mode="json") for item in items], ensure_ascii=False, indent=2))
-    return 0
+    if action == "search":
+        if not arg:
+            print("Search query is required.", file=sys.stderr)
+            return 1
+        items = repo.retrieve(query_text=arg, tags=arg.split(), limit=10)
+        print(json.dumps([item.model_dump(mode="json") for item in items], ensure_ascii=False, indent=2))
+        return 0
+    if action == "propose":
+        if not from_run:
+            print("--from-run RUN_ID is required.", file=sys.stderr)
+            return 1
+        proposal = repo.proposal_for_run(from_run)
+        repo.propose(proposal)
+        print(f"Created proposal {proposal.id}")
+        if verbose:
+            print(proposal.model_dump_json(indent=2))
+        return 0
+    if action == "review":
+        proposals = repo.list_proposals(status="pending")
+        if not proposals:
+            print("No pending memory proposals.")
+            return 0
+        print(json.dumps([proposal.model_dump(mode="json") for proposal in proposals], ensure_ascii=False, indent=2))
+        return 0
+    if action in {"accept", "reject"}:
+        if not arg:
+            print(f"Proposal id is required for memory {action}.", file=sys.stderr)
+            return 1
+        try:
+            proposal = repo.decide_proposal(
+                arg,
+                "accepted" if action == "accept" else "rejected",
+                reasons=[f"CLI {action}"],
+            )
+        except KeyError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(f"{proposal.status}: {proposal.id}")
+        return 0
+    if action == "reindex":
+        counts = repo.reindex()
+        print(json.dumps(counts, ensure_ascii=False, indent=2))
+        return 0
+    print(f"Unknown memory action: {action}", file=sys.stderr)
+    return 1
+
+
+def profile_command(
+    action: str = "show",
+    key: str | None = None,
+    value: str | None = None,
+    *,
+    data_dir: str | Path = ".loopos",
+) -> int:
+    repo = MemoryRepository(_paths(data_dir)["base"])
+    if action == "show":
+        profile = repo.get_profile()
+        if not profile:
+            print("No user profile.")
+        else:
+            print(json.dumps(profile, ensure_ascii=False, indent=2))
+        return 0
+    if action == "set":
+        if not key or value is None:
+            print("profile set requires KEY and VALUE.", file=sys.stderr)
+            return 1
+        repo.set_profile(key, value)
+        print(f"Set profile {key}")
+        return 0
+    print(f"Unknown profile action: {action}", file=sys.stderr)
+    return 1
 
 
 def config_command(*, data_dir: str | Path = ".loopos") -> int:
@@ -188,6 +282,14 @@ def config_command(*, data_dir: str | Path = ".loopos") -> int:
     return 0
 
 
+def _llm_provider(name: str) -> LLMProvider:
+    if name == "mock":
+        return MockLLMProvider()
+    if name == "openai-compatible":
+        return OpenAICompatibleProvider()
+    raise ValueError(f"unknown LLM provider: {name}")
+
+
 if _HAS_TUI:
 
     @app.command("run")
@@ -198,6 +300,9 @@ if _HAS_TUI:
         yes: bool = typer_mod.Option(False, "--yes"),
         verbose: bool = typer_mod.Option(False, "--verbose"),
         data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+        memory: str = typer_mod.Option("on", "--memory"),
+        propose_memory: bool = typer_mod.Option(False, "--propose-memory"),
+        llm_provider: str = typer_mod.Option("mock", "--llm-provider"),
     ) -> None:
         raise typer_mod.Exit(
             run_command(
@@ -207,6 +312,9 @@ if _HAS_TUI:
                 yes=yes,
                 verbose=verbose,
                 data_dir=data_dir,
+                memory=memory,
+                propose_memory=propose_memory,
+                llm_provider=llm_provider,
             )
         )
 
@@ -238,8 +346,25 @@ if _HAS_TUI:
         raise typer_mod.Exit(skills_command(data_dir=data_dir))
 
     @app.command("memory")
-    def _typer_memory(data_dir: str = typer_mod.Option(".loopos", "--data-dir")) -> None:
-        raise typer_mod.Exit(memory_command(data_dir=data_dir))
+    def _typer_memory(
+        action: str = typer_mod.Argument("list"),
+        arg: str | None = typer_mod.Argument(None),
+        from_run: str | None = typer_mod.Option(None, "--from-run"),
+        data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+        verbose: bool = typer_mod.Option(False, "--verbose"),
+    ) -> None:
+        raise typer_mod.Exit(
+            memory_command(action, arg, from_run=from_run, data_dir=data_dir, verbose=verbose)
+        )
+
+    @app.command("profile")
+    def _typer_profile(
+        action: str = typer_mod.Argument("show"),
+        key: str | None = typer_mod.Argument(None),
+        value: str | None = typer_mod.Argument(None),
+        data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+    ) -> None:
+        raise typer_mod.Exit(profile_command(action, key, value, data_dir=data_dir))
 
     @app.command("config")
     def _typer_config(data_dir: str = typer_mod.Option(".loopos", "--data-dir")) -> None:
@@ -257,6 +382,9 @@ def _argparse_main(argv: list[str] | None = None) -> int:
     run_parser.add_argument("--yes", action="store_true")
     run_parser.add_argument("--verbose", action="store_true")
     run_parser.add_argument("--data-dir", default=".loopos")
+    run_parser.add_argument("--memory", choices=["on", "off"], default="on")
+    run_parser.add_argument("--propose-memory", action="store_true")
+    run_parser.add_argument("--llm-provider", choices=["mock", "openai-compatible"], default="mock")
 
     resume_parser = sub.add_parser("resume")
     resume_parser.add_argument("run_id")
@@ -276,7 +404,17 @@ def _argparse_main(argv: list[str] | None = None) -> int:
     skills_parser.add_argument("--data-dir", default=".loopos")
 
     memory_parser = sub.add_parser("memory")
+    memory_parser.add_argument("action", nargs="?", default="list")
+    memory_parser.add_argument("arg", nargs="?")
+    memory_parser.add_argument("--from-run")
+    memory_parser.add_argument("--verbose", action="store_true")
     memory_parser.add_argument("--data-dir", default=".loopos")
+
+    profile_parser = sub.add_parser("profile")
+    profile_parser.add_argument("action", nargs="?", default="show")
+    profile_parser.add_argument("key", nargs="?")
+    profile_parser.add_argument("value", nargs="?")
+    profile_parser.add_argument("--data-dir", default=".loopos")
 
     config_parser = sub.add_parser("config")
     config_parser.add_argument("--data-dir", default=".loopos")
@@ -290,6 +428,9 @@ def _argparse_main(argv: list[str] | None = None) -> int:
             yes=args.yes,
             verbose=args.verbose,
             data_dir=args.data_dir,
+            memory=args.memory,
+            propose_memory=args.propose_memory,
+            llm_provider=args.llm_provider,
         )
     if args.command == "resume":
         return resume_command(args.run_id, data_dir=args.data_dir, max_steps=args.max_steps)
@@ -300,7 +441,15 @@ def _argparse_main(argv: list[str] | None = None) -> int:
     if args.command == "skills":
         return skills_command(data_dir=args.data_dir)
     if args.command == "memory":
-        return memory_command(data_dir=args.data_dir)
+        return memory_command(
+            args.action,
+            args.arg,
+            from_run=args.from_run,
+            data_dir=args.data_dir,
+            verbose=args.verbose,
+        )
+    if args.command == "profile":
+        return profile_command(args.action, args.key, args.value, data_dir=args.data_dir)
     if args.command == "config":
         return config_command(data_dir=args.data_dir)
     parser.print_help()

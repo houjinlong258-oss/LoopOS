@@ -35,6 +35,31 @@ class ContextCompilerTests(unittest.TestCase):
         self.assertEqual(context.memory[0]["content"], "Use structured state.")
         self.assertEqual(context.skills[0]["name"], "Run tests")
 
+    def test_compile_layered_context_and_user_model(self) -> None:
+        state = LoopState(goal="use memory")
+        memories = [
+            MemoryItem(
+                type="fact",
+                layer="episodic",
+                content="Previous command failed.",
+                confidence=0.8,
+                source="test",
+                tags=["failure"],
+            ),
+            MemoryItem(
+                type="user_model",
+                layer="user_model",
+                scope="user",
+                content="tone: concise",
+                confidence=1.0,
+                source="test",
+                tags=["tone"],
+            ),
+        ]
+        context = ContextCompiler().compile(state, memories=memories, skills=[])
+        self.assertEqual(context.episodic_memories[0]["content"], "Previous command failed.")
+        self.assertEqual(context.user_model_snippets[0]["content"], "tone: concise")
+
 
 if __name__ == "__main__":
     unittest.main()

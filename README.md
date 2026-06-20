@@ -8,6 +8,9 @@ LoopOS is a Python MVP for a terminal-native agent runtime. It is not a chatbot 
 - Deterministic state-machine loop with mock planner, executor, evaluator, and event log.
 - Permission-gated terminal executor.
 - Memory OS primitives for events, state, beliefs, skills, governance, retrieval, and pre-action gates.
+- Memory-first Alpha repository with JSONL audit logs plus SQLite query indexes.
+- Governed memory proposals and user profile context.
+- Mock and OpenAI-compatible LLM providers for memory proposal extraction.
 - MCP-like tool registry/router abstraction.
 - CLI/FLI commands with Typer/Rich support and standard-library fallback.
 - Optional adapters for OpenHands, LangGraph, Letta, Zep, and projectmem.
@@ -63,6 +66,8 @@ See `docs/safety.md` for details.
 - `docs/architecture.md`
 - `docs/ai-isa.md`
 - `docs/memory.md`
+- `docs/memory-governance.md`
+- `docs/llm-provider.md`
 - `docs/safety.md`
 - `docs/testing.md`
 - `docs/benchmarks.md`

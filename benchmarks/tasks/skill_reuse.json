@@ -1,0 +1,22 @@
+{
+  "id": "skill_reuse",
+  "name": "Skill Reuse",
+  "goal": "suggest a reusable skill",
+  "workspace_setup": {
+    "command": "pytest",
+    "skills": [
+      {
+        "name": "Run tests",
+        "description": "Run the deterministic test suite.",
+        "trigger_tags": ["pytest"],
+        "steps": [],
+        "confidence": 0.9
+      }
+    ]
+  },
+  "expected_files": [],
+  "expected_commands": [],
+  "success_checks": ["gate action is substitute_skill"],
+  "max_steps": 1,
+  "tags": ["skill-reuse"]
+}

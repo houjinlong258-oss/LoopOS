@@ -8,26 +8,39 @@ from pathlib import Path
 from typing import Literal, Sequence
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from loopos.core.state import utc_now
 
-MemoryType = Literal["belief", "preference", "fact", "failure", "note"]
+MemoryType = Literal["belief", "preference", "fact", "failure", "note", "skill", "user_model"]
 MemoryStatus = Literal["active", "superseded", "rejected", "conflicted"]
+MemoryLayer = Literal["working", "episodic", "semantic", "belief", "skill", "user_model"]
+MemoryScope = Literal["run", "project", "user", "global"]
 
 
 class MemoryItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     id: str = Field(default_factory=lambda: str(uuid4()))
     type: MemoryType
     content: str
     confidence: float
     source: str
+    layer: MemoryLayer = "belief"
+    scope: MemoryScope = "project"
     created_at: object = Field(default_factory=utc_now)
     updated_at: object = Field(default_factory=utc_now)
     version: int = 1
     tags: list[str] = Field(default_factory=list)
     conflicts: list[str] = Field(default_factory=list)
     status: MemoryStatus = "active"
+    metadata: dict[str, object] = Field(default_factory=dict)
+    expires_at: object | None = None
+    last_used_at: object | None = None
+    usage_count: int = 0
+    success_count: int = 0
+    failure_count: int = 0
+    decay_score: float = 1.0
 
     @field_validator("confidence")
     @classmethod
@@ -42,6 +55,25 @@ class MemoryItem(BaseModel):
         if not value.strip():
             raise ValueError("value cannot be empty")
         return value
+
+    @field_validator("decay_score")
+    @classmethod
+    def decay_score_range(cls, value: float) -> float:
+        if value < 0 or value > 1:
+            raise ValueError("decay_score must be between 0 and 1")
+        return value
+
+    @field_validator("tags")
+    @classmethod
+    def canonical_tags(cls, value: list[str]) -> list[str]:
+        seen: set[str] = set()
+        result: list[str] = []
+        for tag in value:
+            normalized = tag.strip().lower()
+            if normalized and normalized not in seen:
+                seen.add(normalized)
+                result.append(normalized)
+        return result
 
 
 class BeliefStore:

@@ -37,6 +37,14 @@ Run the deterministic MVP loop:
 python -m loopos.cli.app run "demo task" --max-steps 3
 ```
 
+Generate governed memory proposals from a run:
+
+```bash
+python -m loopos.cli.app run "demo task" --max-steps 3 --propose-memory --llm-provider mock
+python -m loopos.cli.app memory review
+python -m loopos.cli.app memory accept PROPOSAL_ID
+```
+
 ## Inspect State
 
 Runs are stored under `.loopos/` by default.
@@ -46,6 +54,8 @@ python -m loopos.cli.app status RUN_ID
 python -m loopos.cli.app history RUN_ID
 python -m loopos.cli.app skills
 python -m loopos.cli.app memory
+python -m loopos.cli.app memory search pytest
+python -m loopos.cli.app profile show
 python -m loopos.cli.app config
 ```
 
