@@ -8,6 +8,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from loopos.core.safety import CommandRiskAnalyzer, RiskAssessment, RiskLevel
+from loopos.policy_os.engine import PolicyEngine
 
 
 class PermissionDecision(BaseModel):
@@ -35,6 +36,7 @@ class PermissionPolicy:
         network_allowed: bool = False,
         non_interactive: bool = True,
         analyzer: CommandRiskAnalyzer | None = None,
+        policy_engine: PolicyEngine | None = None,
     ) -> None:
         self.allowlist_paths = [Path(path).resolve() for path in (allowlist_paths or [])]
         self.denylist_patterns = denylist_patterns or []
@@ -43,6 +45,7 @@ class PermissionPolicy:
         self.network_allowed = network_allowed
         self.non_interactive = non_interactive
         self.analyzer = analyzer or CommandRiskAnalyzer()
+        self.policy_engine = policy_engine or PolicyEngine.load_default()
 
     def evaluate(
         self,
@@ -84,6 +87,37 @@ class PermissionPolicy:
 
         assessment = self.analyzer.analyze(cmd)
         reasons.extend(assessment.reasons)
+        policy_decision = self.policy_engine.evaluate(
+            "terminal.execute",
+            subject={
+                "cmd": cmd,
+                "cwd": str(cwd_path),
+                "timeout_seconds": timeout,
+                "risk_level": assessment.risk_level,
+                "requires_approval": assessment.requires_approval,
+                "matched_patterns": assessment.matched_patterns,
+            },
+            tags=["terminal"],
+            risk_level=assessment.risk_level,
+        )
+        if policy_decision.action == "deny":
+            return self._from_assessment(
+                assessment,
+                allowed=False,
+                reasons=reasons + [f"policy denied: {', '.join(policy_decision.reason_codes)}"],
+                timeout_seconds=timeout,
+            )
+        if policy_decision.action == "require_approval":
+            return PermissionDecision(
+                allowed=False,
+                risk_level=assessment.risk_level,
+                requires_approval=True,
+                reasons=reasons
+                + [f"policy requires approval: {', '.join(policy_decision.reason_codes)}"],
+                matched_patterns=assessment.matched_patterns,
+                timeout_seconds=timeout,
+                suggested_safe_alternative=assessment.suggested_safe_alternative,
+            )
 
         if not self.network_allowed and re.search(r"\b(curl|wget|scp|sftp|ftp|Invoke-WebRequest)\b", cmd, re.IGNORECASE):
             return self._from_assessment(

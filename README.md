@@ -5,6 +5,8 @@ LoopOS is a Python MVP for a terminal-native agent runtime. It is not a chatbot 
 ## Current MVP
 
 - Typed AI-ISA schema with validation and JSON round-tripping.
+- AIL Agent Internal Language models with AI-ISA adapters and instruction validation.
+- Policy OS MVP with YAML policy packs, deterministic matching, conflict resolution, and audit-friendly decisions.
 - Deterministic state-machine loop with mock planner, executor, evaluator, and event log.
 - Permission-gated terminal executor.
 - Memory OS primitives for events, state, beliefs, skills, governance, retrieval, and pre-action gates.
@@ -22,6 +24,8 @@ python -m pip install -e ".[dev]"
 python -m loopos.cli.app --help
 python -m loopos.cli.app run "inspect this workspace" --dry-run
 python -m loopos.cli.app run "demo task" --max-steps 3 --yes
+python -m loopos.cli.app policy list
+python -m loopos.cli.app policy check --scope terminal.execute --input "{\"cmd\":\"rm -rf tmp\"}"
 ```
 
 Preferred development checks:
@@ -42,7 +46,9 @@ python -m unittest discover -s tests
 
 ```text
 Goal
--> AI-ISA instruction
+-> AIL runtime context
+-> Policy OS constraints
+-> AI-ISA / AIL instruction
 -> state machine loop
 -> permission-gated tool execution
 -> observation
@@ -65,6 +71,8 @@ See `docs/safety.md` for details.
 - `docs/quickstart.md`
 - `docs/architecture.md`
 - `docs/ai-isa.md`
+- `docs/LoopOS_Fusion_Codex_Prompts.md`
+- `docs/LoopOS_Policy_OS.md`
 - `docs/memory.md`
 - `docs/memory-governance.md`
 - `docs/llm-provider.md`
@@ -85,7 +93,7 @@ No root license has been selected yet. Choose a license before public release.
 ## Roadmap
 
 1. Harden the terminal executor across Windows, Linux, and macOS.
-2. Add a real LLM instruction compiler behind the AI-ISA parser.
-3. Expand memory governance and conflict resolution.
-4. Add benchmark tasks and golden traces.
+2. Expand AIL coverage across planner, evaluator, renderer, and integrations.
+3. Add a real LLM instruction compiler behind the AIL / AI-ISA parser.
+4. Expand Policy OS policy packs and audit tooling.
 5. Deepen optional OpenHands and LangGraph integrations.

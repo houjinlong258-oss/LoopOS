@@ -127,6 +127,18 @@ This document maps the requested LoopOS prompt phases to the MVP files now prese
 
 Added JSONL + SQLite memory indexing, governed memory proposals, user profile storage, layered context compilation, mock/OpenAI-compatible memory proposal extraction, memory/profile CLI commands, and memory-focused benchmark tasks.
 
+## Fusion / AIL / Policy OS Additions
+
+- `docs/LoopOS_Fusion_Codex_Prompts.md`
+- `docs/LoopOS_Policy_OS.md`
+- `loopos/ail/`
+- `loopos/policy_os/`
+- `policies/`
+- `tests/test_ail.py`
+- `tests/test_policy_os.py`
+
+Added Agent Internal Language models, AI-ISA adapters, AIL validation, YAML policy packs, Policy OS loading/matching/conflict resolution, policy-aware terminal/tool/memory/context/loop integration, policy/AIL CLI commands, and a policy compliance benchmark task.
+
 ## Verification
 
 The MVP was verified with:
@@ -138,6 +150,8 @@ python -m ruff check .
 python -m mypy loopos tests
 python -m loopos.cli.app --help
 python -m loopos.cli.app run demo --dry-run
+python -m loopos.cli.app policy list
+python -m loopos.cli.app profile show
 ```
 
 The local environment used a repository-local `.venv`, which is ignored by `.gitignore`.

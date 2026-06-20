@@ -1,0 +1,47 @@
+id: tool-routing
+name: Tool Routing Policy
+version: 0.1.0
+description: Basic MCP-like tool routing preferences.
+priority: 700
+rules:
+  - id: tool.require_approval.high_risk
+    scope: tool.call
+    priority: 850
+    severity: high
+    tags: [tool, safety]
+    conditions:
+      - any:
+          - field: risk_level
+            operator: risk_at_least
+            value: high
+          - field: requires_approval
+            operator: equals
+            value: true
+    actions:
+      - type: require_approval
+        reason_code: tool.high_risk_requires_approval
+        audit_required: true
+  - id: tool.prefer.terminal_exec
+    scope: tool.call
+    priority: 200
+    severity: info
+    tags: [tool, terminal]
+    conditions:
+      - field: name
+        operator: equals
+        value: terminal.exec
+    actions:
+      - type: prefer_tool
+        reason_code: tool.prefer_terminal_exec
+        tool_preferences:
+          terminal.exec:
+            permission_gate: required
+  - id: tool.default.allow
+    scope: tool.call
+    priority: 100
+    severity: info
+    tags: [tool]
+    conditions: []
+    actions:
+      - type: allow
+        reason_code: tool.default_allow

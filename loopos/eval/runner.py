@@ -18,6 +18,7 @@ from loopos.memory.belief_store import MemoryItem
 from loopos.memory.pre_action_gate import PreActionGate
 from loopos.memory.repository import MemoryRepository
 from loopos.memory.skill_store import Skill
+from loopos.policy_os.engine import PolicyEngine
 
 
 class BenchmarkTask(BaseModel):
@@ -128,6 +129,27 @@ class EvalRunner:
                     steps=0,
                     command_count=0,
                     details={"user_model": context.user_model_snippets},
+                )
+
+            if "policy-compliance" in task.tags:
+                command = str(task.workspace_setup.get("command", "rm -rf tmp"))
+                expected_action = str(task.workspace_setup.get("expected_action", "deny"))
+                policy_decision = PolicyEngine.load_default().evaluate(
+                    "terminal.execute",
+                    subject={"cmd": command},
+                )
+                success = policy_decision.action == expected_action
+                return EvalTaskResult(
+                    task_id=task.id,
+                    success=success,
+                    status="succeeded" if success else "failed",
+                    steps=0,
+                    command_count=0,
+                    blocked_dangerous_actions=1 if policy_decision.action == "deny" else 0,
+                    details={
+                        "policy_action": policy_decision.action,
+                        "reasons": policy_decision.reason_codes,
+                    },
                 )
 
             engine = LoopEngine.with_local_stores(workspace / ".loopos", memory_repository=repo)

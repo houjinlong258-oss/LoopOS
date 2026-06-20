@@ -8,7 +8,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
+
+from loopos.ail.codec import instruction_to_ail
+from loopos.ail.models import AILInstruction
 from loopos.core.loop_engine import LoopEngine
+from loopos.core.isa import Instruction
 from loopos.core.policy import DeterministicDemoPolicy
 from loopos.core.state import LoopState
 from loopos.llm.providers import LLMProvider, MockLLMProvider, OpenAICompatibleProvider
@@ -16,6 +21,8 @@ from loopos.memory.event_log import EventLog
 from loopos.memory.repository import MemoryRepository
 from loopos.memory.skill_store import SkillStore
 from loopos.memory.state_store import StateStore
+from loopos.policy_os.audit import PolicyAuditLog
+from loopos.policy_os.engine import PolicyEngine
 
 typer_mod: Any
 ConsoleCls: Any
@@ -52,7 +59,12 @@ def _paths(data_dir: str | Path) -> dict[str, Path]:
         "runs": base / "runs",
         "skills": base / "skills.jsonl",
         "beliefs": base / "beliefs.jsonl",
+        "policy_audit": base / "policy_audit.jsonl",
     }
+
+
+def _policy_engine() -> PolicyEngine:
+    return PolicyEngine.load_default()
 
 
 def _render_state(state: LoopState, *, verbose: bool = False) -> str:
@@ -266,6 +278,100 @@ def profile_command(
     return 1
 
 
+def policy_command(
+    action: str = "list",
+    policy_id: str | None = None,
+    *,
+    scope: str | None = None,
+    input_json: str | None = None,
+    data_dir: str | Path = ".loopos",
+    verbose: bool = False,
+) -> int:
+    engine = _policy_engine()
+    if action == "list":
+        rows = [
+            {
+                "id": rule.id,
+                "scope": rule.scope,
+                "priority": rule.priority,
+                "severity": rule.severity,
+                "actions": [item.type for item in rule.actions],
+            }
+            for rule in engine.registry.list_rules(scope=scope)
+        ]
+        print(json.dumps(rows, ensure_ascii=False, indent=2))
+        return 0
+    if action == "show":
+        if not policy_id:
+            print("policy show requires POLICY_ID.", file=sys.stderr)
+            return 1
+        try:
+            try:
+                payload = engine.registry.get_rule(policy_id).model_dump(mode="json")
+            except KeyError:
+                payload = engine.registry.get_pack(policy_id).model_dump(mode="json")
+        except KeyError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
+    if action == "check":
+        if not scope:
+            print("policy check requires --scope SCOPE.", file=sys.stderr)
+            return 1
+        try:
+            subject = json.loads(input_json or "{}")
+        except json.JSONDecodeError as exc:
+            print(f"--input must be JSON: {exc}", file=sys.stderr)
+            return 1
+        if not isinstance(subject, dict):
+            print("--input must be a JSON object.", file=sys.stderr)
+            return 1
+        decision = engine.evaluate(scope, subject=subject)
+        if decision.audit_required:
+            PolicyAuditLog(_paths(data_dir)["policy_audit"]).append(scope, subject, decision)
+        print(decision.model_dump_json(indent=2))
+        return 0 if decision.allowed else 2
+    if action == "audit":
+        rows = PolicyAuditLog(_paths(data_dir)["policy_audit"]).list()
+        if not rows:
+            print("No policy audit entries.")
+            return 0
+        print(json.dumps(rows if verbose else rows[-20:], ensure_ascii=False, indent=2))
+        return 0
+    print(f"Unknown policy action: {action}", file=sys.stderr)
+    return 1
+
+
+def ail_command(action: str = "validate", file: str | None = None, *, verbose: bool = False) -> int:
+    if action not in {"validate", "inspect"}:
+        print(f"Unknown ail action: {action}", file=sys.stderr)
+        return 1
+    if not file:
+        print(f"ail {action} requires FILE.", file=sys.stderr)
+        return 1
+    try:
+        payload = json.loads(Path(file).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"Could not read AIL input: {exc}", file=sys.stderr)
+        return 1
+    try:
+        instruction = AILInstruction.model_validate(payload)
+    except ValidationError:
+        try:
+            instruction = instruction_to_ail(Instruction.model_validate(payload))
+        except ValidationError as exc:
+            print(f"Invalid AIL instruction: {exc}", file=sys.stderr)
+            return 1
+    if action == "validate":
+        print(f"valid AIL instruction: {instruction.id}")
+        if verbose:
+            print(instruction.model_dump_json(indent=2))
+        return 0
+    print(instruction.model_dump_json(indent=2))
+    return 0
+
+
 def config_command(*, data_dir: str | Path = ".loopos") -> int:
     print(
         json.dumps(
@@ -370,6 +476,34 @@ if _HAS_TUI:
     def _typer_config(data_dir: str = typer_mod.Option(".loopos", "--data-dir")) -> None:
         raise typer_mod.Exit(config_command(data_dir=data_dir))
 
+    @app.command("policy")
+    def _typer_policy(
+        action: str = typer_mod.Argument("list"),
+        policy_id: str | None = typer_mod.Argument(None),
+        scope: str | None = typer_mod.Option(None, "--scope"),
+        input_json: str | None = typer_mod.Option(None, "--input"),
+        data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+        verbose: bool = typer_mod.Option(False, "--verbose"),
+    ) -> None:
+        raise typer_mod.Exit(
+            policy_command(
+                action,
+                policy_id,
+                scope=scope,
+                input_json=input_json,
+                data_dir=data_dir,
+                verbose=verbose,
+            )
+        )
+
+    @app.command("ail")
+    def _typer_ail(
+        action: str = typer_mod.Argument("validate"),
+        file: str | None = typer_mod.Argument(None),
+        verbose: bool = typer_mod.Option(False, "--verbose"),
+    ) -> None:
+        raise typer_mod.Exit(ail_command(action, file, verbose=verbose))
+
 
 def _argparse_main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="loopos", description="LoopOS terminal-native AI-ISA runtime.")
@@ -416,6 +550,19 @@ def _argparse_main(argv: list[str] | None = None) -> int:
     profile_parser.add_argument("value", nargs="?")
     profile_parser.add_argument("--data-dir", default=".loopos")
 
+    policy_parser = sub.add_parser("policy")
+    policy_parser.add_argument("action", nargs="?", default="list")
+    policy_parser.add_argument("policy_id", nargs="?")
+    policy_parser.add_argument("--scope")
+    policy_parser.add_argument("--input", dest="input_json")
+    policy_parser.add_argument("--verbose", action="store_true")
+    policy_parser.add_argument("--data-dir", default=".loopos")
+
+    ail_parser = sub.add_parser("ail")
+    ail_parser.add_argument("action", nargs="?", default="validate")
+    ail_parser.add_argument("file", nargs="?")
+    ail_parser.add_argument("--verbose", action="store_true")
+
     config_parser = sub.add_parser("config")
     config_parser.add_argument("--data-dir", default=".loopos")
 
@@ -450,6 +597,17 @@ def _argparse_main(argv: list[str] | None = None) -> int:
         )
     if args.command == "profile":
         return profile_command(args.action, args.key, args.value, data_dir=args.data_dir)
+    if args.command == "policy":
+        return policy_command(
+            args.action,
+            args.policy_id,
+            scope=args.scope,
+            input_json=args.input_json,
+            data_dir=args.data_dir,
+            verbose=args.verbose,
+        )
+    if args.command == "ail":
+        return ail_command(args.action, args.file, verbose=args.verbose)
     if args.command == "config":
         return config_command(data_dir=args.data_dir)
     parser.print_help()

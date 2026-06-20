@@ -1,0 +1,41 @@
+id: memory-governance
+name: Memory Governance Policy
+version: 0.1.0
+description: Long-term memory write constraints.
+priority: 850
+rules:
+  - id: memory.deny.low_confidence
+    scope: memory.write
+    priority: 920
+    severity: high
+    tags: [memory, governance]
+    conditions:
+      - field: confidence
+        operator: lt
+        value: 0.35
+    actions:
+      - type: deny
+        reason_code: memory.low_confidence
+        audit_required: true
+  - id: memory.require_review.global_scope
+    scope: memory.write
+    priority: 820
+    severity: medium
+    tags: [memory, governance]
+    conditions:
+      - field: subject.scope
+        operator: equals
+        value: global
+    actions:
+      - type: require_review
+        reason_code: memory.global_scope_requires_review
+        audit_required: true
+  - id: memory.default.allow
+    scope: memory.write
+    priority: 100
+    severity: info
+    tags: [memory]
+    conditions: []
+    actions:
+      - type: allow
+        reason_code: memory.default_allow

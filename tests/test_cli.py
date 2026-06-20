@@ -4,6 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from loopos.core.isa import make_instruction
+
 
 class CliTests(unittest.TestCase):
     def run_cli(
@@ -88,6 +90,46 @@ class CliTests(unittest.TestCase):
             show_again = self.run_cli("profile", "show", "--data-dir", tmp)
             self.assertEqual(show_again.returncode, 0)
             self.assertIn('"tone": "direct"', show_again.stdout)
+
+    def test_policy_list_and_check(self) -> None:
+        list_result = self.run_cli("policy", "list")
+        self.assertEqual(list_result.returncode, 0)
+        self.assertIn("terminal.block.destructive_patterns", list_result.stdout)
+
+        check = self.run_cli(
+            "policy",
+            "check",
+            "--scope",
+            "terminal.execute",
+            "--input",
+            '{"cmd":"rm -rf tmp"}',
+        )
+        self.assertEqual(check.returncode, 2)
+        self.assertIn('"action": "deny"', check.stdout)
+
+    def test_policy_show(self) -> None:
+        result = self.run_cli("policy", "show", "terminal.block.destructive_patterns")
+        self.assertEqual(result.returncode, 0)
+        self.assertIn('"scope": "terminal.execute"', result.stdout)
+
+    def test_ail_validate_and_inspect(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "instruction.json"
+            path.write_text(
+                make_instruction(
+                    "EXEC_TERMINAL",
+                    "cli_validate",
+                    {"cmd": "echo hi"},
+                ).model_dump_json(),
+                encoding="utf-8",
+            )
+            validate = self.run_cli("ail", "validate", str(path))
+            self.assertEqual(validate.returncode, 0)
+            self.assertIn("valid AIL instruction", validate.stdout)
+
+            inspect = self.run_cli("ail", "inspect", str(path))
+            self.assertEqual(inspect.returncode, 0)
+            self.assertIn('"policy_scope": "terminal.execute"', inspect.stdout)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,41 @@
+id: git-file-safety
+name: Git and File Safety Policy
+version: 0.1.0
+description: Guard risky git and file operations.
+priority: 900
+rules:
+  - id: file.deny.private_key_access
+    scope: file.read
+    priority: 920
+    severity: critical
+    tags: [file, privacy]
+    conditions:
+      - field: path
+        operator: regex
+        value: '(\.ssh[/\\]id_rsa|\.ssh[/\\]id_ed25519)'
+    actions:
+      - type: deny
+        reason_code: file.private_key_access
+        audit_required: true
+  - id: file.write.default.approval
+    scope: file.write
+    priority: 300
+    severity: medium
+    tags: [file]
+    conditions: []
+    actions:
+      - type: allow
+        reason_code: file.write_workspace_allow
+  - id: git.require_approval.history_mutation
+    scope: git.operation
+    priority: 900
+    severity: high
+    tags: [git, safety]
+    conditions:
+      - field: command
+        operator: regex
+        value: '\bgit\s+(reset\s+--hard|clean\s+-f|push\s+--force)'
+    actions:
+      - type: require_approval
+        reason_code: git.history_mutation_requires_approval
+        audit_required: true

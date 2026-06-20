@@ -1,0 +1,19 @@
+id: renderer-style
+name: Renderer Style Policy
+version: 0.1.0
+description: Default terminal-native rendering style.
+priority: 500
+rules:
+  - id: renderer.default.concise
+    scope: renderer.render
+    priority: 300
+    severity: info
+    tags: [renderer, cli]
+    conditions: []
+    actions:
+      - type: modify
+        reason_code: renderer.concise_default
+        render_hints:
+          verbosity: normal
+          include_json_by_default: false
+          terminal_native: true

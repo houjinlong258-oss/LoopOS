@@ -32,6 +32,7 @@ LoopOS benchmarks are JSON task definitions that can run against the determinist
 - repeated failure avoidance
 - skill reuse
 - user preference context injection
+- policy compliance
 
 ## Running from Python
 

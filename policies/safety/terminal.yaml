@@ -1,0 +1,63 @@
+id: terminal-safety
+name: Terminal Safety Policy
+version: 0.1.0
+description: Conservative terminal execution policy.
+priority: 950
+rules:
+  - id: terminal.block.destructive_patterns
+    scope: terminal.execute
+    priority: 980
+    severity: critical
+    tags: [terminal, safety]
+    conditions:
+      - any:
+          - field: cmd
+            operator: regex
+            value: '\brm\s+-rf\b'
+          - field: cmd
+            operator: regex
+            value: '\bsudo\b'
+          - field: cmd
+            operator: regex
+            value: '\bmkfs(\.|)\w*\b'
+          - field: cmd
+            operator: regex
+            value: '\bcurl\b.*\|\s*(bash|sh)\b'
+          - field: cmd
+            operator: regex
+            value: '\bwget\b.*\|\s*(bash|sh)\b'
+          - field: cmd
+            operator: regex
+            value: '\bgit\s+reset\s+--hard\b'
+          - field: cmd
+            operator: regex
+            value: '\bgit\s+clean\s+-f'
+          - field: cmd
+            operator: regex
+            value: '\bgit\s+config\s+--global\b'
+    actions:
+      - type: deny
+        reason_code: terminal.destructive_pattern
+        audit_required: true
+  - id: terminal.require_approval.high_risk
+    scope: terminal.execute
+    priority: 900
+    severity: high
+    tags: [terminal, safety]
+    conditions:
+      - field: risk_level
+        operator: risk_at_least
+        value: high
+    actions:
+      - type: require_approval
+        reason_code: terminal.high_risk_requires_approval
+        audit_required: true
+  - id: terminal.default.allow
+    scope: terminal.execute
+    priority: 100
+    severity: info
+    tags: [terminal]
+    conditions: []
+    actions:
+      - type: allow
+        reason_code: terminal.default_allow

@@ -7,16 +7,25 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from loopos.execution.permissions import PermissionPolicy
 from loopos.execution.terminal import TerminalExecutor
 from loopos.mcp.types import RegisteredTool, ToolCall, ToolRegistry, ToolResult, ToolSpec
+from loopos.policy_os.engine import PolicyEngine
 
 
 class ToolRouter:
     """Resolve and invoke registered tools."""
 
-    def __init__(self, registry: ToolRegistry | None = None, *, auto_approve: bool = False) -> None:
+    def __init__(
+        self,
+        registry: ToolRegistry | None = None,
+        *,
+        auto_approve: bool = False,
+        policy_engine: PolicyEngine | None = None,
+    ) -> None:
         self.registry = registry or ToolRegistry()
         self.auto_approve = auto_approve
+        self.policy_engine = policy_engine or PolicyEngine.load_default()
 
     def register(self, spec: ToolSpec, handler: Callable[[ToolCall], ToolResult]) -> None:
         self.registry.register(spec, handler)
@@ -34,6 +43,26 @@ class ToolRouter:
             return ToolResult(success=False, name=tool_call.name, error=str(exc), risk_level="blocked")
 
         spec = registered.spec
+        policy_decision = self.policy_engine.evaluate(
+            "tool.call",
+            subject={
+                "name": tool_call.name,
+                "args": tool_call.args,
+                "risk_level": spec.risk_level,
+                "requires_approval": spec.requires_approval,
+                "tags": spec.tags,
+            },
+            tags=["tool", *spec.tags],
+            risk_level=spec.risk_level,
+        )
+        if not policy_decision.allowed:
+            return ToolResult(
+                success=False,
+                name=tool_call.name,
+                error=f"policy {policy_decision.action}: {', '.join(policy_decision.reason_codes)}",
+                risk_level=spec.risk_level,
+                requires_approval=policy_decision.action == "require_approval",
+            )
         if spec.risk_level in {"high", "blocked"} and not self.auto_approve:
             return ToolResult(
                 success=False,
@@ -45,6 +74,7 @@ class ToolRouter:
         result = registered.handler(tool_call)
         result.risk_level = spec.risk_level
         result.requires_approval = spec.requires_approval
+        result.output.setdefault("policy", policy_decision.model_dump(mode="json"))
         return result
 
 
@@ -53,12 +83,17 @@ def create_default_router(
     workspace: str | Path = ".",
     terminal: TerminalExecutor | None = None,
     auto_approve: bool = False,
+    policy_engine: PolicyEngine | None = None,
 ) -> ToolRouter:
     """Create router with MVP built-ins."""
 
     root = Path(workspace).resolve()
-    terminal_executor = terminal or TerminalExecutor(default_cwd=root, auto_approve=auto_approve)
-    router = ToolRouter(auto_approve=auto_approve)
+    terminal_executor = terminal or TerminalExecutor(
+        default_cwd=root,
+        auto_approve=auto_approve,
+        policy=PermissionPolicy(allowlist_paths=[root], policy_engine=policy_engine),
+    )
+    router = ToolRouter(auto_approve=auto_approve, policy_engine=policy_engine)
 
     def terminal_exec(call: ToolCall) -> ToolResult:
         observation = terminal_executor.execute(

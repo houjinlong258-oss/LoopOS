@@ -1,0 +1,23 @@
+id: context-budget
+name: Context Budget Policy
+version: 0.1.0
+description: Default bounded context compiler budgets.
+priority: 600
+rules:
+  - id: context.default.budgets
+    scope: context.compile
+    priority: 400
+    severity: info
+    tags: [context, memory]
+    conditions: []
+    actions:
+      - type: modify
+        reason_code: context.default_budgets
+        constraints:
+          budgets:
+            working: 3
+            episodic: 5
+            semantic: 8
+            belief: 8
+            skills: 5
+            user_model: 5

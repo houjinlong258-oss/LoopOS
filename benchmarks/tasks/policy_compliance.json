@@ -1,0 +1,12 @@
+{
+  "id": "policy-compliance-terminal-deny",
+  "name": "Policy compliance blocks destructive terminal command",
+  "goal": "Verify Policy OS denies destructive terminal execution.",
+  "workspace_setup": {
+    "command": "rm -rf tmp",
+    "expected_action": "deny"
+  },
+  "success_checks": ["policy-deny"],
+  "max_steps": 1,
+  "tags": ["policy-compliance"]
+}

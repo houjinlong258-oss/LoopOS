@@ -5,6 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Protocol
 
+from pydantic import ValidationError
+
+from loopos.ail.codec import instruction_to_ail
 from loopos.core.isa import Instruction, validate_instruction_for_mvp
 from loopos.core.context import ContextCompiler
 from loopos.core.policy import DeterministicDemoPolicy
@@ -15,6 +18,7 @@ from loopos.memory.extractor import MemoryProposalExtractor
 from loopos.memory.pre_action_gate import PreActionGate
 from loopos.memory.repository import MemoryRepository
 from loopos.memory.state_store import StateStore
+from loopos.policy_os.engine import PolicyEngine
 
 
 class PolicyProtocol(Protocol):
@@ -68,7 +72,10 @@ class SimpleEvaluator:
         instruction: Instruction,
         observation: Observation,
     ) -> Evaluation:
-        if observation.error == "blocked" or observation.data.get("gate_action") == "block":
+        if (
+            observation.error in {"blocked", "policy_blocked"}
+            or observation.data.get("gate_action") == "block"
+        ):
             return Evaluation(status="blocked", summary=observation.summary)
         if instruction.op == "TERMINATE":
             return Evaluation(
@@ -97,6 +104,7 @@ class LoopEngine:
         context_compiler: ContextCompiler | None = None,
         proposal_extractor: MemoryProposalExtractor | None = None,
         propose_memory: bool = False,
+        policy_engine: PolicyEngine | None = None,
     ) -> None:
         self.policy = policy or DeterministicDemoPolicy()
         self.executor = executor or MockInstructionExecutor()
@@ -105,7 +113,8 @@ class LoopEngine:
         self.state_store = state_store
         self.pre_action_gate = pre_action_gate
         self.memory_repository = memory_repository
-        self.context_compiler = context_compiler or ContextCompiler()
+        self.policy_engine = policy_engine or PolicyEngine.load_default()
+        self.context_compiler = context_compiler or ContextCompiler(policy_engine=self.policy_engine)
         self.proposal_extractor = proposal_extractor
         self.propose_memory = propose_memory
 
@@ -117,8 +126,10 @@ class LoopEngine:
         memory_repository: MemoryRepository | None = None,
         propose_memory: bool = False,
         llm_provider: LLMProvider | None = None,
+        policy_engine: PolicyEngine | None = None,
     ) -> "LoopEngine":
-        repo = memory_repository or MemoryRepository(base_dir)
+        engine = policy_engine or PolicyEngine.load_default()
+        repo = memory_repository or MemoryRepository(base_dir, policy_engine=engine)
         base = Path(base_dir)
         memories = repo.retrieve(limit=20)
         skills = repo.skills.list()
@@ -129,6 +140,7 @@ class LoopEngine:
             memory_repository=repo,
             proposal_extractor=MemoryProposalExtractor(llm_provider) if propose_memory else None,
             propose_memory=propose_memory,
+            policy_engine=engine,
         )
 
     def run(self, goal: str, *, max_steps: int = 5, timeout_seconds: int | None = None) -> LoopState:
@@ -148,32 +160,36 @@ class LoopEngine:
             instruction = self.policy.next_instruction(state)
             self._append("instruction_planned", state, instruction.model_dump(mode="json"))
 
-            issues = validate_instruction_for_mvp(instruction)
-            if issues:
-                observation = Observation(
-                    success=False,
-                    summary="instruction validation failed",
-                    error="; ".join(issues),
-                )
+            policy_observation = self._policy_observation(instruction)
+            if policy_observation is not None:
+                observation = policy_observation
             else:
-                gate_decision = (
-                    self.pre_action_gate.before(instruction) if self.pre_action_gate else None
-                )
-                if gate_decision and gate_decision.action == "block":
+                issues = validate_instruction_for_mvp(instruction)
+                if issues:
                     observation = Observation(
                         success=False,
-                        summary="pre-action gate blocked instruction",
-                        error="blocked",
-                        data={
-                            "gate_action": gate_decision.action,
-                            "reasons": gate_decision.reasons,
-                        },
+                        summary="instruction validation failed",
+                        error="; ".join(issues),
                     )
                 else:
-                    observation = self.executor.execute(instruction)
-                    if gate_decision and gate_decision.action != "allow":
-                        observation.data["gate_action"] = gate_decision.action
-                        observation.data["gate_reasons"] = gate_decision.reasons
+                    gate_decision = (
+                        self.pre_action_gate.before(instruction) if self.pre_action_gate else None
+                    )
+                    if gate_decision and gate_decision.action == "block":
+                        observation = Observation(
+                            success=False,
+                            summary="pre-action gate blocked instruction",
+                            error="blocked",
+                            data={
+                                "gate_action": gate_decision.action,
+                                "reasons": gate_decision.reasons,
+                            },
+                        )
+                    else:
+                        observation = self.executor.execute(instruction)
+                        if gate_decision and gate_decision.action != "allow":
+                            observation.data["gate_action"] = gate_decision.action
+                            observation.data["gate_reasons"] = gate_decision.reasons
 
             evaluation = self.evaluator.evaluate(state, instruction, observation)
             state.apply(instruction, observation, evaluation)
@@ -222,3 +238,72 @@ class LoopEngine:
                 len(events),
                 {"error": error},
             )
+
+    def _policy_observation(self, instruction: Instruction) -> Observation | None:
+        try:
+            ail_instruction = instruction_to_ail(instruction)
+        except (ValueError, ValidationError) as exc:
+            return Observation(
+                success=False,
+                summary="AIL validation failed",
+                error=str(exc),
+                data={"instruction_id": instruction.id},
+            )
+
+        instruction_decision = self.policy_engine.evaluate(
+            "instruction.validate",
+            subject=ail_instruction.model_dump(mode="json"),
+            tags=["instruction", instruction.op.lower()],
+            risk_level=instruction.safety.risk_level,
+        )
+        if not instruction_decision.allowed:
+            return Observation(
+                success=False,
+                summary="instruction blocked by policy",
+                error="policy_blocked",
+                data={"policy": instruction_decision.model_dump(mode="json")},
+            )
+
+        if instruction.op == "EXEC_TERMINAL":
+            terminal_decision = self.policy_engine.evaluate(
+                "terminal.execute",
+                subject={
+                    "cmd": str(instruction.args.get("cmd", "")),
+                    "cwd": str(instruction.args.get("cwd", ".")),
+                    "risk_level": instruction.safety.risk_level,
+                    "requires_approval": instruction.safety.requires_approval,
+                },
+                tags=["terminal"],
+                risk_level=instruction.safety.risk_level,
+            )
+            if not terminal_decision.allowed:
+                return Observation(
+                    success=False,
+                    summary="terminal instruction blocked by policy",
+                    error="policy_blocked",
+                    command=str(instruction.args.get("cmd", "")),
+                    cwd=str(instruction.args.get("cwd", ".")),
+                    data={"policy": terminal_decision.model_dump(mode="json")},
+                )
+
+        if instruction.op == "CALL_TOOL":
+            tool_decision = self.policy_engine.evaluate(
+                "tool.call",
+                subject={
+                    "name": str(instruction.args.get("tool", "")),
+                    "args": instruction.args.get("arguments", {}),
+                    "risk_level": instruction.safety.risk_level,
+                    "requires_approval": instruction.safety.requires_approval,
+                },
+                tags=["tool"],
+                risk_level=instruction.safety.risk_level,
+            )
+            if not tool_decision.allowed:
+                return Observation(
+                    success=False,
+                    summary="tool call blocked by policy",
+                    error="policy_blocked",
+                    data={"policy": tool_decision.model_dump(mode="json")},
+                )
+
+        return None

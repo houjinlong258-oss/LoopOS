@@ -56,6 +56,8 @@ python -m loopos.cli.app skills
 python -m loopos.cli.app memory
 python -m loopos.cli.app memory search pytest
 python -m loopos.cli.app profile show
+python -m loopos.cli.app policy list
+python -m loopos.cli.app policy check --scope terminal.execute --input "{\"cmd\":\"rm -rf tmp\"}"
 python -m loopos.cli.app config
 ```
 

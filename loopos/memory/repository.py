@@ -14,6 +14,7 @@ from loopos.memory.retrieval import MemoryRetriever
 from loopos.memory.skill_store import SkillStore
 from loopos.memory.sqlite_store import SQLiteMemoryIndex
 from loopos.memory.state_store import StateStore
+from loopos.policy_os.engine import PolicyEngine
 
 ProposalDecision = Literal["accepted", "rejected", "merged"]
 
@@ -21,7 +22,12 @@ ProposalDecision = Literal["accepted", "rejected", "merged"]
 class MemoryRepository:
     """JSONL + SQLite memory facade."""
 
-    def __init__(self, base_dir: str | Path = ".loopos") -> None:
+    def __init__(
+        self,
+        base_dir: str | Path = ".loopos",
+        *,
+        policy_engine: PolicyEngine | None = None,
+    ) -> None:
         self.base_dir = Path(base_dir)
         self.base_dir.mkdir(parents=True, exist_ok=True)
         self.events = EventLog(self.base_dir / "events.jsonl")
@@ -30,12 +36,25 @@ class MemoryRepository:
         self.skills = SkillStore(self.base_dir / "skills.jsonl")
         self.index = SQLiteMemoryIndex(self.base_dir / "memory.sqlite3")
         self.governance = MemoryGovernance()
+        self.policy_engine = policy_engine or PolicyEngine.load_default()
 
     def save_state(self, state: LoopState) -> None:
         self.states.save(state)
         self.index.upsert_run(state)
 
     def write_memory(self, item: MemoryItem) -> GovernanceDecision:
+        policy_decision = self.policy_engine.evaluate(
+            "memory.write",
+            subject=item.model_dump(mode="json"),
+            tags=["memory", item.layer, item.scope],
+            risk_level="medium" if item.scope == "global" else "low",
+        )
+        if not policy_decision.allowed:
+            return GovernanceDecision(
+                action="reject",
+                reasons=[f"policy {policy_decision.action}: {', '.join(policy_decision.reason_codes)}"],
+                item=item,
+            )
         existing = self.list_memory(status="active")
         decision = self.governance.review(item, existing=existing)
         if decision.action in {"allow", "warn", "merge"} and decision.item is not None:

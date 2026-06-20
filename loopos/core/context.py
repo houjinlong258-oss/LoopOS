@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from loopos.core.state import LoopState
 from loopos.memory.belief_store import MemoryItem
 from loopos.memory.skill_store import Skill
+from loopos.policy_os.engine import PolicyEngine
 
 
 class AgentContext(BaseModel):
@@ -29,6 +30,7 @@ class AgentContext(BaseModel):
     reusable_skills: list[dict[str, Any]] = Field(default_factory=list)
     user_model_snippets: list[dict[str, Any]] = Field(default_factory=list)
     recent_failures: list[dict[str, Any]] = Field(default_factory=list)
+    policy: dict[str, Any] = Field(default_factory=dict)
 
 
 PolicyContext = AgentContext
@@ -47,6 +49,7 @@ class ContextCompiler:
         semantic_budget: int = 8,
         skill_budget: int = 5,
         user_model_budget: int = 5,
+        policy_engine: PolicyEngine | None = None,
     ) -> None:
         self.max_memory = max_memory
         self.max_skills = max_skills
@@ -55,6 +58,7 @@ class ContextCompiler:
         self.semantic_budget = semantic_budget
         self.skill_budget = skill_budget
         self.user_model_budget = user_model_budget
+        self.policy_engine = policy_engine
 
     def compile(
         self,
@@ -62,33 +66,59 @@ class ContextCompiler:
         memories: list[MemoryItem] | None = None,
         skills: list[Skill] | None = None,
     ) -> PolicyContext:
+        policy_payload: dict[str, Any] = {}
+        working_budget = self.working_budget
+        episodic_budget = self.episodic_budget
+        semantic_budget = self.semantic_budget
+        skill_budget = self.skill_budget
+        user_model_budget = self.user_model_budget
+        if self.policy_engine is not None:
+            decision = self.policy_engine.evaluate(
+                "context.compile",
+                subject={
+                    "run_id": state.run_id,
+                    "goal": state.goal,
+                    "status": state.status,
+                    "step_index": state.step_index,
+                },
+                tags=["context", "memory"],
+            )
+            policy_payload = decision.model_dump(mode="json")
+            budgets = decision.constraints.get("budgets", {})
+            if isinstance(budgets, dict):
+                working_budget = _budget(budgets.get("working"), working_budget)
+                episodic_budget = _budget(budgets.get("episodic"), episodic_budget)
+                semantic_budget = _budget(budgets.get("semantic"), semantic_budget)
+                skill_budget = _budget(budgets.get("skills"), skill_budget)
+                user_model_budget = _budget(budgets.get("user_model"), user_model_budget)
+
         memory_items = memories or []
         skill_items = skills or []
         working = self._memory_dicts(
             [item for item in memory_items if item.layer == "working"],
-            self.working_budget,
+            working_budget,
         )
         episodic = self._memory_dicts(
             [item for item in memory_items if item.layer == "episodic"],
-            self.episodic_budget,
+            episodic_budget,
         )
         semantic = self._memory_dicts(
             [item for item in memory_items if item.layer == "semantic"],
-            self.semantic_budget,
+            semantic_budget,
         )
         beliefs = self._memory_dicts(
             [item for item in memory_items if item.layer == "belief"],
-            self.semantic_budget,
+            semantic_budget,
         )
         user_model = self._memory_dicts(
             [item for item in memory_items if item.layer == "user_model"],
-            self.user_model_budget,
+            user_model_budget,
         )
         recent_failures = self._memory_dicts(
             [item for item in memory_items if item.type == "failure"],
-            self.episodic_budget,
+            episodic_budget,
         )
-        reusable_skills = self._skill_dicts(skill_items, self.skill_budget)
+        reusable_skills = self._skill_dicts(skill_items, skill_budget)
         return AgentContext(
             run_id=state.run_id,
             goal=state.goal,
@@ -105,6 +135,7 @@ class ContextCompiler:
             reusable_skills=reusable_skills,
             user_model_snippets=user_model,
             recent_failures=recent_failures,
+            policy=policy_payload,
         )
 
     @staticmethod
@@ -134,3 +165,11 @@ class ContextCompiler:
             }
             for skill in skills[:limit]
         ]
+
+
+def _budget(value: Any, fallback: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return fallback
+    return parsed if parsed >= 0 else fallback

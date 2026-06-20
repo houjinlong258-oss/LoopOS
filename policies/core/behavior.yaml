@@ -1,0 +1,15 @@
+id: core-behavior
+name: Core Behavior Policy
+version: 0.1.0
+description: Baseline state-driven runtime behavior.
+priority: 700
+rules:
+  - id: instruction.default.allow
+    scope: instruction.validate
+    priority: 100
+    severity: info
+    tags: [core, instruction]
+    conditions: []
+    actions:
+      - type: allow
+        reason_code: instruction.default_allow
