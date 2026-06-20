@@ -64,6 +64,8 @@ def resolve_policy_conflicts(matched_rules: list[PolicyRule]) -> PolicyDecision:
     return PolicyDecision(
         allowed=action_type in {"allow", "modify", "prefer_tool"},
         action=action_type,
+        risk=_risk_for_action(action_type),
+        requires_approval=action_type in {"require_approval", "require_review"},
         severity=max(_max_severity(matched_rules), primary_rule.severity, key=lambda value: SEVERITY_ORDER[value]),
         reason_codes=_dedupe(reason_codes),
         constraints=constraints,
@@ -73,6 +75,16 @@ def resolve_policy_conflicts(matched_rules: list[PolicyRule]) -> PolicyDecision:
         audit_required=audit_required,
         matched_rules=[rule.id for rule in matched_rules],
     )
+
+
+def _risk_for_action(action: PolicyActionType) -> str:
+    if action == "deny":
+        return "blocked"
+    if action == "require_approval":
+        return "high"
+    if action == "require_review":
+        return "medium"
+    return "low"
 
 
 def _max_severity(rules: list[PolicyRule]) -> PolicySeverity:

@@ -14,6 +14,43 @@ from loopos.memory.belief_store import MemoryLayer, MemoryScope, MemoryStatus, M
 
 RenderFormat = Literal["text", "json", "markdown"]
 RenderVerbosity = Literal["quiet", "normal", "verbose"]
+KernelOp = Literal[
+    "GOAL.SET",
+    "CTX.COMPILE",
+    "PLAN.CREATE",
+    "PLAN.UPDATE",
+    "SYSCALL.PREPARE",
+    "TOOL.CALL",
+    "TERM.EXEC",
+    "FILE.READ",
+    "FILE.WRITE",
+    "GIT.STATUS",
+    "GIT.DIFF",
+    "STATE.PATCH",
+    "STATE.SNAPSHOT",
+    "EVAL.SCORE",
+    "MEM.PROPOSE",
+    "MEM.COMMIT",
+    "SKILL.EXTRACT",
+    "SKILL.APPLY",
+    "LOOP.CONTINUE",
+    "LOOP.REPAIR",
+    "LOOP.REPLAN",
+    "LOOP.WAIT_APPROVAL",
+    "LOOP.HALT",
+]
+
+LEGACY_TO_KERNEL_OP: dict[str, KernelOp] = {
+    "PLAN": "PLAN.CREATE",
+    "CALL_TOOL": "TOOL.CALL",
+    "EXEC_TERMINAL": "TERM.EXEC",
+    "OBSERVE": "STATE.SNAPSHOT",
+    "EVALUATE": "EVAL.SCORE",
+    "UPDATE_STATE": "STATE.PATCH",
+    "STORE_MEMORY": "MEM.PROPOSE",
+    "EXTRACT_SKILL": "SKILL.EXTRACT",
+    "TERMINATE": "LOOP.HALT",
+}
 
 
 def utc_now() -> datetime:
@@ -49,35 +86,78 @@ class AILState(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class AILReason(BaseModel):
+    """Auditable reason without model scratchpad content."""
+
+    code: str
+    evidence: list[str] = Field(default_factory=list)
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+
+    @field_validator("code")
+    @classmethod
+    def code_required(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("reason code is required")
+        return value
+
+
+class AILPolicyRef(BaseModel):
+    """Reference to the policy decision used by the kernel."""
+
+    decision_id: str | None = None
+    matched_rules: list[str] = Field(default_factory=list)
+
+
 class AILInstruction(BaseModel):
     """Canonical internal instruction object."""
 
     model_config = ConfigDict(extra="forbid")
 
     id: str = Field(default_factory=lambda: str(uuid4()))
-    op: InstructionOp
+    run_id: str | None = None
+    step: int = Field(default=0, ge=0)
+    op: InstructionOp | KernelOp
     created_at: datetime = Field(default_factory=utc_now)
-    reason_code: str
+    reason_code: str = ""
+    reason: AILReason | None = None
     args: dict[str, Any] = Field(default_factory=dict)
     safety: InstructionSafety = Field(default_factory=InstructionSafety)
     expected_observation: ExpectedObservation = Field(default_factory=ExpectedObservation)
+    expect: ExpectedObservation | None = None
+    policy: AILPolicyRef = Field(default_factory=AILPolicyRef)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("reason_code")
     @classmethod
     def reason_code_required(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("reason_code is required")
         return value
 
     @model_validator(mode="after")
     def validate_instruction_contract(self) -> "AILInstruction":
+        if self.reason is None and self.reason_code.strip():
+            self.reason = AILReason(code=self.reason_code)
+        elif self.reason is not None and not self.reason_code.strip():
+            self.reason_code = self.reason.code
+        if not self.reason_code.strip():
+            raise ValueError("reason_code is required")
+        if self.expect is None:
+            self.expect = self.expected_observation
+        else:
+            self.expected_observation = self.expect
+        if "." in self.op and not self.run_id:
+            raise ValueError("kernel instructions require run_id")
         from loopos.ail.validators import validate_ail_instruction
 
         issues = validate_ail_instruction(self)
         if issues:
             raise ValueError("; ".join(issues))
         return self
+
+    @property
+    def normalized_op(self) -> KernelOp:
+        if "." in self.op:
+            return self.op  # type: ignore[return-value]
+        return LEGACY_TO_KERNEL_OP[self.op]
 
 
 class AILObservation(BaseModel):
@@ -92,6 +172,26 @@ class AILObservation(BaseModel):
     duration_ms: int = 0
     error: str | None = None
     data: dict[str, Any] = Field(default_factory=dict)
+
+
+class AILSyscall(BaseModel):
+    """Kernel syscall envelope linked to one instruction and decision."""
+
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    run_id: str
+    instruction_id: str
+    name: str
+    input: dict[str, Any] = Field(default_factory=dict)
+    policy_decision_id: str
+    risk: Literal["low", "medium", "high", "blocked"] = "low"
+    created_at: datetime = Field(default_factory=utc_now)
+
+    @field_validator("run_id", "instruction_id", "name", "policy_decision_id")
+    @classmethod
+    def syscall_value_required(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("syscall fields cannot be empty")
+        return value
 
 
 class AILEvaluation(BaseModel):

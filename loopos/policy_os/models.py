@@ -111,12 +111,27 @@ class PolicyRequest(BaseModel):
     created_at: datetime = Field(default_factory=utc_now)
 
 
+class PolicyContext(BaseModel):
+    """Typed kernel context supplied to Policy OS."""
+
+    phase: str
+    task: dict[str, Any] = Field(default_factory=dict)
+    state: dict[str, Any] = Field(default_factory=dict)
+    instruction: dict[str, Any] = Field(default_factory=dict)
+    syscall: dict[str, Any] = Field(default_factory=dict)
+    memory: dict[str, Any] = Field(default_factory=dict)
+    runtime: dict[str, Any] = Field(default_factory=dict)
+
+
 class PolicyDecision(BaseModel):
     """Resolved decision returned by Policy OS."""
 
+    decision_id: str = Field(default_factory=lambda: str(uuid4()))
     allowed: bool
     action: PolicyActionType
     severity: PolicySeverity = "info"
+    risk: PolicyRiskLevel = "low"
+    requires_approval: bool = False
     reason_codes: list[str] = Field(default_factory=list)
     constraints: dict[str, Any] = Field(default_factory=dict)
     tool_preferences: dict[str, Any] = Field(default_factory=dict)
@@ -124,3 +139,9 @@ class PolicyDecision(BaseModel):
     render_hints: dict[str, Any] = Field(default_factory=dict)
     audit_required: bool = False
     matched_rules: list[str] = Field(default_factory=list)
+
+    @property
+    def renderer_hints(self) -> dict[str, Any]:
+        """Kernel-prompt spelling retained without breaking render_hints callers."""
+
+        return self.render_hints

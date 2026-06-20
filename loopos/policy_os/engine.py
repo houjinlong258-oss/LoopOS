@@ -8,7 +8,7 @@ from typing import Any
 from loopos.policy_os.conflict_resolver import resolve_policy_conflicts
 from loopos.policy_os.loader import load_policy_packs
 from loopos.policy_os.matcher import matches_rule
-from loopos.policy_os.models import PolicyDecision, PolicyRequest
+from loopos.policy_os.models import PolicyContext, PolicyDecision, PolicyRequest
 from loopos.policy_os.registry import PolicyRegistry
 
 
@@ -52,6 +52,24 @@ class PolicyEngine:
         )
         matched = [rule for rule in self.registry.list_rules(scope=scope) if matches_rule(rule, request)]
         return resolve_policy_conflicts(matched)
+
+    def evaluate_context(
+        self,
+        scope: str,
+        context: PolicyContext,
+        *,
+        tags: list[str] | None = None,
+        risk_level: str = "low",
+    ) -> PolicyDecision:
+        """Evaluate a complete kernel context while preserving the existing API."""
+
+        return self.evaluate(
+            scope,
+            subject=context.model_dump(mode="json"),
+            tags=tags,
+            risk_level=risk_level,
+            metadata={"phase": context.phase},
+        )
 
 
 def _normalize_risk(value: str) -> str:

@@ -12,14 +12,14 @@ def validate_ail_instruction(instruction: AILInstruction) -> list[str]:
     if instruction.expected_observation is None:
         issues.append("expected_observation is required")
 
-    if instruction.op == "EXEC_TERMINAL":
+    if instruction.op in {"EXEC_TERMINAL", "TERM.EXEC"}:
         command = instruction.args.get("cmd")
         if not isinstance(command, str) or not command.strip():
             issues.append("EXEC_TERMINAL requires args.cmd")
         if not instruction.metadata.get("policy_scope") and not instruction.metadata.get("policy_decision"):
             issues.append("EXEC_TERMINAL requires policy metadata")
 
-    if instruction.op == "CALL_TOOL":
+    if instruction.op in {"CALL_TOOL", "TOOL.CALL"}:
         tool = instruction.args.get("tool")
         if not isinstance(tool, str) or not tool.strip():
             issues.append("CALL_TOOL requires args.tool")
@@ -29,12 +29,17 @@ def validate_ail_instruction(instruction: AILInstruction) -> list[str]:
         if not instruction.metadata.get("routing") and not instruction.metadata.get("policy_scope"):
             issues.append("CALL_TOOL requires routing or policy metadata")
 
-    if instruction.op == "STORE_MEMORY":
+    if instruction.op in {"STORE_MEMORY", "MEM.COMMIT"}:
         has_proposal = any(key in instruction.args for key in ("proposal", "proposal_id", "request"))
         if "item" in instruction.args and not has_proposal:
             issues.append("STORE_MEMORY must use a proposal or explicit write request")
 
     if instruction.safety.risk_level == "blocked" and not instruction.safety.requires_approval:
         issues.append("blocked risk_level requires approval metadata")
+
+    if instruction.op == "LOOP.HALT":
+        reason = instruction.args.get("reason")
+        if not isinstance(reason, str) or not reason.strip():
+            issues.append("LOOP.HALT requires args.reason")
 
     return issues
