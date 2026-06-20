@@ -12,5 +12,8 @@ Phase 1 modularization has started without changing public command behavior:
 - `loopos/cli/commands/tasks.py`, `triggers.py`, `worktrees.py`, and `review.py` own outer-loop command logic.
 - `loopos/cli/commands/models.py` owns provider and multi-model commands.
 - `loopos/cli/commands/gateway.py` owns ChatOps commands.
+- `loopos/cli/commands/goal.py` owns Goal Negotiation commands and option parsing.
+- `loopos/cli/commands/memory.py` owns memory, profile, and skill commands.
+- `loopos/cli/commands/policy.py`, `ail.py`, and `config.py` own their command logic.
 - `loopos/cli/app.py` retains compatible imports plus Typer/argparse registration while remaining command groups are migrated.
 - Modularization contracts verify that the app exports the same command callables and data paths.

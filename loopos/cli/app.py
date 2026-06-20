@@ -9,22 +9,25 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from pydantic import ValidationError
-
 from loopos.cli.commands import (
+    ail_command as ail_command,
+    config_command as config_command,
     gateway_command as gateway_command,
+    goal_command as goal_command,
+    memory_command as memory_command,
     models_command as models_command,
+    parse_goal_options as _parse_goal_options,
+    policy_command as policy_command,
+    profile_command as profile_command,
     providers_command as providers_command,
     review_command as review_command,
+    skills_command as skills_command,
     tasks_command as tasks_command,
     triggers_command as triggers_command,
     worktrees_command as worktrees_command,
 )
 from loopos.cli.context import data_paths
 
-from loopos.ail.codec import instruction_to_ail
-from loopos.ail.models import AILInstruction
-from loopos.core.isa import Instruction
 from loopos.core.state import LoopState
 from loopos.goal import GoalNegotiator
 from loopos.kernel import (
@@ -40,8 +43,6 @@ from loopos.kernel import (
 from loopos.llm.providers import LLMProvider, MockLLMProvider, OpenAICompatibleProvider
 from loopos.memory.extractor import MemoryProposalExtractor
 from loopos.memory.repository import MemoryRepository
-from loopos.policy_os.audit import PolicyAuditLog
-from loopos.policy_os.engine import PolicyEngine
 from loopos.syscalls import create_default_syscall_router
 
 typer_mod: Any
@@ -72,10 +73,6 @@ else:
 
 
 _paths = data_paths
-
-
-def _policy_engine() -> PolicyEngine:
-    return PolicyEngine.load_default()
 
 
 def _render_state(state: LoopState, *, verbose: bool = False) -> str:
@@ -318,53 +315,6 @@ def history_command(run_id: str, *, data_dir: str | Path = ".loopos") -> int:
     return 0
 
 
-def skills_command(
-    action: str = "list",
-    arg: str | None = None,
-    *,
-    data_dir: str | Path = ".loopos",
-) -> int:
-    repo = MemoryRepository(_paths(data_dir)["base"])
-    skills = repo.skills.list()
-    if action == "review":
-        proposals = repo.list_skill_proposals(status="pending")
-        print(json.dumps([item.model_dump(mode="json") for item in proposals], ensure_ascii=False, indent=2))
-        return 0
-    if action == "accept":
-        if not arg:
-            print("skills accept requires PROPOSAL_ID.", file=sys.stderr)
-            return 1
-        try:
-            proposal = repo.commit_skill_proposal(arg)
-        except KeyError as exc:
-            print(str(exc), file=sys.stderr)
-            return 1
-        print(f"{proposal.status}: {proposal.id}")
-        return 0 if proposal.status in {"accepted", "merged"} else 1
-    if action == "disable":
-        if not arg:
-            print("skills disable requires SKILL_ID.", file=sys.stderr)
-            return 1
-        for skill in skills:
-            if skill.id == arg:
-                skill.status = "disabled"
-                repo.skills.upsert(skill)
-                repo.index.upsert_skill(skill)
-                print(f"disabled: {skill.id}")
-                return 0
-        print(f"Skill not found: {arg}", file=sys.stderr)
-        return 1
-    if action != "list":
-        print(f"Unknown skills action: {action}", file=sys.stderr)
-        return 1
-    skills = [skill for skill in skills if skill.status == "active"]
-    if not skills:
-        print("No skills stored.")
-        return 0
-    print(json.dumps([skill.model_dump(mode="json") for skill in skills], ensure_ascii=False, indent=2))
-    return 0
-
-
 def trace_command(
     run_id: str,
     *,
@@ -442,249 +392,6 @@ def tools_command(
     return 0
 
 
-def goal_command(
-    action: str,
-    raw_goal: str,
-    *,
-    option: str | None = None,
-    json_output: bool = False,
-) -> int:
-    negotiator = GoalNegotiator()
-    payload: Any
-    if action == "analyze":
-        payload = negotiator.analyze(raw_goal)
-    elif action == "propose":
-        payload = negotiator.propose(raw_goal)
-    elif action == "finalize":
-        try:
-            payload = negotiator.finalize(raw_goal, option_ids=_parse_goal_options(option))
-        except ValueError as exc:
-            print(str(exc), file=sys.stderr)
-            return 1
-    else:
-        print(f"Unknown goal action: {action}", file=sys.stderr)
-        return 1
-    if json_output or action != "propose":
-        print(payload.model_dump_json(indent=2))
-        return 0
-    for item in payload.options:
-        print(f"[{item.id}] {item.title}: {item.objective}")
-    return 0
-
-
-def memory_command(
-    action: str = "list",
-    arg: str | None = None,
-    *,
-    from_run: str | None = None,
-    data_dir: str | Path = ".loopos",
-    verbose: bool = False,
-) -> int:
-    repo = MemoryRepository(_paths(data_dir)["base"])
-    if action == "list":
-        items = repo.list_memory(status="active")
-        if not items:
-            print("No active memory.")
-            return 0
-        print(json.dumps([item.model_dump(mode="json") for item in items], ensure_ascii=False, indent=2))
-        return 0
-    if action == "search":
-        if not arg:
-            print("Search query is required.", file=sys.stderr)
-            return 1
-        items = repo.retrieve(query_text=arg, tags=arg.split(), limit=10)
-        print(json.dumps([item.model_dump(mode="json") for item in items], ensure_ascii=False, indent=2))
-        return 0
-    if action == "propose":
-        if not from_run:
-            print("--from-run RUN_ID is required.", file=sys.stderr)
-            return 1
-        proposal = repo.proposal_for_run(from_run)
-        repo.propose(proposal)
-        print(f"Created proposal {proposal.id}")
-        if verbose:
-            print(proposal.model_dump_json(indent=2))
-        return 0
-    if action == "review":
-        proposals = repo.list_proposals(status="pending")
-        if not proposals:
-            print("No pending memory proposals.")
-            return 0
-        print(json.dumps([proposal.model_dump(mode="json") for proposal in proposals], ensure_ascii=False, indent=2))
-        return 0
-    if action in {"accept", "reject"}:
-        if not arg:
-            print(f"Proposal id is required for memory {action}.", file=sys.stderr)
-            return 1
-        try:
-            proposal = repo.decide_proposal(
-                arg,
-                "accepted" if action == "accept" else "rejected",
-                reasons=[f"CLI {action}"],
-            )
-        except KeyError as exc:
-            print(str(exc), file=sys.stderr)
-            return 1
-        print(f"{proposal.status}: {proposal.id}")
-        return 0
-    if action == "reindex":
-        counts = repo.reindex()
-        print(json.dumps(counts, ensure_ascii=False, indent=2))
-        return 0
-    print(f"Unknown memory action: {action}", file=sys.stderr)
-    return 1
-
-
-def profile_command(
-    action: str = "show",
-    key: str | None = None,
-    value: str | None = None,
-    *,
-    data_dir: str | Path = ".loopos",
-) -> int:
-    repo = MemoryRepository(_paths(data_dir)["base"])
-    if action == "show":
-        profile = repo.get_profile()
-        if not profile:
-            print("No user profile.")
-        else:
-            print(json.dumps(profile, ensure_ascii=False, indent=2))
-        return 0
-    if action == "set":
-        if not key or value is None:
-            print("profile set requires KEY and VALUE.", file=sys.stderr)
-            return 1
-        repo.set_profile(key, value)
-        print(f"Set profile {key}")
-        return 0
-    print(f"Unknown profile action: {action}", file=sys.stderr)
-    return 1
-
-
-def policy_command(
-    action: str = "list",
-    policy_id: str | None = None,
-    *,
-    scope: str | None = None,
-    input_json: str | None = None,
-    data_dir: str | Path = ".loopos",
-    verbose: bool = False,
-    cmd: str | None = None,
-) -> int:
-    engine = _policy_engine()
-    if action == "list":
-        rows = [
-            {
-                "id": rule.id,
-                "scope": rule.scope,
-                "priority": rule.priority,
-                "severity": rule.severity,
-                "actions": [item.type for item in rule.actions],
-            }
-            for rule in engine.registry.list_rules(scope=scope)
-        ]
-        print(json.dumps(rows, ensure_ascii=False, indent=2))
-        return 0
-    if action == "show":
-        if not policy_id:
-            print("policy show requires POLICY_ID.", file=sys.stderr)
-            return 1
-        try:
-            try:
-                payload = engine.registry.get_rule(policy_id).model_dump(mode="json")
-            except KeyError:
-                payload = engine.registry.get_pack(policy_id).model_dump(mode="json")
-        except KeyError as exc:
-            print(str(exc), file=sys.stderr)
-            return 1
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
-        return 0
-    if action == "check":
-        if not scope:
-            print("policy check requires --scope SCOPE.", file=sys.stderr)
-            return 1
-        try:
-            subject = json.loads(input_json or "{}")
-        except json.JSONDecodeError as exc:
-            print(f"--input must be JSON: {exc}", file=sys.stderr)
-            return 1
-        if not isinstance(subject, dict):
-            print("--input must be a JSON object.", file=sys.stderr)
-            return 1
-        decision = engine.evaluate(scope, subject=subject)
-        if decision.audit_required:
-            PolicyAuditLog(_paths(data_dir)["policy_audit"]).append(scope, subject, decision)
-        print(decision.model_dump_json(indent=2))
-        return 0 if decision.allowed else 2
-    if action == "audit":
-        rows = PolicyAuditLog(_paths(data_dir)["policy_audit"]).list()
-        if not rows:
-            print("No policy audit entries.")
-            return 0
-        print(json.dumps(rows if verbose else rows[-20:], ensure_ascii=False, indent=2))
-        return 0
-    if action == "explain":
-        if not cmd:
-            print("policy explain requires --cmd CMD.", file=sys.stderr)
-            return 1
-        decision = engine.evaluate(
-            "terminal.execute",
-            subject={"cmd": cmd, "risk_level": "medium"},
-            tags=["terminal", "explain"],
-            risk_level="medium",
-        )
-        print(decision.model_dump_json(indent=2))
-        return 0 if decision.allowed else 2
-    print(f"Unknown policy action: {action}", file=sys.stderr)
-    return 1
-
-
-def ail_command(action: str = "validate", file: str | None = None, *, verbose: bool = False) -> int:
-    if action not in {"validate", "inspect"}:
-        print(f"Unknown ail action: {action}", file=sys.stderr)
-        return 1
-    if not file:
-        print(f"ail {action} requires FILE.", file=sys.stderr)
-        return 1
-    try:
-        payload = json.loads(Path(file).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        print(f"Could not read AIL input: {exc}", file=sys.stderr)
-        return 1
-    try:
-        instruction = AILInstruction.model_validate(payload)
-    except ValidationError:
-        try:
-            instruction = instruction_to_ail(Instruction.model_validate(payload))
-        except ValidationError as exc:
-            print(f"Invalid AIL instruction: {exc}", file=sys.stderr)
-            return 1
-    if action == "validate":
-        print(f"valid AIL instruction: {instruction.id}")
-        if verbose:
-            print(instruction.model_dump_json(indent=2))
-        return 0
-    print(instruction.model_dump_json(indent=2))
-    return 0
-
-
-def config_command(*, data_dir: str | Path = ".loopos") -> int:
-    print(
-        json.dumps(
-            {
-                "data_dir": str(Path(data_dir)),
-                "runtime": "python",
-                "kernel": "v2",
-                "llm": "mock-only",
-                "web_ui": False,
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
-    )
-    return 0
-
-
 def repl_command() -> int:
     """Minimal terminal shell over the public command functions."""
 
@@ -735,18 +442,6 @@ def _propose_memory(repo: MemoryRepository, run_id: str, provider_name: str) -> 
         repo.propose(proposal)
     for error in errors:
         repo.events.append("memory_proposal_error", run_id, len(events), {"error": error})
-
-
-def _parse_goal_options(value: str | None) -> list[int]:
-    if not value:
-        return []
-    try:
-        options = [int(item.strip()) for item in value.split(",") if item.strip()]
-    except ValueError as exc:
-        raise ValueError("goal options must be comma-separated integers") from exc
-    if not options or any(option < 1 or option > 5 for option in options):
-        raise ValueError("goal options must be between 1 and 5")
-    return list(dict.fromkeys(options))
 
 
 if _HAS_TUI:

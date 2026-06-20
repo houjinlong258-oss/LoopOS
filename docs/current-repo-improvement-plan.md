@@ -228,11 +228,12 @@ Typer/Rich and standard-library fallback behavior are both implemented, but comm
 - Added shared `loopos/cli/context.py` data paths.
 - Added modular command files for tasks, triggers, worktrees, review, providers/models, and gateway.
 - Preserved compatibility exports from `loopos.cli.app`.
-- Reduced `loopos/cli/app.py` from approximately 1,850 to 1,397 lines.
+- Reduced `loopos/cli/app.py` from approximately 1,850 to 1,397 lines in Increment 1.
+- Increment 2 moved goal, memory/profile/skills, policy, AIL, and config commands; `app.py` is now approximately 1,092 lines.
 - Added modularization contract tests.
 - Verified 121 tests plus 16 subtests, Ruff, mypy, CLI help, and diff checks.
 
-Remaining Phase 1 work: migrate run/status/trace/policy/goal/tools/memory/skills/config/AIL command logic and extract renderer helpers.
+Remaining Phase 1 work: migrate run/resume/status/history/trace/replay/tools command logic and extract renderer helpers.
 
 ## Explicit Non-Goals for the Alpha Upgrade
 
