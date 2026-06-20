@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 
 
 WorktreeStatus = Literal["planned", "active", "stale", "cleaned", "conflict"]
+WorktreeCommandRisk = Literal["medium", "high"]
 
 
 def utc_now() -> datetime:
@@ -34,3 +35,24 @@ class WorktreeRecord(BaseModel):
             raise ValueError("worktree fields cannot be empty")
         return value
 
+
+class WorktreeCommand(BaseModel):
+    purpose: str
+    cmd: str
+    risk: WorktreeCommandRisk = "medium"
+    requires_approval: bool = True
+
+    @field_validator("purpose", "cmd")
+    @classmethod
+    def required_command_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("worktree command fields cannot be empty")
+        return value
+
+
+class WorktreeExecutionPlan(BaseModel):
+    worktree_id: str
+    task_id: str
+    workspace: str
+    dry_run: bool = True
+    commands: list[WorktreeCommand] = Field(default_factory=list)

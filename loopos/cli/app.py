@@ -35,6 +35,7 @@ from loopos.policy_os.audit import PolicyAuditLog
 from loopos.policy_os.engine import PolicyEngine
 from loopos.review import ReviewCoordinator, ReviewStore
 from loopos.syscalls import create_default_syscall_router
+from loopos.syscalls.types import SyscallCall
 from loopos.tasks import TaskArtifactStore, TaskRecord, TaskStore
 from loopos.triggers import TriggerKernel
 from loopos.worktree import WorktreeManager, WorktreeStore
@@ -625,6 +626,9 @@ def worktrees_command(
     task_id: str | None = None,
     *,
     data_dir: str | Path = ".loopos",
+    workspace: str | Path = ".",
+    dry_run: bool = True,
+    yes: bool = False,
 ) -> int:
     paths = _paths(data_dir)
     store = WorktreeStore(paths["worktrees"])
@@ -670,6 +674,46 @@ def worktrees_command(
             return 1
         print(record.model_dump_json(indent=2))
         return 0
+    if action == "materialize":
+        if not task_id:
+            print("worktrees materialize requires WORKTREE_ID.", file=sys.stderr)
+            return 1
+        try:
+            manager = WorktreeManager(store)
+            record = store.load(task_id)
+            plan = manager.materialization_plan(record, workspace=workspace, dry_run=dry_run)
+            router = create_default_syscall_router(workspace, auto_approve_medium=yes)
+            results = [
+                router.dispatch(
+                    SyscallCall(
+                        run_id=f"worktree-{record.id}",
+                        instruction_id=f"worktree-materialize-{record.id}",
+                        name="terminal.exec",
+                        input={"cmd": command.cmd, "timeout_seconds": 30},
+                        workspace=str(workspace),
+                        mode="dry_run" if dry_run else "guarded",
+                        approval_granted=yes,
+                    )
+                )
+                for command in plan.commands
+            ]
+            if not dry_run and all(result.success for result in results):
+                record.status = "active"
+                store.save(record)
+        except (KeyError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(
+            json.dumps(
+                {
+                    "plan": plan.model_dump(mode="json"),
+                    "results": [result.model_dump(mode="json") for result in results],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0 if all(result.success for result in results) else 3
     print(f"Unknown worktrees action: {action}", file=sys.stderr)
     return 1
 
@@ -682,9 +726,12 @@ def review_command(
     producer: str = "producer",
     verifier: str = "verifier",
     reviewer: str = "reviewer",
+    actor: str | None = None,
+    note: str | None = None,
 ) -> int:
     paths = _paths(data_dir)
     store = ReviewStore(paths["reviews"])
+    coordinator = ReviewCoordinator(store)
     if action == "list":
         print(json.dumps([item.model_dump(mode="json") for item in store.list()], ensure_ascii=False, indent=2))
         return 0
@@ -694,7 +741,7 @@ def review_command(
             return 1
         try:
             task = TaskStore(paths["tasks"]).load(task_id)
-            review = ReviewCoordinator(store).start(
+            review = coordinator.start(
                 task,
                 producer=producer,
                 verifier=verifier,
@@ -705,6 +752,39 @@ def review_command(
             return 1
         task.review_id = review.id
         TaskStore(paths["tasks"]).save(task)
+        print(review.model_dump_json(indent=2))
+        return 0
+    if action == "verify":
+        if not task_id or not note:
+            print("review verify requires REVIEW_ID and --note TEXT.", file=sys.stderr)
+            return 1
+        try:
+            review = coordinator.verify(task_id, actor=actor or verifier, note=note)
+        except (KeyError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(review.model_dump_json(indent=2))
+        return 0
+    if action == "approve":
+        if not task_id:
+            print("review approve requires REVIEW_ID.", file=sys.stderr)
+            return 1
+        try:
+            review = coordinator.approve(task_id, actor=actor or reviewer)
+        except (KeyError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(review.model_dump_json(indent=2))
+        return 0
+    if action == "reject":
+        if not task_id or not note:
+            print("review reject requires REVIEW_ID and --note TEXT.", file=sys.stderr)
+            return 1
+        try:
+            review = coordinator.reject(task_id, actor=actor or reviewer, finding=note)
+        except (KeyError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
         print(review.model_dump_json(indent=2))
         return 0
     print(f"Unknown review action: {action}", file=sys.stderr)
@@ -1281,8 +1361,20 @@ if _HAS_TUI:
         action: str = typer_mod.Argument("list"),
         task_id: str | None = typer_mod.Argument(None),
         data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+        workspace: str = typer_mod.Option(".", "--workspace"),
+        dry_run: bool = typer_mod.Option(True, "--dry-run/--execute"),
+        yes: bool = typer_mod.Option(False, "--yes"),
     ) -> None:
-        raise typer_mod.Exit(worktrees_command(action, task_id, data_dir=data_dir))
+        raise typer_mod.Exit(
+            worktrees_command(
+                action,
+                task_id,
+                data_dir=data_dir,
+                workspace=workspace,
+                dry_run=dry_run,
+                yes=yes,
+            )
+        )
 
     @app.command("review")
     def _typer_review(
@@ -1292,6 +1384,8 @@ if _HAS_TUI:
         producer: str = typer_mod.Option("producer", "--producer"),
         verifier: str = typer_mod.Option("verifier", "--verifier"),
         reviewer: str = typer_mod.Option("reviewer", "--reviewer"),
+        actor: str | None = typer_mod.Option(None, "--actor"),
+        note: str | None = typer_mod.Option(None, "--note"),
     ) -> None:
         raise typer_mod.Exit(
             review_command(
@@ -1301,6 +1395,8 @@ if _HAS_TUI:
                 producer=producer,
                 verifier=verifier,
                 reviewer=reviewer,
+                actor=actor,
+                note=note,
             )
         )
 
@@ -1487,6 +1583,10 @@ def _argparse_main(argv: list[str] | None = None) -> int:
     worktrees_parser.add_argument("action", nargs="?", default="list")
     worktrees_parser.add_argument("task_id", nargs="?")
     worktrees_parser.add_argument("--data-dir", default=".loopos")
+    worktrees_parser.add_argument("--workspace", default=".")
+    worktrees_parser.add_argument("--dry-run", action="store_true", default=True)
+    worktrees_parser.add_argument("--execute", dest="dry_run", action="store_false")
+    worktrees_parser.add_argument("--yes", action="store_true")
 
     review_parser = sub.add_parser("review")
     review_parser.add_argument("action", nargs="?", default="list")
@@ -1495,6 +1595,8 @@ def _argparse_main(argv: list[str] | None = None) -> int:
     review_parser.add_argument("--producer", default="producer")
     review_parser.add_argument("--verifier", default="verifier")
     review_parser.add_argument("--reviewer", default="reviewer")
+    review_parser.add_argument("--actor")
+    review_parser.add_argument("--note")
 
     providers_parser = sub.add_parser("providers")
     providers_parser.add_argument("action", nargs="?", default="list")
@@ -1626,7 +1728,14 @@ def _argparse_main(argv: list[str] | None = None) -> int:
     if args.command == "triggers":
         return triggers_command(args.action, args.trigger_id, data_dir=args.data_dir)
     if args.command == "worktrees":
-        return worktrees_command(args.action, args.task_id, data_dir=args.data_dir)
+        return worktrees_command(
+            args.action,
+            args.task_id,
+            data_dir=args.data_dir,
+            workspace=args.workspace,
+            dry_run=args.dry_run,
+            yes=args.yes,
+        )
     if args.command == "review":
         return review_command(
             args.action,
@@ -1635,6 +1744,8 @@ def _argparse_main(argv: list[str] | None = None) -> int:
             producer=args.producer,
             verifier=args.verifier,
             reviewer=args.reviewer,
+            actor=args.actor,
+            note=args.note,
         )
     if args.command == "providers":
         return providers_command(args.action, args.value, json_output=args.json_output)

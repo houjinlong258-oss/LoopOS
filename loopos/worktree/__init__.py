@@ -1,7 +1,18 @@
 """Worktree isolation registry."""
 
 from loopos.worktree.manager import WorktreeManager, WorktreeStore
-from loopos.worktree.models import WorktreeRecord, WorktreeStatus
+from loopos.worktree.models import (
+    WorktreeCommand,
+    WorktreeExecutionPlan,
+    WorktreeRecord,
+    WorktreeStatus,
+)
 
-__all__ = ["WorktreeManager", "WorktreeRecord", "WorktreeStatus", "WorktreeStore"]
-
+__all__ = [
+    "WorktreeCommand",
+    "WorktreeExecutionPlan",
+    "WorktreeManager",
+    "WorktreeRecord",
+    "WorktreeStatus",
+    "WorktreeStore",
+]

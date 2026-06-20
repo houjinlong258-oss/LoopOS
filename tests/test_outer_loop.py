@@ -57,6 +57,13 @@ class OuterLoopTests(unittest.TestCase):
             self.assertTrue(review.high_risk)
             self.assertEqual(review.status, "in_review")
 
+            with self.assertRaises(ValueError):
+                coordinator.approve(review.id, actor="reviewer")
+
+            coordinator.verify(review.id, actor="verifier", note="pytest passed")
+            approved = coordinator.approve(review.id, actor="reviewer")
+            self.assertEqual(approved.status, "approved")
+
     def test_task_todos_and_artifacts_are_persistent(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             task_store = TaskStore(Path(tmp) / "tasks.json")
@@ -77,6 +84,19 @@ class OuterLoopTests(unittest.TestCase):
             self.assertEqual(task.todos[0].status, "done")
             self.assertEqual(artifact_store.list(task_id=task.id)[0].id, report.id)
             self.assertEqual(report.status, "ready")
+
+    def test_worktree_materialization_plan_uses_git_worktree_command(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            task = TriggerKernel(TaskStore(Path(tmp) / "tasks.json")).fire("code-improvement")
+            manager = WorktreeManager(WorktreeStore(Path(tmp) / "worktrees.json"))
+            record = manager.plan_for_task(task)
+
+            plan = manager.materialization_plan(record, workspace=tmp)
+
+            self.assertTrue(plan.dry_run)
+            self.assertEqual(plan.commands[0].purpose, "create isolated git worktree")
+            self.assertIn("worktree", plan.commands[0].cmd)
+            self.assertTrue(plan.commands[0].requires_approval)
 
 
 if __name__ == "__main__":

@@ -4,10 +4,17 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 from pathlib import Path
 
 from loopos.tasks import TaskRecord
-from loopos.worktree.models import WorktreeRecord, WorktreeStatus, utc_now
+from loopos.worktree.models import (
+    WorktreeCommand,
+    WorktreeExecutionPlan,
+    WorktreeRecord,
+    WorktreeStatus,
+    utc_now,
+)
 
 
 def _slug(value: str) -> str:
@@ -98,3 +105,32 @@ class WorktreeManager:
             raise ValueError("only stale worktrees can be marked cleaned")
         record.status = "cleaned"
         return self.store.save(record)
+
+    def materialization_plan(
+        self,
+        record: WorktreeRecord,
+        *,
+        workspace: str | Path,
+        dry_run: bool = True,
+    ) -> WorktreeExecutionPlan:
+        if record.status == "conflict":
+            raise ValueError("conflicting worktrees cannot be materialized")
+        if record.status in {"cleaned", "stale"}:
+            raise ValueError("inactive worktrees cannot be materialized")
+        command = subprocess.list2cmdline(
+            ["git", "worktree", "add", "-b", record.branch, record.path]
+        )
+        return WorktreeExecutionPlan(
+            worktree_id=record.id,
+            task_id=record.task_id,
+            workspace=str(Path(workspace).resolve()),
+            dry_run=dry_run,
+            commands=[
+                WorktreeCommand(
+                    purpose="create isolated git worktree",
+                    cmd=command,
+                    risk="medium",
+                    requires_approval=True,
+                )
+            ],
+        )

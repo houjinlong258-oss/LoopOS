@@ -77,6 +77,8 @@ class ReviewCoordinator:
             raise ValueError("only the assigned reviewer can approve")
         if review.high_risk and actor in {review.producer, review.verifier}:
             raise ValueError("producer or verifier cannot approve high-risk work")
+        if review.high_risk and not review.verification_notes:
+            raise ValueError("high-risk work requires verifier notes before approval")
         review.status = "approved"
         return self.store.save(review)
 
@@ -85,4 +87,12 @@ class ReviewCoordinator:
         if actor != review.verifier:
             raise ValueError("only the assigned verifier can record verification")
         review.verification_notes.append(note)
+        return self.store.save(review)
+
+    def reject(self, review_id: str, *, actor: str, finding: str) -> ReviewRecord:
+        review = self.store.load(review_id)
+        if actor != review.reviewer:
+            raise ValueError("only the assigned reviewer can reject")
+        review.findings.append(finding)
+        review.status = "rejected"
         return self.store.save(review)

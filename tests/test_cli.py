@@ -223,10 +223,47 @@ class CliTests(unittest.TestCase):
             worktree = self.run_cli("worktrees", "plan", code_task["id"], "--data-dir", tmp)
             self.assertEqual(worktree.returncode, 0)
             self.assertIn('"branch": "codex/', worktree.stdout)
+            worktree_payload = json.loads(worktree.stdout)
+
+            materialize = self.run_cli(
+                "worktrees",
+                "materialize",
+                worktree_payload["id"],
+                "--workspace",
+                tmp,
+                "--data-dir",
+                tmp,
+            )
+            self.assertEqual(materialize.returncode, 0)
+            self.assertIn('"dry_run": true', materialize.stdout)
+            self.assertIn('"planned": true', materialize.stdout)
 
             review = self.run_cli("review", "start", code_task["id"], "--data-dir", tmp)
             self.assertEqual(review.returncode, 0)
             self.assertIn('"high_risk": true', review.stdout)
+            review_payload = json.loads(review.stdout)
+
+            approve_without_verify = self.run_cli(
+                "review", "approve", review_payload["id"], "--data-dir", tmp
+            )
+            self.assertEqual(approve_without_verify.returncode, 1)
+            self.assertIn("requires verifier notes", approve_without_verify.stderr)
+
+            verify = self.run_cli(
+                "review",
+                "verify",
+                review_payload["id"],
+                "--note",
+                "pytest passed",
+                "--data-dir",
+                tmp,
+            )
+            self.assertEqual(verify.returncode, 0)
+            self.assertIn("pytest passed", verify.stdout)
+
+            approved = self.run_cli("review", "approve", review_payload["id"], "--data-dir", tmp)
+            self.assertEqual(approved.returncode, 0)
+            self.assertIn('"status": "approved"', approved.stdout)
 
             todo = self.run_cli(
                 "tasks",
