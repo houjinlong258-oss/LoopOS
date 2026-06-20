@@ -1,0 +1,32 @@
+id: goal-negotiation
+name: Goal Negotiation Policy
+version: 0.1.0
+description: Vague goals must be negotiated before entering the kernel.
+priority: 820
+rules:
+  - id: goal.require_selection_for_ambiguous
+    scope: goal.negotiate
+    priority: 900
+    severity: medium
+    tags: [goal, negotiation]
+    conditions:
+      - field: ambiguous
+        operator: equals
+        value: true
+    actions:
+      - type: require_review
+        reason_code: goal.ambiguous_requires_selection
+        constraints:
+          min_options: 3
+          max_options: 5
+        audit_required: true
+  - id: goal.default.allow
+    scope: goal.negotiate
+    priority: 100
+    severity: info
+    tags: [goal, negotiation]
+    conditions: []
+    actions:
+      - type: allow
+        reason_code: goal.concrete_enough
+

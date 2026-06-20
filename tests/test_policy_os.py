@@ -35,6 +35,24 @@ class PolicyOSTests(unittest.TestCase):
         self.assertIn(decision.action, {"deny", "require_approval"})
         self.assertFalse(decision.allowed)
 
+    def test_goal_loop_and_review_policy_packs_load_by_default(self) -> None:
+        engine = PolicyEngine.load_default()
+
+        goal = engine.evaluate("goal.negotiate", subject={"ambiguous": True})
+        self.assertEqual(goal.action, "require_review")
+        self.assertIn("goal.ambiguous_requires_selection", goal.reason_codes)
+
+        loop = engine.evaluate("loop.decide", subject={"repeated_failures": 2})
+        self.assertEqual(loop.action, "modify")
+        self.assertEqual(loop.constraints["next_action"], "replan")
+
+        review = engine.evaluate(
+            "review.start",
+            subject={"high_risk": True, "role_separated": False},
+        )
+        self.assertEqual(review.action, "deny")
+        self.assertIn("review.high_risk_requires_separate_roles", review.reason_codes)
+
     def test_yaml_loader_and_registry(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "pack.yaml"

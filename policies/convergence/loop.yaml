@@ -1,0 +1,45 @@
+id: loop-convergence
+name: Loop Convergence Policy
+version: 0.1.0
+description: Deterministic loop decisions for repeated failures and missing progress.
+priority: 830
+rules:
+  - id: loop.replan.repeated_failures
+    scope: loop.decide
+    priority: 850
+    severity: medium
+    tags: [loop, convergence]
+    conditions:
+      - field: repeated_failures
+        operator: gte
+        value: 2
+    actions:
+      - type: modify
+        reason_code: loop.repeated_failures_replan
+        constraints:
+          next_action: replan
+        audit_required: true
+  - id: loop.ask_user.missing_information
+    scope: loop.decide
+    priority: 820
+    severity: medium
+    tags: [loop, convergence]
+    conditions:
+      - field: missing_information
+        operator: equals
+        value: true
+    actions:
+      - type: require_review
+        reason_code: loop.missing_information_ask_user
+        constraints:
+          next_action: ask_user
+  - id: loop.default.allow
+    scope: loop.decide
+    priority: 100
+    severity: info
+    tags: [loop, convergence]
+    conditions: []
+    actions:
+      - type: allow
+        reason_code: loop.default_allow
+

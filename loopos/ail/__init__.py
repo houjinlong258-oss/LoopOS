@@ -19,6 +19,8 @@ from loopos.ail.models import (
 )
 from loopos.ail.validators import validate_ail_instruction
 
+RenderSpec = AILRenderSpec
+
 __all__ = [
     "AILEvaluation",
     "AILEvent",
@@ -34,6 +36,7 @@ __all__ = [
     "AILState",
     "AILSyscall",
     "KernelOp",
+    "RenderSpec",
     "ail_to_instruction",
     "instruction_to_ail",
     "normalize_instruction",

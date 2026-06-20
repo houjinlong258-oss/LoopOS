@@ -2,7 +2,7 @@ import unittest
 
 from pydantic import ValidationError
 
-from loopos.ail import ail_to_instruction, instruction_to_ail, normalize_instruction
+from loopos.ail import RenderSpec, ail_to_instruction, instruction_to_ail, normalize_instruction
 from loopos.ail.models import AILInstruction, AILSyscall
 from loopos.core.isa import ExpectedObservation, InstructionSafety, make_instruction
 
@@ -76,6 +76,11 @@ class AILTests(unittest.TestCase):
 
         self.assertEqual(AILInstruction.model_validate_json(instruction.model_dump_json()).op, "FILE.READ")
         self.assertEqual(AILSyscall.model_validate_json(syscall.model_dump_json()).name, "file.read")
+
+    def test_render_spec_compatibility_alias(self) -> None:
+        spec = RenderSpec(format="json", verbosity="verbose")
+        self.assertEqual(spec.format, "json")
+        self.assertEqual(spec.verbosity, "verbose")
 
 
 if __name__ == "__main__":

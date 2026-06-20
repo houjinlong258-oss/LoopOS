@@ -1,0 +1,33 @@
+id: review-separation
+name: Review Separation Policy
+version: 0.1.0
+description: High-risk work requires separated producer, verifier, and reviewer roles.
+priority: 860
+rules:
+  - id: review.deny.self_approval_high_risk
+    scope: review.start
+    priority: 900
+    severity: high
+    tags: [review, separation]
+    conditions:
+      - all:
+          - field: high_risk
+            operator: equals
+            value: true
+          - field: role_separated
+            operator: equals
+            value: false
+    actions:
+      - type: deny
+        reason_code: review.high_risk_requires_separate_roles
+        audit_required: true
+  - id: review.default.allow
+    scope: review.start
+    priority: 100
+    severity: info
+    tags: [review, separation]
+    conditions: []
+    actions:
+      - type: allow
+        reason_code: review.separation_ok
+
