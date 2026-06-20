@@ -16,6 +16,7 @@ from loopos.ail.models import AILInstruction
 from loopos.core.isa import Instruction
 from loopos.core.state import LoopState
 from loopos.goal import GoalNegotiator
+from loopos.gateway import ChatOpsGateway
 from loopos.kernel import (
     KernelBoot,
     KernelConfig,
@@ -29,9 +30,14 @@ from loopos.kernel import (
 from loopos.llm.providers import LLMProvider, MockLLMProvider, OpenAICompatibleProvider
 from loopos.memory.extractor import MemoryProposalExtractor
 from loopos.memory.repository import MemoryRepository
+from loopos.model_kernel import MultiModelScheduler, ProviderRegistry
 from loopos.policy_os.audit import PolicyAuditLog
 from loopos.policy_os.engine import PolicyEngine
+from loopos.review import ReviewCoordinator, ReviewStore
 from loopos.syscalls import create_default_syscall_router
+from loopos.tasks import TaskStore
+from loopos.triggers import TriggerKernel
+from loopos.worktree import WorktreeManager, WorktreeStore
 
 typer_mod: Any
 ConsoleCls: Any
@@ -69,6 +75,9 @@ def _paths(data_dir: str | Path) -> dict[str, Path]:
         "skills": base / "skills.jsonl",
         "beliefs": base / "beliefs.jsonl",
         "policy_audit": base / "policy_audit.jsonl",
+        "tasks": base / "tasks.json",
+        "worktrees": base / "worktrees.json",
+        "reviews": base / "reviews.json",
     }
 
 
@@ -468,6 +477,203 @@ def goal_command(
     for item in payload.options:
         print(f"[{item.id}] {item.title}: {item.objective}")
     return 0
+
+
+def tasks_command(
+    action: str = "list",
+    arg: str | None = None,
+    *,
+    data_dir: str | Path = ".loopos",
+    quick_win: bool = False,
+    json_output: bool = False,
+) -> int:
+    store = TaskStore(_paths(data_dir)["tasks"])
+    if action == "list":
+        tasks = store.list()
+        if json_output:
+            print(json.dumps([task.model_dump(mode="json") for task in tasks], ensure_ascii=False, indent=2))
+        elif not tasks:
+            print("No tasks stored.")
+        else:
+            for task in tasks:
+                marker = " quick-win" if task.quick_win else ""
+                print(f"{task.id} [{task.status}] {task.title}{marker}")
+        return 0
+    if action == "next":
+        next_task = store.next(quick_win=quick_win)
+        if next_task is None:
+            print("No matching task.")
+            return 0
+        print(next_task.model_dump_json(indent=2))
+        return 0
+    if action == "show":
+        if not arg:
+            print("tasks show requires TASK_ID.", file=sys.stderr)
+            return 1
+        try:
+            task = store.load(arg)
+        except KeyError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(task.model_dump_json(indent=2))
+        return 0
+    print(f"Unknown tasks action: {action}", file=sys.stderr)
+    return 1
+
+
+def triggers_command(
+    action: str = "list",
+    trigger_id: str | None = None,
+    *,
+    data_dir: str | Path = ".loopos",
+) -> int:
+    kernel = TriggerKernel(TaskStore(_paths(data_dir)["tasks"]))
+    if action == "list":
+        print(json.dumps([item.model_dump(mode="json") for item in kernel.list()], ensure_ascii=False, indent=2))
+        return 0
+    if action == "fire":
+        if not trigger_id:
+            print("triggers fire requires TRIGGER_ID.", file=sys.stderr)
+            return 1
+        try:
+            task = kernel.fire(trigger_id)
+        except KeyError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(task.model_dump_json(indent=2))
+        return 0
+    print(f"Unknown triggers action: {action}", file=sys.stderr)
+    return 1
+
+
+def worktrees_command(
+    action: str = "list",
+    task_id: str | None = None,
+    *,
+    data_dir: str | Path = ".loopos",
+) -> int:
+    paths = _paths(data_dir)
+    store = WorktreeStore(paths["worktrees"])
+    if action == "list":
+        print(json.dumps([item.model_dump(mode="json") for item in store.list()], ensure_ascii=False, indent=2))
+        return 0
+    if action == "plan":
+        if not task_id:
+            print("worktrees plan requires TASK_ID.", file=sys.stderr)
+            return 1
+        try:
+            task = TaskStore(paths["tasks"]).load(task_id)
+            record = WorktreeManager(store).plan_for_task(task)
+        except (KeyError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(record.model_dump_json(indent=2))
+        return 0
+    print(f"Unknown worktrees action: {action}", file=sys.stderr)
+    return 1
+
+
+def review_command(
+    action: str = "list",
+    task_id: str | None = None,
+    *,
+    data_dir: str | Path = ".loopos",
+    producer: str = "producer",
+    verifier: str = "verifier",
+    reviewer: str = "reviewer",
+) -> int:
+    paths = _paths(data_dir)
+    store = ReviewStore(paths["reviews"])
+    if action == "list":
+        print(json.dumps([item.model_dump(mode="json") for item in store.list()], ensure_ascii=False, indent=2))
+        return 0
+    if action == "start":
+        if not task_id:
+            print("review start requires TASK_ID.", file=sys.stderr)
+            return 1
+        try:
+            task = TaskStore(paths["tasks"]).load(task_id)
+            review = ReviewCoordinator(store).start(
+                task,
+                producer=producer,
+                verifier=verifier,
+                reviewer=reviewer,
+            )
+        except (KeyError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        task.review_id = review.id
+        TaskStore(paths["tasks"]).save(task)
+        print(review.model_dump_json(indent=2))
+        return 0
+    print(f"Unknown review action: {action}", file=sys.stderr)
+    return 1
+
+
+def providers_command(
+    action: str = "list",
+    value: str | None = None,
+    *,
+    json_output: bool = False,
+) -> int:
+    registry = ProviderRegistry()
+    if action == "list":
+        rows = [profile.model_dump(mode="json") for profile in registry.list()]
+        print(json.dumps(rows, ensure_ascii=False, indent=2))
+        return 0
+    if action == "route":
+        capabilities = [item.strip() for item in (value or "text").split(",") if item.strip()]
+        try:
+            profile = registry.route(capabilities)  # type: ignore[arg-type]
+        except KeyError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(profile.model_dump_json(indent=2))
+        return 0
+    if action == "assign":
+        role = value or "primary_reasoner"
+        try:
+            assignment = MultiModelScheduler(registry).assign(role)  # type: ignore[arg-type]
+        except (KeyError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        if json_output:
+            print(assignment.model_dump_json(indent=2))
+        else:
+            print(f"{assignment.role}: {assignment.provider_id} ({assignment.reason_code})")
+        return 0
+    print(f"Unknown providers action: {action}", file=sys.stderr)
+    return 1
+
+
+def gateway_command(
+    action: str = "simulate",
+    channel: str = "telegram",
+    text: str = "hello",
+    *,
+    user_id: str = "user",
+) -> int:
+    gateway = ChatOpsGateway()
+    if action == "simulate":
+        try:
+            event = gateway.receive(channel, user_id, text)  # type: ignore[arg-type]
+            spec = gateway.to_run_spec(event)
+        except (KeyError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(
+            json.dumps(
+                {
+                    "event": event.model_dump(mode="json"),
+                    "run_spec": spec.model_dump(mode="json"),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0
+    print(f"Unknown gateway action: {action}", file=sys.stderr)
+    return 1
 
 
 def memory_command(
@@ -884,6 +1090,77 @@ if _HAS_TUI:
             goal_command(action, raw_goal, option=option, json_output=json_output)
         )
 
+    @app.command("tasks")
+    def _typer_tasks(
+        action: str = typer_mod.Argument("list"),
+        arg: str | None = typer_mod.Argument(None),
+        data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+        quick_win: bool = typer_mod.Option(False, "--quick-win"),
+        json_output: bool = typer_mod.Option(False, "--json"),
+    ) -> None:
+        raise typer_mod.Exit(
+            tasks_command(
+                action,
+                arg,
+                data_dir=data_dir,
+                quick_win=quick_win,
+                json_output=json_output,
+            )
+        )
+
+    @app.command("triggers")
+    def _typer_triggers(
+        action: str = typer_mod.Argument("list"),
+        trigger_id: str | None = typer_mod.Argument(None),
+        data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+    ) -> None:
+        raise typer_mod.Exit(triggers_command(action, trigger_id, data_dir=data_dir))
+
+    @app.command("worktrees")
+    def _typer_worktrees(
+        action: str = typer_mod.Argument("list"),
+        task_id: str | None = typer_mod.Argument(None),
+        data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+    ) -> None:
+        raise typer_mod.Exit(worktrees_command(action, task_id, data_dir=data_dir))
+
+    @app.command("review")
+    def _typer_review(
+        action: str = typer_mod.Argument("list"),
+        task_id: str | None = typer_mod.Argument(None),
+        data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+        producer: str = typer_mod.Option("producer", "--producer"),
+        verifier: str = typer_mod.Option("verifier", "--verifier"),
+        reviewer: str = typer_mod.Option("reviewer", "--reviewer"),
+    ) -> None:
+        raise typer_mod.Exit(
+            review_command(
+                action,
+                task_id,
+                data_dir=data_dir,
+                producer=producer,
+                verifier=verifier,
+                reviewer=reviewer,
+            )
+        )
+
+    @app.command("providers")
+    def _typer_providers(
+        action: str = typer_mod.Argument("list"),
+        value: str | None = typer_mod.Argument(None),
+        json_output: bool = typer_mod.Option(False, "--json"),
+    ) -> None:
+        raise typer_mod.Exit(providers_command(action, value, json_output=json_output))
+
+    @app.command("gateway")
+    def _typer_gateway(
+        action: str = typer_mod.Argument("simulate"),
+        channel: str = typer_mod.Argument("telegram"),
+        text: str = typer_mod.Argument("hello"),
+        user_id: str = typer_mod.Option("user", "--user-id"),
+    ) -> None:
+        raise typer_mod.Exit(gateway_command(action, channel, text, user_id=user_id))
+
     @app.command("memory")
     def _typer_memory(
         action: str = typer_mod.Argument("list"),
@@ -1008,6 +1285,42 @@ def _argparse_main(argv: list[str] | None = None) -> int:
     goal_parser.add_argument("--option")
     goal_parser.add_argument("--json", dest="json_output", action="store_true")
 
+    tasks_parser = sub.add_parser("tasks")
+    tasks_parser.add_argument("action", nargs="?", default="list")
+    tasks_parser.add_argument("arg", nargs="?")
+    tasks_parser.add_argument("--data-dir", default=".loopos")
+    tasks_parser.add_argument("--quick-win", action="store_true")
+    tasks_parser.add_argument("--json", dest="json_output", action="store_true")
+
+    triggers_parser = sub.add_parser("triggers")
+    triggers_parser.add_argument("action", nargs="?", default="list")
+    triggers_parser.add_argument("trigger_id", nargs="?")
+    triggers_parser.add_argument("--data-dir", default=".loopos")
+
+    worktrees_parser = sub.add_parser("worktrees")
+    worktrees_parser.add_argument("action", nargs="?", default="list")
+    worktrees_parser.add_argument("task_id", nargs="?")
+    worktrees_parser.add_argument("--data-dir", default=".loopos")
+
+    review_parser = sub.add_parser("review")
+    review_parser.add_argument("action", nargs="?", default="list")
+    review_parser.add_argument("task_id", nargs="?")
+    review_parser.add_argument("--data-dir", default=".loopos")
+    review_parser.add_argument("--producer", default="producer")
+    review_parser.add_argument("--verifier", default="verifier")
+    review_parser.add_argument("--reviewer", default="reviewer")
+
+    providers_parser = sub.add_parser("providers")
+    providers_parser.add_argument("action", nargs="?", default="list")
+    providers_parser.add_argument("value", nargs="?")
+    providers_parser.add_argument("--json", dest="json_output", action="store_true")
+
+    gateway_parser = sub.add_parser("gateway")
+    gateway_parser.add_argument("action", nargs="?", default="simulate")
+    gateway_parser.add_argument("channel", nargs="?", default="telegram")
+    gateway_parser.add_argument("text", nargs="?", default="hello")
+    gateway_parser.add_argument("--user-id", default="user")
+
     memory_parser = sub.add_parser("memory")
     memory_parser.add_argument("action", nargs="?", default="list")
     memory_parser.add_argument("arg", nargs="?")
@@ -1102,6 +1415,36 @@ def _argparse_main(argv: list[str] | None = None) -> int:
             args.raw_goal,
             option=args.option,
             json_output=args.json_output,
+        )
+    if args.command == "tasks":
+        return tasks_command(
+            args.action,
+            args.arg,
+            data_dir=args.data_dir,
+            quick_win=args.quick_win,
+            json_output=args.json_output,
+        )
+    if args.command == "triggers":
+        return triggers_command(args.action, args.trigger_id, data_dir=args.data_dir)
+    if args.command == "worktrees":
+        return worktrees_command(args.action, args.task_id, data_dir=args.data_dir)
+    if args.command == "review":
+        return review_command(
+            args.action,
+            args.task_id,
+            data_dir=args.data_dir,
+            producer=args.producer,
+            verifier=args.verifier,
+            reviewer=args.reviewer,
+        )
+    if args.command == "providers":
+        return providers_command(args.action, args.value, json_output=args.json_output)
+    if args.command == "gateway":
+        return gateway_command(
+            args.action,
+            args.channel,
+            args.text,
+            user_id=args.user_id,
         )
     if args.command == "memory":
         return memory_command(

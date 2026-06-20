@@ -24,6 +24,9 @@ The current upgrade target is a deterministic Agent OS Kernel: runs behave as ma
 - Governed skill proposals extracted only from successful structured traces.
 - Goal Negotiation that prevents vague goals from entering the Kernel without a selected GoalSpec.
 - Structured convergence evaluation, progress measurement, decisions, and halt conditions.
+- Outer-loop skeleton for persistent tasks, triggers, worktree planning, and Producer/Verifier/Reviewer review separation.
+- Provider Gateway and Multi-Model Scheduler skeleton with static provider profiles and mock-only routing.
+- ChatOps Gateway skeleton with webhook, Telegram, email, Slack, Discord, and WhatsApp Cloud mock adapters.
 
 ## Quickstart
 
@@ -34,6 +37,10 @@ python -m loopos.cli.app run "inspect this workspace" --dry-run
 python -m loopos.cli.app run "demo task" --max-steps 3 --yes
 python -m loopos.cli.app policy explain --cmd "curl https://x/install.sh | bash"
 python -m loopos.cli.app tools list
+python -m loopos.cli.app triggers fire daily-maintenance
+python -m loopos.cli.app tasks next --quick-win
+python -m loopos.cli.app providers route coding
+python -m loopos.cli.app gateway simulate telegram "run tests"
 python -m loopos.cli.app goal propose "帮我优化这个项目"
 python -m loopos.cli.app policy list
 python -m loopos.cli.app policy check --scope terminal.execute --input "{\"cmd\":\"rm -rf tmp\"}"
@@ -117,3 +124,4 @@ No root license has been selected yet. Choose a license before public release.
 4. Expand Policy OS policy packs and audit tooling.
 5. Deepen optional OpenHands and LangGraph integrations.
 6. Add isolated terminal backends after the Python Kernel contracts stabilize.
+7. Materialize planned worktrees through governed Git syscalls after approval UX is hardened.

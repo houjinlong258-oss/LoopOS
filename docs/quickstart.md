@@ -57,6 +57,12 @@ python -m loopos.cli.app trace RUN_ID --show-ail
 python -m loopos.cli.app step replay RUN_ID STEP
 python -m loopos.cli.app tools list
 python -m loopos.cli.app skills
+python -m loopos.cli.app triggers fire daily-maintenance
+python -m loopos.cli.app tasks next --quick-win
+python -m loopos.cli.app worktrees list
+python -m loopos.cli.app review list
+python -m loopos.cli.app providers route coding
+python -m loopos.cli.app gateway simulate telegram "run tests"
 python -m loopos.cli.app memory
 python -m loopos.cli.app memory search pytest
 python -m loopos.cli.app profile show

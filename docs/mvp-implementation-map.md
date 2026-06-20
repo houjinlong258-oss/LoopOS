@@ -167,3 +167,16 @@ The local environment used a repository-local `.venv`, which is ignored by `.git
 - `loopos/convergence/`: typed evaluation, progress, loop decisions, and halt conditions.
 
 The Kernel prompt is stored in `docs/LoopOS_Kernel_Level_Codex_Prompt.md`. Hermes remains a local ignored architecture reference and is not a dependency.
+
+## Kernel Builder / Outer Loop Additions
+
+- `loopos/tasks/`: persistent JSON task queue with quick-win selection.
+- `loopos/triggers/`: deterministic trigger kernel; triggers create tasks only and do not execute work.
+- `loopos/worktree/`: worktree planning records with branch naming and conflict detection.
+- `loopos/review/`: Producer, Verifier, and Reviewer separation for high-risk/code tasks.
+- `loopos/skills/`: compatibility exports for the governed skill kernel.
+- `loopos/model_kernel/`: provider profiles, capability routing, mock client, and multi-model role scheduler.
+- `loopos/gateway/`: ChatOps/mobile mock adapters and message-to-RunSpec conversion.
+- CLI: `triggers`, `tasks`, `worktrees`, `review`, `providers`, and `gateway`.
+
+This stage intentionally does not call real model APIs, real chat platform APIs, or materialize Git worktrees directly. Those actions must go through Policy OS and syscalls when enabled.

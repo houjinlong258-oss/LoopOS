@@ -14,6 +14,13 @@ class ImportTests(unittest.TestCase):
             "loopos.memory.governance",
             "loopos.mcp.router",
             "loopos.integrations.openhands_adapter",
+            "loopos.tasks",
+            "loopos.triggers",
+            "loopos.worktree",
+            "loopos.review",
+            "loopos.model_kernel",
+            "loopos.gateway",
+            "loopos.skills",
         ]
         for module in modules:
             with self.subTest(module=module):

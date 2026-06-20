@@ -2,6 +2,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import json
 from pathlib import Path
 
 from loopos.core.isa import make_instruction
@@ -201,6 +202,45 @@ class CliTests(unittest.TestCase):
             inspect = self.run_cli("ail", "inspect", str(path))
             self.assertEqual(inspect.returncode, 0)
             self.assertIn('"policy_scope": "terminal.execute"', inspect.stdout)
+
+    def test_outer_loop_cli_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fired = self.run_cli("triggers", "fire", "daily-maintenance", "--data-dir", tmp)
+            self.assertEqual(fired.returncode, 0)
+            task = json.loads(fired.stdout)
+            self.assertEqual(task["source_trigger"], "daily-maintenance")
+
+            next_task = self.run_cli("tasks", "next", "--quick-win", "--data-dir", tmp)
+            self.assertEqual(next_task.returncode, 0)
+            self.assertIn(task["id"], next_task.stdout)
+
+            code_task_result = self.run_cli(
+                "triggers", "fire", "code-improvement", "--data-dir", tmp
+            )
+            self.assertEqual(code_task_result.returncode, 0)
+            code_task = json.loads(code_task_result.stdout)
+
+            worktree = self.run_cli("worktrees", "plan", code_task["id"], "--data-dir", tmp)
+            self.assertEqual(worktree.returncode, 0)
+            self.assertIn('"branch": "codex/', worktree.stdout)
+
+            review = self.run_cli("review", "start", code_task["id"], "--data-dir", tmp)
+            self.assertEqual(review.returncode, 0)
+            self.assertIn('"high_risk": true', review.stdout)
+
+    def test_provider_and_gateway_cli_commands(self) -> None:
+        providers = self.run_cli("providers", "list")
+        self.assertEqual(providers.returncode, 0)
+        self.assertIn('"id": "openai-codex"', providers.stdout)
+
+        route = self.run_cli("providers", "route", "coding")
+        self.assertEqual(route.returncode, 0)
+        self.assertIn('"id": "openai-codex"', route.stdout)
+
+        gateway = self.run_cli("gateway", "simulate", "telegram", "run tests")
+        self.assertEqual(gateway.returncode, 0)
+        self.assertIn('"channel": "telegram"', gateway.stdout)
+        self.assertIn('"goal": "run tests"', gateway.stdout)
 
 
 if __name__ == "__main__":
