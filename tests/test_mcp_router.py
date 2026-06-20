@@ -33,7 +33,7 @@ class McpRouterTests(unittest.TestCase):
 
     def test_default_file_tools(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            router = create_default_router(workspace=tmp)
+            router = create_default_router(workspace=tmp, auto_approve=True)
             write = router.call(ToolCall(name="file.write", args={"path": "a.txt", "content": "hello"}))
             self.assertTrue(write.success)
             read = router.call(ToolCall(name="file.read", args={"path": "a.txt"}))

@@ -5,6 +5,9 @@ from pathlib import Path
 
 from loopos.core.state import LoopState
 from loopos.kernel import (
+    KernelBoot,
+    KernelBootError,
+    KernelConfig,
     KernelSignal,
     KernelStateMachine,
     LoopScheduler,
@@ -42,6 +45,19 @@ class KernelProcessTests(unittest.TestCase):
         run = RunRecord.from_spec(RunSpec(goal="roundtrip"))
         decoded = RunRecord.model_validate(json.loads(run.model_dump_json()))
         self.assertEqual(decoded.run_id, run.run_id)
+
+    def test_boot_registers_kernel_services(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime = KernelBoot().start(
+                KernelConfig(workspace=tmp, data_dir=str(Path(tmp) / ".loopos"))
+            )
+            self.assertEqual(len(runtime.syscall_router.registry.list()), 5)
+            self.assertTrue((Path(tmp) / ".loopos" / "runs").is_dir())
+
+    def test_boot_rejects_missing_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(KernelBootError):
+                KernelBoot().start(KernelConfig(workspace=str(Path(tmp) / "missing")))
 
 
 class KernelSchedulerTests(unittest.TestCase):

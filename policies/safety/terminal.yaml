@@ -4,6 +4,19 @@ version: 0.1.0
 description: Conservative terminal execution policy.
 priority: 950
 rules:
+  - id: terminal.block.remote_code_pipe
+    scope: terminal.execute
+    priority: 995
+    severity: critical
+    tags: [terminal, safety, network]
+    conditions:
+      - field: cmd
+        operator: regex
+        value: '\b(curl|wget)\b.*\|\s*(bash|sh)\b'
+    actions:
+      - type: deny
+        reason_code: remote_code_execution_pipe
+        audit_required: true
   - id: terminal.block.destructive_patterns
     scope: terminal.execute
     priority: 980
@@ -20,6 +33,9 @@ rules:
           - field: cmd
             operator: regex
             value: '\bmkfs(\.|)\w*\b'
+          - field: cmd
+            operator: regex
+            value: '\bdd\s+if='
           - field: cmd
             operator: regex
             value: '\bcurl\b.*\|\s*(bash|sh)\b'
@@ -51,6 +67,19 @@ rules:
     actions:
       - type: require_approval
         reason_code: terminal.high_risk_requires_approval
+        audit_required: true
+  - id: terminal.require_approval.medium_risk
+    scope: terminal.execute
+    priority: 700
+    severity: medium
+    tags: [terminal, permission]
+    conditions:
+      - field: risk_level
+        operator: equals
+        value: medium
+    actions:
+      - type: require_approval
+        reason_code: terminal.medium_risk_requires_approval
         audit_required: true
   - id: terminal.default.allow
     scope: terminal.execute

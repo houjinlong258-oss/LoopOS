@@ -119,8 +119,9 @@ rules:
             result = router.call(
                 ToolCall(name="file.write", args={"path": "note.txt", "content": "hello"})
             )
-            self.assertTrue(result.success)
-            self.assertIn("policy", result.output)
+            self.assertFalse(result.success)
+            self.assertTrue(result.requires_approval)
+            self.assertFalse((Path(tmp) / "note.txt").exists())
 
     def test_loop_engine_blocks_policy_denied_terminal_instruction(self) -> None:
         class DangerousPolicy:

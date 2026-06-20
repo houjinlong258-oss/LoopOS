@@ -24,8 +24,18 @@ rules:
     tags: [file]
     conditions: []
     actions:
+      - type: require_approval
+        reason_code: file.write_workspace_requires_approval
+        audit_required: true
+  - id: git.read.default.allow
+    scope: git.operation
+    priority: 100
+    severity: info
+    tags: [git]
+    conditions: []
+    actions:
       - type: allow
-        reason_code: file.write_workspace_allow
+        reason_code: git.read_allow
   - id: git.require_approval.history_mutation
     scope: git.operation
     priority: 900
