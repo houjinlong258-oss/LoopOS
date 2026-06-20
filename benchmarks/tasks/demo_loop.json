@@ -1,0 +1,11 @@
+{
+  "id": "demo_loop",
+  "name": "Deterministic Loop Completes",
+  "goal": "run the deterministic demo loop",
+  "workspace_setup": {},
+  "expected_files": [],
+  "expected_commands": ["echo hello"],
+  "success_checks": ["state.status == succeeded"],
+  "max_steps": 3,
+  "tags": ["loop", "mock"]
+}

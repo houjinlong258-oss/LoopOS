@@ -1,0 +1,15 @@
+{
+  "id": "file_presence",
+  "name": "Workspace Setup File Exists",
+  "goal": "run with a prepared workspace file",
+  "workspace_setup": {
+    "files": {
+      "input.txt": "hello"
+    }
+  },
+  "expected_files": ["input.txt"],
+  "expected_commands": ["echo hello"],
+  "success_checks": ["expected file exists", "state.status == succeeded"],
+  "max_steps": 3,
+  "tags": ["file", "mock"]
+}

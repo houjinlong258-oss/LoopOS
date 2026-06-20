@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "loopos"
+version = "0.1.0"
+description = "Terminal-native AI-ISA agent runtime with governed memory."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.0",
+  "typer>=0.12",
+  "rich>=13.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6",
+  "mypy>=1.10",
+]
+langgraph = [
+  "langgraph>=1.0",
+]
+
+[project.scripts]
+loopos = "loopos.cli.app:main"
+
+[tool.setuptools.packages.find]
+include = ["loopos*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [
+  ".venv",
+  "OpenHands-1.8.0",
+  "langgraph-1.2.6",
+  "letta-0.16.8",
+  "zep-main",
+  "projectmem-0.1.5",
+]
+
+[tool.mypy]
+python_version = "3.11"
+plugins = ["pydantic.mypy"]
+strict = true
+disallow_untyped_decorators = false
+warn_unused_ignores = false
+exclude = ["OpenHands-1.8.0", "langgraph-1.2.6", "letta-0.16.8", "zep-main", "projectmem-0.1.5"]

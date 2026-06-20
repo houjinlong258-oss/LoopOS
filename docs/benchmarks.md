@@ -1,0 +1,38 @@
+# Benchmarks
+
+LoopOS benchmarks are JSON task definitions that can run against the deterministic MVP engine.
+
+## Task Schema
+
+- `id`
+- `name`
+- `goal`
+- `workspace_setup`
+- `expected_files`
+- `expected_commands`
+- `success_checks`
+- `max_steps`
+- `tags`
+
+## Current Metrics
+
+- `success_rate`
+- `steps_to_success`
+- `command_count`
+- `blocked_dangerous_actions`
+- `repeated_failure_count`
+- `skill_reuse_count`
+- `token_estimate`
+
+## Running from Python
+
+```python
+from loopos.eval.runner import EvalRunner
+
+runner = EvalRunner()
+tasks = runner.load_tasks("benchmarks/tasks")
+report = runner.run_all(tasks)
+runner.write_report(report, "benchmarks/report.json")
+```
+
+The MVP runner uses the deterministic native loop. It does not call a real LLM.

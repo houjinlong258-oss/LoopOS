@@ -1,0 +1,10 @@
+[
+  "run_started",
+  "instruction_planned",
+  "observation",
+  "evaluation",
+  "instruction_planned",
+  "observation",
+  "evaluation",
+  "run_finished"
+]
