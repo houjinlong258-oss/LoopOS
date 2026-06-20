@@ -155,3 +155,15 @@ python -m loopos.cli.app profile show
 ```
 
 The local environment used a repository-local `.venv`, which is ignored by `.gitignore`.
+
+## Kernel MVP Additions
+
+- `loopos/kernel/`: Boot, RunManager, scheduler, process model, transitions, trace, replay, and KernelLoopEngine.
+- `loopos/syscalls/`: typed registry/router and terminal, file, and Git syscall adapters.
+- `loopos/context/`: bounded context manager with the previous core import retained as a compatibility export.
+- `loopos/agents/skill_extractor.py`: successful-trace SkillProposal extraction.
+- CLI: guarded/dry-run Kernel execution, approval resume, trace, replay, policy explain, tools, JSON, AIL, and policy views.
+- `loopos/goal/`: pre-run ambiguity analysis, five-option proposals, and finalized GoalSpec.
+- `loopos/convergence/`: typed evaluation, progress, loop decisions, and halt conditions.
+
+The Kernel prompt is stored in `docs/LoopOS_Kernel_Level_Codex_Prompt.md`. Hermes remains a local ignored architecture reference and is not a dependency.

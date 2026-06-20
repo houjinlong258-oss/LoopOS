@@ -56,6 +56,22 @@ class SyscallRouter:
         if decision.action == "deny" or spec.risk == "blocked":
             return self._error(call, "blocked by policy", decision, spec, step=step)
 
+        if call.mode == "dry_run":
+            result = SyscallResult(
+                syscall_id=call.id,
+                run_id=call.run_id,
+                instruction_id=call.instruction_id,
+                name=call.name,
+                success=True,
+                output={"planned": True, "input": call.input},
+                risk=spec.risk,
+                requires_approval=spec.requires_approval or decision.requires_approval,
+                policy_decision=decision,
+                dry_run=True,
+            )
+            self._trace_result(call, step, result)
+            return result
+
         approval_required = spec.requires_approval or decision.requires_approval
         approved = call.approval_granted or (spec.risk == "medium" and self.auto_approve_medium)
         if approval_required and not approved:
@@ -77,24 +93,11 @@ class SyscallRouter:
                 step=step,
             )
 
-        if call.mode == "dry_run":
-            result = SyscallResult(
-                syscall_id=call.id,
-                run_id=call.run_id,
-                instruction_id=call.instruction_id,
-                name=call.name,
-                success=True,
-                output={"planned": True, "input": call.input},
-                risk=spec.risk,
-                policy_decision=decision,
-                dry_run=True,
-            )
-        else:
-            started = time.perf_counter()
-            result = registered.handler(call)
-            result.policy_decision = decision
-            result.risk = spec.risk
-            result.duration_ms = int((time.perf_counter() - started) * 1000)
+        started = time.perf_counter()
+        result = registered.handler(call)
+        result.policy_decision = decision
+        result.risk = spec.risk
+        result.duration_ms = int((time.perf_counter() - started) * 1000)
         self._trace_result(call, step, result)
         return result
 
@@ -170,9 +173,12 @@ def create_default_syscall_router(
     )
 
     def terminal_exec(call: SyscallCall) -> SyscallResult:
+        cwd = _safe_path(root, str(call.input.get("cwd", ".")))
+        if cwd is None or not cwd.is_dir():
+            return _handler_result(call, False, {}, "cwd is outside workspace")
         observation = terminal.execute(
             str(call.input.get("cmd", "")),
-            cwd=call.input.get("cwd", root),
+            cwd=cwd,
             timeout_seconds=_optional_int(call.input.get("timeout_seconds")),
         )
         return _handler_result(

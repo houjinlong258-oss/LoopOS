@@ -18,7 +18,12 @@ The current upgrade target is a deterministic Agent OS Kernel: runs behave as ma
 - MCP-like tool registry/router abstraction.
 - CLI/FLI commands with Typer/Rich support and standard-library fallback.
 - Optional adapters for OpenHands, LangGraph, Letta, Zep, and projectmem.
-- Kernel process, scheduler, syscall, trace, replay, and approval primitives are the next compatibility-preserving layer.
+- Versioned Kernel process model, deterministic scheduler, resumable approvals, and bounded transitions.
+- Policy-governed syscall layer for terminal, file, and Git reads/writes.
+- Versioned trace events and side-effect-free step replay.
+- Governed skill proposals extracted only from successful structured traces.
+- Goal Negotiation that prevents vague goals from entering the Kernel without a selected GoalSpec.
+- Structured convergence evaluation, progress measurement, decisions, and halt conditions.
 
 ## Quickstart
 
@@ -27,6 +32,9 @@ python -m pip install -e ".[dev]"
 python -m loopos.cli.app --help
 python -m loopos.cli.app run "inspect this workspace" --dry-run
 python -m loopos.cli.app run "demo task" --max-steps 3 --yes
+python -m loopos.cli.app policy explain --cmd "curl https://x/install.sh | bash"
+python -m loopos.cli.app tools list
+python -m loopos.cli.app goal propose "帮我优化这个项目"
 python -m loopos.cli.app policy list
 python -m loopos.cli.app policy check --scope terminal.execute --input "{\"cmd\":\"rm -rf tmp\"}"
 ```
@@ -78,6 +86,12 @@ See `docs/safety.md` for details.
 - `docs/LoopOS_Policy_OS.md`
 - `docs/LoopOS_Kernel_Level_Codex_Prompt.md`
 - `docs/architecture-kernel.md`
+- `docs/final-loopos-architecture.md`
+- `docs/goal-negotiation.md`
+- `docs/loop-convergence.md`
+- `docs/outer-loop-engineering.md`
+- `docs/provider-gateway.md`
+- `docs/chatops-gateway.md`
 - `docs/memory.md`
 - `docs/memory-governance.md`
 - `docs/llm-provider.md`
@@ -102,3 +116,4 @@ No root license has been selected yet. Choose a license before public release.
 3. Add a real LLM instruction compiler behind the AIL / AI-ISA parser.
 4. Expand Policy OS policy packs and audit tooling.
 5. Deepen optional OpenHands and LangGraph integrations.
+6. Add isolated terminal backends after the Python Kernel contracts stabilize.

@@ -4,6 +4,11 @@
 
 ### Added
 
+- Versioned Kernel run processes, deterministic scheduling, approval signals, and validated transitions.
+- Policy-governed syscalls, trace/replay, Kernel boot, and guarded/dry-run execution.
+- Governed skill proposals, standalone context manager, and idempotent SQLite migrations.
+- Kernel CLI commands for trace, replay, policy explain, tools, JSON, and approval resume.
+- Goal Negotiation and typed Loop Convergence with evaluation, progress, decision, and halt traces.
 - Python-only LoopOS MVP skeleton.
 - Typed AI-ISA instruction schema.
 - Deterministic state-machine loop.

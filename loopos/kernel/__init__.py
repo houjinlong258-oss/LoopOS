@@ -2,6 +2,7 @@
 
 from loopos.kernel.boot import KernelBoot, KernelBootError, KernelConfig, KernelRuntime
 from loopos.kernel.models import PendingApproval, RunRecord, RunSpec
+from loopos.kernel.loop_engine import KernelLoopEngine
 from loopos.kernel.run_manager import RunManager
 from loopos.kernel.replay import ReplayEngine, ReplayResult
 from loopos.kernel.scheduler import LoopScheduler, ScheduleDecision, SchedulerInput
@@ -16,6 +17,7 @@ __all__ = [
     "KernelBootError",
     "KernelConfig",
     "KernelRuntime",
+    "KernelLoopEngine",
     "KernelStateMachine",
     "LoopScheduler",
     "PendingApproval",

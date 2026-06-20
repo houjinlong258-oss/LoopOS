@@ -4,6 +4,8 @@
 
 LoopOS is a terminal-native, state-machine-driven, self-improving AI agent runtime.
 
+Codex is the engineering agent that implements and verifies LoopOS. Codex is not the LoopOS runtime, must not impersonate its Kernel, and must deliver changes in auditable phases with tests.
+
 It combines:
 - AIL: Agent Internal Language for structured runtime communication.
 - AI-ISA: typed instructions for agent actions.

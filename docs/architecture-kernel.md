@@ -6,7 +6,7 @@ LoopOS Kernel is a deterministic, policy-governed runtime for terminal-native ag
 
 ```text
 Goal
--> Intent Compiler / RunSpec
+-> Goal Negotiation / GoalSpec / RunSpec
 -> Context Compiler
 -> deterministic Planner
 -> AIL validation and normalization
@@ -14,7 +14,7 @@ Goal
 -> Kernel Scheduler
 -> Syscall Router
 -> Observation
--> Evaluation
+-> Evaluation / ProgressDelta / LoopDecision
 -> Transition Engine
 -> governed Memory and Skill proposals
 -> Scheduler continue, repair, replan, wait, or halt
@@ -40,3 +40,5 @@ Trace events are append-only and carry run, step, instruction, policy, and sysca
 ## Compatibility
 
 Legacy AI-ISA, LoopEngine, MCP Router, EventLog, StateStore, JSONL, and SQLite entry points remain readable. Compatibility adapters normalize legacy operation names and records before they enter the Kernel.
+
+The terminal CLI is the default Kernel entry point. The legacy LoopEngine remains a supported compatibility runtime for callers that inject custom planner, executor, or evaluator protocols; new CLI runs and new integrations should use `KernelLoopEngine`.

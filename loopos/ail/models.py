@@ -16,6 +16,7 @@ RenderFormat = Literal["text", "json", "markdown"]
 RenderVerbosity = Literal["quiet", "normal", "verbose"]
 KernelOp = Literal[
     "GOAL.SET",
+    "GOAL.FINALIZE",
     "CTX.COMPILE",
     "PLAN.CREATE",
     "PLAN.UPDATE",
@@ -29,6 +30,9 @@ KernelOp = Literal[
     "STATE.PATCH",
     "STATE.SNAPSHOT",
     "EVAL.SCORE",
+    "EVAL.APPLY",
+    "PROGRESS.MEASURE",
+    "LOOP.DECIDE",
     "MEM.PROPOSE",
     "MEM.COMMIT",
     "SKILL.EXTRACT",

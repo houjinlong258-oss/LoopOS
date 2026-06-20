@@ -18,6 +18,8 @@ LoopOS treats terminal execution as privileged behavior. The runtime must analyz
 
 The `--yes` CLI flag only applies to low and medium risk behavior. It cannot bypass high or blocked decisions.
 
+Kernel `--dry-run` evaluates policies and records planned syscalls, but bypasses approval prompts only because no adapter is executed. Replay is also side-effect free. Medium-risk guarded actions require `--yes` or a persisted approval/resume cycle; high-risk actions require an explicit `resume --approve` signal and blocked actions cannot be resumed.
+
 ## Terminal Policy Checks
 
 `PermissionPolicy` checks:

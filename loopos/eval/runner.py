@@ -14,6 +14,7 @@ from loopos.core.isa import make_instruction
 from loopos.core.loop_engine import LoopEngine
 from loopos.core.state import LoopState
 from loopos.eval.metrics import EvalMetrics, compute_metrics
+from loopos.kernel import KernelBoot, KernelConfig, KernelLoopEngine, ReplayEngine, RunSpec
 from loopos.memory.belief_store import MemoryItem
 from loopos.memory.pre_action_gate import PreActionGate
 from loopos.memory.repository import MemoryRepository
@@ -152,6 +153,36 @@ class EvalRunner:
                     },
                 )
 
+            if "kernel-replay" in task.tags:
+                runtime = KernelBoot().start(
+                    KernelConfig(
+                        workspace=str(workspace),
+                        data_dir=str(workspace / ".loopos"),
+                    )
+                )
+                run = KernelLoopEngine(runtime, memory_repository=repo).run(
+                    RunSpec(
+                        goal=task.goal,
+                        workspace=str(workspace),
+                        mode="dry_run",
+                        max_steps=task.max_steps,
+                    )
+                )
+                replay = ReplayEngine(runtime.trace_store).replay(
+                    run.run_id, run.step, durable=run
+                )
+                success = run.status == "succeeded" and bool(replay.events)
+                return EvalTaskResult(
+                    task_id=task.id,
+                    success=success,
+                    status=run.status,
+                    steps=run.step,
+                    command_count=0,
+                    details={
+                        "trace_events": len(runtime.trace_store.list(run.run_id)),
+                        "replay_differences": replay.differences,
+                    },
+                )
             engine = LoopEngine.with_local_stores(workspace / ".loopos", memory_repository=repo)
             state = engine.run(task.goal, max_steps=task.max_steps)
             files_ok = all((workspace / expected).exists() for expected in task.expected_files)

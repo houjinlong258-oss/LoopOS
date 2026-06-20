@@ -53,3 +53,9 @@ For deeper MVP details, see `docs/architecture-mvp.md`.
 The current stage adds AIL and Policy OS as the cross-cutting runtime contract. AI-ISA remains the executable instruction schema, but AIL is the canonical handoff shape between planner, policy, tools, memory, and renderer.
 
 Policy OS evaluates structured requests for `instruction.validate`, `terminal.execute`, `tool.call`, `memory.write`, `context.compile`, `renderer.render`, `file.*`, and `git.operation`. Default policies live under `policies/`; the full concept docs are `docs/LoopOS_Fusion_Codex_Prompts.md` and `docs/LoopOS_Policy_OS.md`.
+
+## Kernel MVP
+
+The Kernel layer adds versioned `RunRecord` processes, deterministic scheduling, validated transitions, approval signals, and a single syscall boundary. The CLI now uses `KernelLoopEngine`; the original `loopos.core.LoopEngine` remains available for legacy custom policy/executor tests.
+
+Trace events carry instruction, syscall, and policy decision identifiers. `ReplayEngine` reconstructs a selected step from stored events and never invokes adapters. The Memory-first repository indexes new trace events and governed skill proposals while continuing to read legacy JSON/JSONL files.

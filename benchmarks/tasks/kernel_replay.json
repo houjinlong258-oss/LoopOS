@@ -1,0 +1,9 @@
+{
+  "id": "kernel-replay",
+  "name": "Kernel trace replay",
+  "goal": "创建 hello.py 并运行它",
+  "workspace_setup": {},
+  "success_checks": ["run_succeeded", "trace_replay_available"],
+  "max_steps": 20,
+  "tags": ["kernel-replay", "trace", "dry-run"]
+}

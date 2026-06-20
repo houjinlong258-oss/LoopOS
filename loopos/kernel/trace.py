@@ -5,18 +5,22 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 TraceKind = Literal[
     "run",
+    "goal",
     "instruction",
     "policy",
     "syscall",
     "observation",
     "evaluation",
+    "progress",
+    "decision",
+    "halt",
     "transition",
     "memory",
     "skill",
@@ -60,9 +64,15 @@ class TraceEvent(BaseModel):
 
 
 class TraceStore:
-    def __init__(self, path: str | Path) -> None:
+    def __init__(
+        self,
+        path: str | Path,
+        *,
+        indexer: Callable[[TraceEvent], None] | None = None,
+    ) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.indexer = indexer
 
     def append(
         self,
@@ -88,6 +98,8 @@ class TraceStore:
         )
         with self.path.open("a", encoding="utf-8") as handle:
             handle.write(event.model_dump_json() + "\n")
+        if self.indexer is not None:
+            self.indexer(event)
         return event
 
     def list(self, run_id: str | None = None, *, step: int | None = None) -> list[TraceEvent]:
@@ -112,10 +124,14 @@ def _legacy_kind(event_type: str) -> TraceKind:
     value = event_type.lower()
     for kind in (
         "instruction",
+        "goal",
         "policy",
         "syscall",
         "observation",
         "evaluation",
+        "progress",
+        "decision",
+        "halt",
         "transition",
         "memory",
         "skill",
@@ -124,4 +140,3 @@ def _legacy_kind(event_type: str) -> TraceKind:
         if kind in value:
             return kind  # type: ignore[return-value]
     return "run"
-

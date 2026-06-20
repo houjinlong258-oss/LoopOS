@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import sys
 from pathlib import Path
 from typing import Any
@@ -12,17 +13,25 @@ from pydantic import ValidationError
 
 from loopos.ail.codec import instruction_to_ail
 from loopos.ail.models import AILInstruction
-from loopos.core.loop_engine import LoopEngine
 from loopos.core.isa import Instruction
-from loopos.core.policy import DeterministicDemoPolicy
 from loopos.core.state import LoopState
+from loopos.goal import GoalNegotiator
+from loopos.kernel import (
+    KernelBoot,
+    KernelConfig,
+    KernelLoopEngine,
+    ReplayEngine,
+    RunManager,
+    RunRecord,
+    RunSpec,
+    TraceStore,
+)
 from loopos.llm.providers import LLMProvider, MockLLMProvider, OpenAICompatibleProvider
-from loopos.memory.event_log import EventLog
+from loopos.memory.extractor import MemoryProposalExtractor
 from loopos.memory.repository import MemoryRepository
-from loopos.memory.skill_store import SkillStore
-from loopos.memory.state_store import StateStore
 from loopos.policy_os.audit import PolicyAuditLog
 from loopos.policy_os.engine import PolicyEngine
+from loopos.syscalls import create_default_syscall_router
 
 typer_mod: Any
 ConsoleCls: Any
@@ -88,6 +97,28 @@ def _render_state(state: LoopState, *, verbose: bool = False) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
+def _render_run(run: RunRecord, *, verbose: bool = False) -> str:
+    payload: dict[str, Any] = {
+        "run_id": run.run_id,
+        "goal": run.goal,
+        "status": run.status,
+        "phase": run.phase,
+        "step": run.step,
+        "max_steps": run.max_steps,
+        "workspace": run.workspace,
+        "mode": run.mode,
+        "progress_score": run.progress_score,
+    }
+    if run.pending_approval:
+        payload["pending_approval"] = run.pending_approval.model_dump(mode="json")
+    if run.errors:
+        payload["errors"] = run.errors
+    if verbose:
+        payload["trace_event_ids"] = run.trace_event_ids
+        payload["metadata"] = run.metadata
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
 def _print_state(state: LoopState, *, verbose: bool = False) -> None:
     if _HAS_TUI:
         body = (
@@ -106,6 +137,47 @@ def _print_state(state: LoopState, *, verbose: bool = False) -> None:
         print(_render_state(state, verbose=verbose))
 
 
+def _print_run(
+    run: RunRecord,
+    *,
+    trace_store: TraceStore | None = None,
+    verbose: bool = False,
+    show_ail: bool = False,
+    show_policy: bool = False,
+    json_output: bool = False,
+) -> None:
+    events = trace_store.list(run.run_id) if trace_store else []
+    if json_output:
+        payload = json.loads(_render_run(run, verbose=verbose))
+        if show_ail:
+            payload["ail"] = [event.payload for event in events if event.kind == "instruction"]
+        if show_policy:
+            payload["policy"] = [event.payload for event in events if event.kind == "policy"]
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+    if _HAS_TUI:
+        body = (
+            f"Goal: {run.goal}\nStatus: {run.status}\nPhase: {run.phase}\n"
+            f"Steps: {run.step}/{run.max_steps}\nWorkspace: {run.workspace}\nMode: {run.mode}"
+        )
+        console.print(PanelCls(body, title=f"LoopOS Kernel Run {run.run_id}"))
+        for event in events:
+            if event.kind == "instruction":
+                console.print(f"[{event.step}/{run.max_steps}] {event.payload.get('op', 'UNKNOWN')}")
+        if run.pending_approval:
+            console.print(
+                f"[yellow]Approval required[/yellow]: {', '.join(run.pending_approval.reason_codes)}"
+            )
+        if show_ail:
+            console.print_json(
+                data=[event.payload for event in events if event.kind == "instruction"]
+            )
+        if show_policy:
+            console.print_json(data=[event.payload for event in events if event.kind == "policy"])
+    else:
+        print(_render_run(run, verbose=verbose))
+
+
 def run_command(
     goal: str,
     *,
@@ -117,53 +189,117 @@ def run_command(
     memory: str = "on",
     propose_memory: bool = False,
     llm_provider: str = "mock",
+    workspace: str | Path = ".",
+    mode: str = "guarded",
+    show_ail: bool = False,
+    show_policy: bool = False,
+    json_output: bool = False,
+    goal_option: str | None = None,
 ) -> int:
-    if dry_run:
-        state = LoopState(goal=goal)
-        instruction = DeterministicDemoPolicy().next_instruction(state)
-        print(instruction.model_dump_json(indent=2))
-        return 0
-
+    negotiator = GoalNegotiator()
+    analysis = negotiator.analyze(goal)
+    try:
+        option_ids = _parse_goal_options(goal_option)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    if analysis.ambiguous and not option_ids:
+        proposal = negotiator.propose(goal)
+        if json_output:
+            print(proposal.model_dump_json(indent=2))
+        else:
+            print("LoopOS detected an ambiguous goal.\n")
+            print("请选择一个执行方案：\n")
+            for option in proposal.options:
+                print(f"[{option.id}] {option.title}")
+        return 4
+    try:
+        goal_spec = negotiator.finalize(goal, option_ids=option_ids)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
     paths = _paths(data_dir)
-    if memory == "off":
-        engine = LoopEngine(
-            event_log=EventLog(paths["events"]),
-            state_store=StateStore(paths["runs"]),
+    kernel_mode = "dry_run" if dry_run else mode
+    if kernel_mode not in {"guarded", "dry_run"}:
+        print(f"Unknown run mode: {kernel_mode}", file=sys.stderr)
+        return 1
+    runtime = KernelBoot().start(
+        KernelConfig(
+            workspace=str(workspace),
+            data_dir=str(paths["base"]),
+            auto_approve_medium=yes,
         )
-    else:
-        engine = LoopEngine.with_local_stores(
-            paths["base"],
-            propose_memory=propose_memory,
-            llm_provider=_llm_provider(llm_provider),
+    )
+    repository = MemoryRepository(paths["base"]) if memory == "on" else None
+    engine = KernelLoopEngine(runtime, memory_repository=repository)
+    run = engine.run(
+        RunSpec(
+            goal=goal,
+            workspace=str(Path(workspace).resolve()),
+            mode=kernel_mode,  # type: ignore[arg-type]
+            max_steps=max_steps,
+            non_interactive=not sys.stdin.isatty(),
+            metadata={"goal_spec": goal_spec.model_dump(mode="json")},
         )
-    state = engine.run(goal, max_steps=max_steps)
-    _print_state(state, verbose=verbose)
-    return 0 if state.status == "succeeded" else 1
+    )
+    if propose_memory and repository is not None:
+        _propose_memory(repository, run.run_id, llm_provider)
+    _print_run(
+        run,
+        trace_store=runtime.trace_store,
+        verbose=verbose,
+        show_ail=show_ail,
+        show_policy=show_policy,
+        json_output=json_output,
+    )
+    if run.status == "succeeded":
+        return 0
+    return 3 if run.status == "waiting_approval" else 1
 
 
 def status_command(run_id: str, *, data_dir: str | Path = ".loopos", verbose: bool = False) -> int:
     try:
-        state = StateStore(_paths(data_dir)["runs"]).load(run_id)
+        run = RunManager(_paths(data_dir)["runs"]).load(run_id)
     except FileNotFoundError:
         print(f"Run not found: {run_id}", file=sys.stderr)
         return 1
-    _print_state(state, verbose=verbose)
+    _print_run(run, verbose=verbose)
     return 0
 
 
-def resume_command(run_id: str, *, data_dir: str | Path = ".loopos", max_steps: int = 5) -> int:
+def resume_command(
+    run_id: str,
+    *,
+    data_dir: str | Path = ".loopos",
+    approve: bool = False,
+    deny: bool = False,
+    verbose: bool = False,
+    json_output: bool = False,
+) -> int:
     try:
-        state = StateStore(_paths(data_dir)["runs"]).load(run_id)
+        paths = _paths(data_dir)
+        existing = RunManager(paths["runs"]).load(run_id)
     except FileNotFoundError:
         print(f"Run not found: {run_id}", file=sys.stderr)
         return 1
-    print("Resume is read-only in the MVP. Current state:")
-    _print_state(state)
-    return 0
+    try:
+        runtime = KernelBoot().start(
+            KernelConfig(workspace=existing.workspace, data_dir=str(paths["base"]))
+        )
+        run = KernelLoopEngine(runtime, memory_repository=MemoryRepository(paths["base"])).resume(
+            run_id, approve=approve, deny=deny
+        )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    _print_run(run, trace_store=runtime.trace_store, verbose=verbose, json_output=json_output)
+    if run.status == "succeeded":
+        return 0
+    return 3 if run.status == "waiting_approval" else 1
 
 
 def history_command(run_id: str, *, data_dir: str | Path = ".loopos") -> int:
-    events = EventLog(_paths(data_dir)["events"]).list(run_id)
+    events = TraceStore(_paths(data_dir)["events"]).list(run_id)
     if not events:
         print(f"No events for run: {run_id}")
         return 0
@@ -173,19 +309,164 @@ def history_command(run_id: str, *, data_dir: str | Path = ".loopos") -> int:
         table.add_column("type")
         table.add_column("payload")
         for event in events:
-            table.add_row(str(event.step_index), event.type, json.dumps(event.payload, ensure_ascii=False)[:120])
+            table.add_row(str(event.step), event.type or event.kind or "run", json.dumps(event.payload, ensure_ascii=False)[:120])
         console.print(table)
     else:
         print(json.dumps([event.model_dump(mode="json") for event in events], ensure_ascii=False, indent=2))
     return 0
 
 
-def skills_command(*, data_dir: str | Path = ".loopos") -> int:
-    skills = SkillStore(_paths(data_dir)["skills"]).list()
+def skills_command(
+    action: str = "list",
+    arg: str | None = None,
+    *,
+    data_dir: str | Path = ".loopos",
+) -> int:
+    repo = MemoryRepository(_paths(data_dir)["base"])
+    skills = repo.skills.list()
+    if action == "review":
+        proposals = repo.list_skill_proposals(status="pending")
+        print(json.dumps([item.model_dump(mode="json") for item in proposals], ensure_ascii=False, indent=2))
+        return 0
+    if action == "accept":
+        if not arg:
+            print("skills accept requires PROPOSAL_ID.", file=sys.stderr)
+            return 1
+        try:
+            proposal = repo.commit_skill_proposal(arg)
+        except KeyError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(f"{proposal.status}: {proposal.id}")
+        return 0 if proposal.status in {"accepted", "merged"} else 1
+    if action == "disable":
+        if not arg:
+            print("skills disable requires SKILL_ID.", file=sys.stderr)
+            return 1
+        for skill in skills:
+            if skill.id == arg:
+                skill.status = "disabled"
+                repo.skills.upsert(skill)
+                repo.index.upsert_skill(skill)
+                print(f"disabled: {skill.id}")
+                return 0
+        print(f"Skill not found: {arg}", file=sys.stderr)
+        return 1
+    if action != "list":
+        print(f"Unknown skills action: {action}", file=sys.stderr)
+        return 1
+    skills = [skill for skill in skills if skill.status == "active"]
     if not skills:
         print("No skills stored.")
         return 0
     print(json.dumps([skill.model_dump(mode="json") for skill in skills], ensure_ascii=False, indent=2))
+    return 0
+
+
+def trace_command(
+    run_id: str,
+    *,
+    data_dir: str | Path = ".loopos",
+    show_ail: bool = False,
+    show_policy: bool = False,
+    json_output: bool = False,
+) -> int:
+    events = TraceStore(_paths(data_dir)["events"]).list(run_id)
+    if not events:
+        print(f"No events for run: {run_id}", file=sys.stderr)
+        return 1
+    selected = events
+    if show_ail and not show_policy:
+        selected = [event for event in events if event.kind == "instruction"]
+    elif show_policy and not show_ail:
+        selected = [event for event in events if event.kind == "policy"]
+    payload = [event.model_dump(mode="json") for event in selected]
+    if json_output or not _HAS_TUI:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
+    table = TableCls(title=f"Trace {run_id}")
+    table.add_column("step")
+    table.add_column("kind")
+    table.add_column("summary")
+    for event in selected:
+        summary = event.payload.get("op") or event.payload.get("summary") or event.type
+        table.add_row(str(event.step), str(event.kind), str(summary)[:100])
+    console.print(table)
+    return 0
+
+
+def replay_command(
+    run_id: str,
+    step: int,
+    *,
+    data_dir: str | Path = ".loopos",
+    json_output: bool = False,
+) -> int:
+    paths = _paths(data_dir)
+    try:
+        durable = RunManager(paths["runs"]).load(run_id)
+    except FileNotFoundError:
+        durable = None
+    result = ReplayEngine(TraceStore(paths["events"])).replay(run_id, step, durable=durable)
+    if not result.events:
+        print(f"No replayable events for run {run_id} step {step}", file=sys.stderr)
+        return 1
+    payload = result.model_dump(mode="json")
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def tools_command(
+    action: str = "list",
+    *,
+    workspace: str | Path = ".",
+    json_output: bool = False,
+) -> int:
+    if action != "list":
+        print(f"Unknown tools action: {action}", file=sys.stderr)
+        return 1
+    specs = create_default_syscall_router(workspace).registry.list()
+    payload = [spec.model_dump(mode="json") for spec in specs]
+    if json_output or not _HAS_TUI:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        table = TableCls(title="Kernel Syscalls")
+        table.add_column("name")
+        table.add_column("risk")
+        table.add_column("policy scope")
+        for spec in specs:
+            table.add_row(spec.name, spec.risk, spec.policy_scope)
+        console.print(table)
+    return 0
+
+
+def goal_command(
+    action: str,
+    raw_goal: str,
+    *,
+    option: str | None = None,
+    json_output: bool = False,
+) -> int:
+    negotiator = GoalNegotiator()
+    payload: Any
+    if action == "analyze":
+        payload = negotiator.analyze(raw_goal)
+    elif action == "propose":
+        payload = negotiator.propose(raw_goal)
+    elif action == "finalize":
+        try:
+            payload = negotiator.finalize(raw_goal, option_ids=_parse_goal_options(option))
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+    else:
+        print(f"Unknown goal action: {action}", file=sys.stderr)
+        return 1
+    if json_output or action != "propose":
+        print(payload.model_dump_json(indent=2))
+        return 0
+    for item in payload.options:
+        print(f"[{item.id}] {item.title}: {item.objective}")
     return 0
 
 
@@ -286,6 +567,7 @@ def policy_command(
     input_json: str | None = None,
     data_dir: str | Path = ".loopos",
     verbose: bool = False,
+    cmd: str | None = None,
 ) -> int:
     engine = _policy_engine()
     if action == "list":
@@ -339,6 +621,18 @@ def policy_command(
             return 0
         print(json.dumps(rows if verbose else rows[-20:], ensure_ascii=False, indent=2))
         return 0
+    if action == "explain":
+        if not cmd:
+            print("policy explain requires --cmd CMD.", file=sys.stderr)
+            return 1
+        decision = engine.evaluate(
+            "terminal.execute",
+            subject={"cmd": cmd, "risk_level": "medium"},
+            tags=["terminal", "explain"],
+            risk_level="medium",
+        )
+        print(decision.model_dump_json(indent=2))
+        return 0 if decision.allowed else 2
     print(f"Unknown policy action: {action}", file=sys.stderr)
     return 1
 
@@ -378,6 +672,7 @@ def config_command(*, data_dir: str | Path = ".loopos") -> int:
             {
                 "data_dir": str(Path(data_dir)),
                 "runtime": "python",
+                "kernel": "v2",
                 "llm": "mock-only",
                 "web_ui": False,
             },
@@ -388,6 +683,36 @@ def config_command(*, data_dir: str | Path = ".loopos") -> int:
     return 0
 
 
+def repl_command() -> int:
+    """Minimal terminal shell over the public command functions."""
+
+    print("LoopOS Kernel REPL. Commands: run, status, trace, tools, help, quit")
+    while True:
+        try:
+            raw = input("loopos> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 0
+        if not raw:
+            continue
+        parts = shlex.split(raw)
+        command = parts[0].lower()
+        if command in {"quit", "exit"}:
+            return 0
+        if command == "help":
+            print("run GOAL | status RUN_ID | trace RUN_ID | tools | quit")
+        elif command == "run" and len(parts) > 1:
+            run_command(" ".join(parts[1:]))
+        elif command == "status" and len(parts) == 2:
+            status_command(parts[1])
+        elif command == "trace" and len(parts) == 2:
+            trace_command(parts[1])
+        elif command == "tools":
+            tools_command()
+        else:
+            print(f"Unknown or incomplete command: {raw}")
+
+
 def _llm_provider(name: str) -> LLMProvider:
     if name == "mock":
         return MockLLMProvider()
@@ -396,16 +721,48 @@ def _llm_provider(name: str) -> LLMProvider:
     raise ValueError(f"unknown LLM provider: {name}")
 
 
+def _propose_memory(repo: MemoryRepository, run_id: str, provider_name: str) -> None:
+    extractor = MemoryProposalExtractor(_llm_provider(provider_name))
+    events = repo.events.list(run_id)
+    proposals, errors = extractor.extract(
+        run_id=run_id,
+        events=events,
+        user_profile=repo.get_profile(),
+    )
+    for proposal in proposals:
+        repo.propose(proposal)
+    for error in errors:
+        repo.events.append("memory_proposal_error", run_id, len(events), {"error": error})
+
+
+def _parse_goal_options(value: str | None) -> list[int]:
+    if not value:
+        return []
+    try:
+        options = [int(item.strip()) for item in value.split(",") if item.strip()]
+    except ValueError as exc:
+        raise ValueError("goal options must be comma-separated integers") from exc
+    if not options or any(option < 1 or option > 5 for option in options):
+        raise ValueError("goal options must be between 1 and 5")
+    return list(dict.fromkeys(options))
+
+
 if _HAS_TUI:
 
     @app.command("run")
     def _typer_run(
         goal: str,
-        max_steps: int = typer_mod.Option(5, "--max-steps"),
+        max_steps: int = typer_mod.Option(20, "--max-steps"),
         dry_run: bool = typer_mod.Option(False, "--dry-run"),
         yes: bool = typer_mod.Option(False, "--yes"),
         verbose: bool = typer_mod.Option(False, "--verbose"),
         data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+        workspace: str = typer_mod.Option(".", "--workspace"),
+        mode: str = typer_mod.Option("guarded", "--mode"),
+        show_ail: bool = typer_mod.Option(False, "--show-ail"),
+        show_policy: bool = typer_mod.Option(False, "--show-policy"),
+        json_output: bool = typer_mod.Option(False, "--json"),
+        goal_option: str | None = typer_mod.Option(None, "--goal-option"),
         memory: str = typer_mod.Option("on", "--memory"),
         propose_memory: bool = typer_mod.Option(False, "--propose-memory"),
         llm_provider: str = typer_mod.Option("mock", "--llm-provider"),
@@ -421,6 +778,12 @@ if _HAS_TUI:
                 memory=memory,
                 propose_memory=propose_memory,
                 llm_provider=llm_provider,
+                workspace=workspace,
+                mode=mode,
+                show_ail=show_ail,
+                show_policy=show_policy,
+                json_output=json_output,
+                goal_option=goal_option,
             )
         )
 
@@ -428,9 +791,21 @@ if _HAS_TUI:
     def _typer_resume(
         run_id: str,
         data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
-        max_steps: int = typer_mod.Option(5, "--max-steps"),
+        approve: bool = typer_mod.Option(False, "--approve"),
+        deny: bool = typer_mod.Option(False, "--deny"),
+        verbose: bool = typer_mod.Option(False, "--verbose"),
+        json_output: bool = typer_mod.Option(False, "--json"),
     ) -> None:
-        raise typer_mod.Exit(resume_command(run_id, data_dir=data_dir, max_steps=max_steps))
+        raise typer_mod.Exit(
+            resume_command(
+                run_id,
+                data_dir=data_dir,
+                approve=approve,
+                deny=deny,
+                verbose=verbose,
+                json_output=json_output,
+            )
+        )
 
     @app.command("status")
     def _typer_status(
@@ -448,8 +823,66 @@ if _HAS_TUI:
         raise typer_mod.Exit(history_command(run_id, data_dir=data_dir))
 
     @app.command("skills")
-    def _typer_skills(data_dir: str = typer_mod.Option(".loopos", "--data-dir")) -> None:
-        raise typer_mod.Exit(skills_command(data_dir=data_dir))
+    def _typer_skills(
+        action: str = typer_mod.Argument("list"),
+        arg: str | None = typer_mod.Argument(None),
+        data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+    ) -> None:
+        raise typer_mod.Exit(skills_command(action, arg, data_dir=data_dir))
+
+    @app.command("trace")
+    def _typer_trace(
+        run_id: str,
+        data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+        show_ail: bool = typer_mod.Option(False, "--show-ail"),
+        show_policy: bool = typer_mod.Option(False, "--show-policy"),
+        json_output: bool = typer_mod.Option(False, "--json"),
+    ) -> None:
+        raise typer_mod.Exit(
+            trace_command(
+                run_id,
+                data_dir=data_dir,
+                show_ail=show_ail,
+                show_policy=show_policy,
+                json_output=json_output,
+            )
+        )
+
+    @app.command("step")
+    def _typer_step(
+        action: str,
+        run_id: str,
+        step: int,
+        data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+        json_output: bool = typer_mod.Option(False, "--json"),
+    ) -> None:
+        if action != "replay":
+            console.print(f"Unknown step action: {action}", style="red")
+            raise typer_mod.Exit(1)
+        raise typer_mod.Exit(
+            replay_command(run_id, step, data_dir=data_dir, json_output=json_output)
+        )
+
+    @app.command("tools")
+    def _typer_tools(
+        action: str = typer_mod.Argument("list"),
+        workspace: str = typer_mod.Option(".", "--workspace"),
+        json_output: bool = typer_mod.Option(False, "--json"),
+    ) -> None:
+        raise typer_mod.Exit(
+            tools_command(action, workspace=workspace, json_output=json_output)
+        )
+
+    @app.command("goal")
+    def _typer_goal(
+        action: str,
+        raw_goal: str,
+        option: str | None = typer_mod.Option(None, "--option"),
+        json_output: bool = typer_mod.Option(False, "--json"),
+    ) -> None:
+        raise typer_mod.Exit(
+            goal_command(action, raw_goal, option=option, json_output=json_output)
+        )
 
     @app.command("memory")
     def _typer_memory(
@@ -484,6 +917,7 @@ if _HAS_TUI:
         input_json: str | None = typer_mod.Option(None, "--input"),
         data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
         verbose: bool = typer_mod.Option(False, "--verbose"),
+        cmd: str | None = typer_mod.Option(None, "--cmd"),
     ) -> None:
         raise typer_mod.Exit(
             policy_command(
@@ -493,6 +927,7 @@ if _HAS_TUI:
                 input_json=input_json,
                 data_dir=data_dir,
                 verbose=verbose,
+                cmd=cmd,
             )
         )
 
@@ -511,19 +946,28 @@ def _argparse_main(argv: list[str] | None = None) -> int:
 
     run_parser = sub.add_parser("run")
     run_parser.add_argument("goal")
-    run_parser.add_argument("--max-steps", type=int, default=5)
+    run_parser.add_argument("--max-steps", type=int, default=20)
     run_parser.add_argument("--dry-run", action="store_true")
     run_parser.add_argument("--yes", action="store_true")
     run_parser.add_argument("--verbose", action="store_true")
     run_parser.add_argument("--data-dir", default=".loopos")
+    run_parser.add_argument("--workspace", default=".")
+    run_parser.add_argument("--mode", choices=["guarded", "dry_run"], default="guarded")
+    run_parser.add_argument("--show-ail", action="store_true")
+    run_parser.add_argument("--show-policy", action="store_true")
+    run_parser.add_argument("--json", dest="json_output", action="store_true")
+    run_parser.add_argument("--goal-option")
     run_parser.add_argument("--memory", choices=["on", "off"], default="on")
     run_parser.add_argument("--propose-memory", action="store_true")
     run_parser.add_argument("--llm-provider", choices=["mock", "openai-compatible"], default="mock")
 
     resume_parser = sub.add_parser("resume")
     resume_parser.add_argument("run_id")
-    resume_parser.add_argument("--max-steps", type=int, default=5)
     resume_parser.add_argument("--data-dir", default=".loopos")
+    resume_parser.add_argument("--approve", action="store_true")
+    resume_parser.add_argument("--deny", action="store_true")
+    resume_parser.add_argument("--verbose", action="store_true")
+    resume_parser.add_argument("--json", dest="json_output", action="store_true")
 
     status_parser = sub.add_parser("status")
     status_parser.add_argument("run_id")
@@ -535,7 +979,34 @@ def _argparse_main(argv: list[str] | None = None) -> int:
     history_parser.add_argument("--data-dir", default=".loopos")
 
     skills_parser = sub.add_parser("skills")
+    skills_parser.add_argument("action", nargs="?", default="list")
+    skills_parser.add_argument("arg", nargs="?")
     skills_parser.add_argument("--data-dir", default=".loopos")
+
+    trace_parser = sub.add_parser("trace")
+    trace_parser.add_argument("run_id")
+    trace_parser.add_argument("--data-dir", default=".loopos")
+    trace_parser.add_argument("--show-ail", action="store_true")
+    trace_parser.add_argument("--show-policy", action="store_true")
+    trace_parser.add_argument("--json", dest="json_output", action="store_true")
+
+    step_parser = sub.add_parser("step")
+    step_parser.add_argument("action")
+    step_parser.add_argument("run_id")
+    step_parser.add_argument("step", type=int)
+    step_parser.add_argument("--data-dir", default=".loopos")
+    step_parser.add_argument("--json", dest="json_output", action="store_true")
+
+    tools_parser = sub.add_parser("tools")
+    tools_parser.add_argument("action", nargs="?", default="list")
+    tools_parser.add_argument("--workspace", default=".")
+    tools_parser.add_argument("--json", dest="json_output", action="store_true")
+
+    goal_parser = sub.add_parser("goal")
+    goal_parser.add_argument("action")
+    goal_parser.add_argument("raw_goal")
+    goal_parser.add_argument("--option")
+    goal_parser.add_argument("--json", dest="json_output", action="store_true")
 
     memory_parser = sub.add_parser("memory")
     memory_parser.add_argument("action", nargs="?", default="list")
@@ -556,6 +1027,7 @@ def _argparse_main(argv: list[str] | None = None) -> int:
     policy_parser.add_argument("--scope")
     policy_parser.add_argument("--input", dest="input_json")
     policy_parser.add_argument("--verbose", action="store_true")
+    policy_parser.add_argument("--cmd")
     policy_parser.add_argument("--data-dir", default=".loopos")
 
     ail_parser = sub.add_parser("ail")
@@ -578,15 +1050,59 @@ def _argparse_main(argv: list[str] | None = None) -> int:
             memory=args.memory,
             propose_memory=args.propose_memory,
             llm_provider=args.llm_provider,
+            workspace=args.workspace,
+            mode=args.mode,
+            show_ail=args.show_ail,
+            show_policy=args.show_policy,
+            json_output=args.json_output,
+            goal_option=args.goal_option,
         )
     if args.command == "resume":
-        return resume_command(args.run_id, data_dir=args.data_dir, max_steps=args.max_steps)
+        return resume_command(
+            args.run_id,
+            data_dir=args.data_dir,
+            approve=args.approve,
+            deny=args.deny,
+            verbose=args.verbose,
+            json_output=args.json_output,
+        )
     if args.command == "status":
         return status_command(args.run_id, data_dir=args.data_dir, verbose=args.verbose)
     if args.command == "history":
         return history_command(args.run_id, data_dir=args.data_dir)
     if args.command == "skills":
-        return skills_command(data_dir=args.data_dir)
+        return skills_command(args.action, args.arg, data_dir=args.data_dir)
+    if args.command == "trace":
+        return trace_command(
+            args.run_id,
+            data_dir=args.data_dir,
+            show_ail=args.show_ail,
+            show_policy=args.show_policy,
+            json_output=args.json_output,
+        )
+    if args.command == "step":
+        if args.action != "replay":
+            print(f"Unknown step action: {args.action}", file=sys.stderr)
+            return 1
+        return replay_command(
+            args.run_id,
+            args.step,
+            data_dir=args.data_dir,
+            json_output=args.json_output,
+        )
+    if args.command == "tools":
+        return tools_command(
+            args.action,
+            workspace=args.workspace,
+            json_output=args.json_output,
+        )
+    if args.command == "goal":
+        return goal_command(
+            args.action,
+            args.raw_goal,
+            option=args.option,
+            json_output=args.json_output,
+        )
     if args.command == "memory":
         return memory_command(
             args.action,
@@ -605,6 +1121,7 @@ def _argparse_main(argv: list[str] | None = None) -> int:
             input_json=args.input_json,
             data_dir=args.data_dir,
             verbose=args.verbose,
+            cmd=args.cmd,
         )
     if args.command == "ail":
         return ail_command(args.action, args.file, verbose=args.verbose)
@@ -616,6 +1133,8 @@ def _argparse_main(argv: list[str] | None = None) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     if _HAS_TUI and argv is None:
+        if len(sys.argv) == 1 and sys.stdin.isatty():
+            return repl_command()
         app()
         return 0
     return _argparse_main(argv)

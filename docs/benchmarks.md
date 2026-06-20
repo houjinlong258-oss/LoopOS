@@ -33,6 +33,7 @@ LoopOS benchmarks are JSON task definitions that can run against the determinist
 - skill reuse
 - user preference context injection
 - policy compliance
+- kernel trace replay
 
 ## Running from Python
 
@@ -45,4 +46,4 @@ report = runner.run_all(tasks)
 runner.write_report(report, "benchmarks/report.json")
 ```
 
-The MVP runner uses the deterministic native loop. It does not call a real LLM.
+The MVP runner uses deterministic native and Kernel loops. It does not call a real LLM. The kernel replay task verifies the nine-step hello dry-run and side-effect-free replay.
