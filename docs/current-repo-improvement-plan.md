@@ -221,6 +221,19 @@ Typer/Rich and standard-library fallback behavior are both implemented, but comm
 - Provider and gateway tests remain deterministic and offline.
 - `python -m loopos.cli.app --help`, pytest, Ruff, and mypy all pass.
 
+## Implementation Progress
+
+### Phase 1 Increment 1 - 2026-06-20
+
+- Added shared `loopos/cli/context.py` data paths.
+- Added modular command files for tasks, triggers, worktrees, review, providers/models, and gateway.
+- Preserved compatibility exports from `loopos.cli.app`.
+- Reduced `loopos/cli/app.py` from approximately 1,850 to 1,397 lines.
+- Added modularization contract tests.
+- Verified 121 tests plus 16 subtests, Ruff, mypy, CLI help, and diff checks.
+
+Remaining Phase 1 work: migrate run/status/trace/policy/goal/tools/memory/skills/config/AIL command logic and extract renderer helpers.
+
 ## Explicit Non-Goals for the Alpha Upgrade
 
 - No Web UI or desktop GUI.

@@ -80,9 +80,11 @@ This document maps the requested LoopOS prompt phases to the MVP files now prese
 
 ## 14 CLI/FLI UI
 
-- `loopos/cli/app.py`
-- `tests/test_cli.py`
-- Commands: `run`, `resume`, `status`, `history`, `skills`, `memory`, `config`.
+- `loopos/cli/app.py` for Typer/argparse registration and compatibility exports.
+- `loopos/cli/context.py` for shared CLI data paths.
+- `loopos/cli/commands/` for modular outer-loop, provider/model, and gateway command implementations.
+- `tests/test_cli.py` and `tests/test_cli_modularization.py`.
+- Commands include run/resume/status/trace, memory/skills, policy/AIL, outer loop, providers/models, and gateway.
 - Uses Typer/Rich when installed and a standard-library fallback otherwise.
 
 ## 15 Security and Permission Model
