@@ -3,7 +3,7 @@ import tempfile
 from pathlib import Path
 
 from loopos.gateway import ChatOpsGateway, GatewayStore
-from loopos.model_kernel import MultiModelScheduler, ProviderRegistry
+from loopos.model_kernel import MultiModelScheduler, ProviderRegistry, load_provider_profiles
 
 
 class ModelGatewayTests(unittest.TestCase):
@@ -26,6 +26,33 @@ class ModelGatewayTests(unittest.TestCase):
         assert companion is not None
         self.assertEqual(companion.role, "vision_companion")
         self.assertEqual(summary.source, "screenshot.png")
+
+    def test_provider_profiles_load_from_yaml_and_alias_capabilities(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "providers.yaml"
+            path.write_text(
+                """
+providers:
+  - id: local-coder
+    aliases: [lc]
+    capabilities: [text, code, local_only, reasoning]
+    default_models: [local-code]
+    local_only: true
+""",
+                encoding="utf-8",
+            )
+            profiles = load_provider_profiles([path])
+            registry = ProviderRegistry.from_paths([path], include_defaults=False)
+
+            self.assertEqual(profiles[0].capabilities, ["text", "coding", "local", "reasoning"])
+            self.assertEqual(registry.get("lc").id, "local-coder")
+            self.assertEqual(registry.route(["coding"], local_only=True).id, "local-coder")
+
+    def test_secret_task_routes_to_local_provider(self) -> None:
+        assignments = MultiModelScheduler().route_task(task="coding", secret=True)
+
+        self.assertIn("local", assignments[0].capabilities)
+        self.assertEqual(assignments[0].reason_code, "privacy_local")
 
     def test_chatops_gateway_converts_message_to_run_spec_and_approval(self) -> None:
         gateway = ChatOpsGateway()

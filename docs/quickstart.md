@@ -68,6 +68,7 @@ python -m loopos.cli.app review list
 python -m loopos.cli.app review verify REVIEW_ID --note "pytest passed"
 python -m loopos.cli.app review approve REVIEW_ID
 python -m loopos.cli.app providers route coding
+python -m loopos.cli.app models route --task coding --input image
 python -m loopos.cli.app gateway simulate telegram "run tests"
 python -m loopos.cli.app gateway approval telegram "git reset --hard" --run-id RUN_ID --risk high
 python -m loopos.cli.app gateway decide CARD_ID --deny

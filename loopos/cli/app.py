@@ -805,7 +805,7 @@ def providers_command(
     if action == "route":
         capabilities = [item.strip() for item in (value or "text").split(",") if item.strip()]
         try:
-            profile = registry.route(capabilities)  # type: ignore[arg-type]
+            profile = registry.route(capabilities)
         except KeyError as exc:
             print(str(exc), file=sys.stderr)
             return 1
@@ -825,6 +825,29 @@ def providers_command(
         return 0
     print(f"Unknown providers action: {action}", file=sys.stderr)
     return 1
+
+
+def models_command(
+    action: str = "route",
+    *,
+    task: str = "general",
+    input_kind: str | None = None,
+    secret: bool = False,
+) -> int:
+    if action != "route":
+        print(f"Unknown models action: {action}", file=sys.stderr)
+        return 1
+    try:
+        assignments = MultiModelScheduler().route_task(
+            task=task,
+            input_kind=input_kind,
+            secret=secret,
+        )
+    except KeyError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    print(json.dumps([item.model_dump(mode="json") for item in assignments], ensure_ascii=False, indent=2))
+    return 0
 
 
 def gateway_command(
@@ -1408,6 +1431,17 @@ if _HAS_TUI:
     ) -> None:
         raise typer_mod.Exit(providers_command(action, value, json_output=json_output))
 
+    @app.command("models")
+    def _typer_models(
+        action: str = typer_mod.Argument("route"),
+        task: str = typer_mod.Option("general", "--task"),
+        input_kind: str | None = typer_mod.Option(None, "--input"),
+        secret: bool = typer_mod.Option(False, "--secret"),
+    ) -> None:
+        raise typer_mod.Exit(
+            models_command(action, task=task, input_kind=input_kind, secret=secret)
+        )
+
     @app.command("gateway")
     def _typer_gateway(
         action: str = typer_mod.Argument("simulate"),
@@ -1603,6 +1637,12 @@ def _argparse_main(argv: list[str] | None = None) -> int:
     providers_parser.add_argument("value", nargs="?")
     providers_parser.add_argument("--json", dest="json_output", action="store_true")
 
+    models_parser = sub.add_parser("models")
+    models_parser.add_argument("action", nargs="?", default="route")
+    models_parser.add_argument("--task", default="general")
+    models_parser.add_argument("--input", dest="input_kind")
+    models_parser.add_argument("--secret", action="store_true")
+
     gateway_parser = sub.add_parser("gateway")
     gateway_parser.add_argument("action", nargs="?", default="simulate")
     gateway_parser.add_argument("channel", nargs="?", default="telegram")
@@ -1749,6 +1789,13 @@ def _argparse_main(argv: list[str] | None = None) -> int:
         )
     if args.command == "providers":
         return providers_command(args.action, args.value, json_output=args.json_output)
+    if args.command == "models":
+        return models_command(
+            args.action,
+            task=args.task,
+            input_kind=args.input_kind,
+            secret=args.secret,
+        )
     if args.command == "gateway":
         return gateway_command(
             args.action,

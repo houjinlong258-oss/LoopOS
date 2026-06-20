@@ -316,6 +316,15 @@ class CliTests(unittest.TestCase):
         self.assertEqual(route.returncode, 0)
         self.assertIn('"id": "openai-codex"', route.stdout)
 
+        models = self.run_cli("models", "route", "--task", "coding", "--input", "image")
+        self.assertEqual(models.returncode, 0)
+        self.assertIn('"role": "coder"', models.stdout)
+        self.assertIn('"role": "vision_companion"', models.stdout)
+
+        secret_models = self.run_cli("models", "route", "--task", "coding", "--secret")
+        self.assertEqual(secret_models.returncode, 0)
+        self.assertIn('"reason_code": "privacy_local"', secret_models.stdout)
+
         with tempfile.TemporaryDirectory() as tmp:
             gateway = self.run_cli(
                 "gateway",

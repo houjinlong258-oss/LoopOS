@@ -175,7 +175,7 @@ The Kernel prompt is stored in `docs/LoopOS_Kernel_Level_Codex_Prompt.md`. Herme
 - `loopos/worktree/`: worktree planning records with branch naming, conflict detection, stale/cleanup state, task linking, and syscall-backed materialization dry-runs.
 - `loopos/review/`: Producer, Verifier, and Reviewer separation for high-risk/code tasks; code tasks require a planned worktree before review, and high-risk approval requires verifier notes.
 - `loopos/skills/`: compatibility exports for the governed skill kernel.
-- `loopos/model_kernel/`: provider profiles, capability routing, mock client, and multi-model role scheduler.
+- `loopos/model_kernel/`: provider profiles, YAML provider loading, capability/local-only routing, mock client, and multi-model role scheduler.
 - `loopos/gateway/`: ChatOps/mobile mock adapters, message-to-RunSpec conversion, persistent mock approval cards, and approve/deny resume decisions.
 - CLI: `triggers`, `tasks`, `worktrees`, `review`, `providers`, and `gateway`.
 
