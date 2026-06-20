@@ -279,10 +279,47 @@ class CliTests(unittest.TestCase):
         self.assertEqual(route.returncode, 0)
         self.assertIn('"id": "openai-codex"', route.stdout)
 
-        gateway = self.run_cli("gateway", "simulate", "telegram", "run tests")
-        self.assertEqual(gateway.returncode, 0)
-        self.assertIn('"channel": "telegram"', gateway.stdout)
-        self.assertIn('"goal": "run tests"', gateway.stdout)
+        with tempfile.TemporaryDirectory() as tmp:
+            gateway = self.run_cli(
+                "gateway",
+                "simulate",
+                "telegram",
+                "run tests",
+                "--data-dir",
+                tmp,
+            )
+            self.assertEqual(gateway.returncode, 0)
+            self.assertIn('"channel": "telegram"', gateway.stdout)
+            self.assertIn('"goal": "run tests"', gateway.stdout)
+
+            approval = self.run_cli(
+                "gateway",
+                "approval",
+                "telegram",
+                "git reset --hard",
+                "--run-id",
+                "run-1",
+                "--risk",
+                "high",
+                "--reason-code",
+                "git_reset_hard_requires_approval",
+                "--data-dir",
+                tmp,
+            )
+            self.assertEqual(approval.returncode, 0)
+            card = json.loads(approval.stdout)
+
+            decision = self.run_cli(
+                "gateway",
+                "decide",
+                card["id"],
+                "--approve",
+                "--data-dir",
+                tmp,
+            )
+            self.assertEqual(decision.returncode, 0)
+            self.assertIn('"approve": true', decision.stdout)
+            self.assertIn('"run_id": "run-1"', decision.stdout)
 
 
 if __name__ == "__main__":

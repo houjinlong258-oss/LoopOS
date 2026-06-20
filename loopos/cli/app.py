@@ -16,7 +16,7 @@ from loopos.ail.models import AILInstruction
 from loopos.core.isa import Instruction
 from loopos.core.state import LoopState
 from loopos.goal import GoalNegotiator
-from loopos.gateway import ChatOpsGateway
+from loopos.gateway import ChatOpsGateway, GatewayStore
 from loopos.kernel import (
     KernelBoot,
     KernelConfig,
@@ -79,6 +79,8 @@ def _paths(data_dir: str | Path) -> dict[str, Path]:
         "task_artifacts": base / "task_artifacts.json",
         "worktrees": base / "worktrees.json",
         "reviews": base / "reviews.json",
+        "gateway_messages": base / "gateway_messages.json",
+        "gateway_approvals": base / "gateway_approvals.json",
     }
 
 
@@ -751,12 +753,24 @@ def gateway_command(
     text: str = "hello",
     *,
     user_id: str = "user",
+    data_dir: str | Path = ".loopos",
+    run_id: str | None = None,
+    risk: str = "medium",
+    reason_code: str | None = None,
+    approve: bool = False,
+    deny: bool = False,
 ) -> int:
     gateway = ChatOpsGateway()
+    paths = _paths(data_dir)
+    store = GatewayStore(
+        messages_path=paths["gateway_messages"],
+        approvals_path=paths["gateway_approvals"],
+    )
     if action == "simulate":
         try:
             event = gateway.receive(channel, user_id, text)  # type: ignore[arg-type]
             spec = gateway.to_run_spec(event)
+            store.append_message(event)
         except (KeyError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             return 1
@@ -770,6 +784,39 @@ def gateway_command(
                 indent=2,
             )
         )
+        return 0
+    if action == "approval":
+        if not run_id:
+            print("gateway approval requires --run-id RUN_ID.", file=sys.stderr)
+            return 1
+        try:
+            card = gateway.approval_card(
+                channel,  # type: ignore[arg-type]
+                run_id=run_id,
+                action_summary=text,
+                risk=risk,
+                reason_codes=[item.strip() for item in (reason_code or "").split(",") if item.strip()],
+            )
+            store.save_approval(card)
+        except (KeyError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(card.model_dump_json(indent=2))
+        return 0
+    if action == "decide":
+        if approve == deny:
+            print("gateway decide requires exactly one of --approve or --deny.", file=sys.stderr)
+            return 1
+        try:
+            decision = store.decide(channel, approve=approve)
+        except KeyError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(decision.model_dump_json(indent=2))
+        return 0
+    if action == "approvals":
+        cards = store.list_approvals()
+        print(json.dumps([card.model_dump(mode="json") for card in cards], ensure_ascii=False, indent=2))
         return 0
     print(f"Unknown gateway action: {action}", file=sys.stderr)
     return 1
@@ -1271,8 +1318,27 @@ if _HAS_TUI:
         channel: str = typer_mod.Argument("telegram"),
         text: str = typer_mod.Argument("hello"),
         user_id: str = typer_mod.Option("user", "--user-id"),
+        data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+        run_id: str | None = typer_mod.Option(None, "--run-id"),
+        risk: str = typer_mod.Option("medium", "--risk"),
+        reason_code: str | None = typer_mod.Option(None, "--reason-code"),
+        approve: bool = typer_mod.Option(False, "--approve"),
+        deny: bool = typer_mod.Option(False, "--deny"),
     ) -> None:
-        raise typer_mod.Exit(gateway_command(action, channel, text, user_id=user_id))
+        raise typer_mod.Exit(
+            gateway_command(
+                action,
+                channel,
+                text,
+                user_id=user_id,
+                data_dir=data_dir,
+                run_id=run_id,
+                risk=risk,
+                reason_code=reason_code,
+                approve=approve,
+                deny=deny,
+            )
+        )
 
     @app.command("memory")
     def _typer_memory(
@@ -1440,6 +1506,12 @@ def _argparse_main(argv: list[str] | None = None) -> int:
     gateway_parser.add_argument("channel", nargs="?", default="telegram")
     gateway_parser.add_argument("text", nargs="?", default="hello")
     gateway_parser.add_argument("--user-id", default="user")
+    gateway_parser.add_argument("--data-dir", default=".loopos")
+    gateway_parser.add_argument("--run-id")
+    gateway_parser.add_argument("--risk", default="medium")
+    gateway_parser.add_argument("--reason-code")
+    gateway_parser.add_argument("--approve", action="store_true")
+    gateway_parser.add_argument("--deny", action="store_true")
 
     memory_parser = sub.add_parser("memory")
     memory_parser.add_argument("action", nargs="?", default="list")
@@ -1572,6 +1644,12 @@ def _argparse_main(argv: list[str] | None = None) -> int:
             args.channel,
             args.text,
             user_id=args.user_id,
+            data_dir=args.data_dir,
+            run_id=args.run_id,
+            risk=args.risk,
+            reason_code=args.reason_code,
+            approve=args.approve,
+            deny=args.deny,
         )
     if args.command == "memory":
         return memory_command(

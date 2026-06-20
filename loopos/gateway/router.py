@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 from loopos.gateway.adapters import MockGatewayAdapter, default_mock_adapters
-from loopos.gateway.models import ApprovalCard, GatewayChannel, MessageEvent
+from loopos.gateway.models import (
+    ApprovalCard,
+    ApprovalResumeDecision,
+    GatewayChannel,
+    MessageEvent,
+    utc_now,
+)
 from loopos.kernel.models import RunSpec
 
 
@@ -55,5 +61,16 @@ class ChatOpsGateway:
 
     def decide(self, card: ApprovalCard, *, approve: bool) -> ApprovalCard:
         card.status = "approved" if approve else "denied"
+        card.decided_at = utc_now()
         return card
 
+    def resume_decision(self, card: ApprovalCard) -> ApprovalResumeDecision:
+        if card.status == "pending":
+            raise ValueError("approval card is still pending")
+        return ApprovalResumeDecision(
+            card_id=card.id,
+            run_id=card.run_id,
+            approve=card.status == "approved",
+            deny=card.status == "denied",
+            status=card.status,
+        )

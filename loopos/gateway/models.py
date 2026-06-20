@@ -50,4 +50,14 @@ class ApprovalCard(BaseModel):
     reason_codes: list[str] = Field(default_factory=list)
     status: Literal["pending", "approved", "denied"] = "pending"
     created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+    decided_at: datetime | None = None
+
+
+class ApprovalResumeDecision(BaseModel):
+    card_id: str
+    run_id: str
+    approve: bool = False
+    deny: bool = False
+    status: Literal["approved", "denied"]
 

@@ -1,6 +1,8 @@
 import unittest
+import tempfile
+from pathlib import Path
 
-from loopos.gateway import ChatOpsGateway
+from loopos.gateway import ChatOpsGateway, GatewayStore
 from loopos.model_kernel import MultiModelScheduler, ProviderRegistry
 
 
@@ -41,6 +43,30 @@ class ModelGatewayTests(unittest.TestCase):
         self.assertEqual(spec.goal, "run tests")
         self.assertEqual(spec.metadata["gateway_event_id"], event.id)
         self.assertEqual(card.status, "denied")
+
+    def test_gateway_store_persists_approval_decisions_for_resume(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = GatewayStore(
+                messages_path=Path(tmp) / "messages.json",
+                approvals_path=Path(tmp) / "approvals.json",
+            )
+            gateway = ChatOpsGateway()
+            event = store.append_message(gateway.receive("slack", "u1", "run tests"))
+            card = store.save_approval(
+                gateway.approval_card(
+                    "slack",
+                    run_id="run-1",
+                    action_summary="write file",
+                    risk="medium",
+                    reason_codes=["file_write_requires_approval"],
+                )
+            )
+            decision = store.decide(card.id, approve=True)
+
+            self.assertEqual(store.list_messages()[0].id, event.id)
+            self.assertTrue(decision.approve)
+            self.assertEqual(decision.run_id, "run-1")
+            self.assertEqual(store.load_approval(card.id).status, "approved")
 
 
 if __name__ == "__main__":

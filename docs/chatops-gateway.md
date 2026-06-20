@@ -9,3 +9,5 @@ Executable skeleton:
 - `loopos gateway simulate telegram "run tests"` creates a typed mock `MessageEvent`.
 - `ChatOpsGateway.to_run_spec()` converts that message into a guarded `RunSpec`.
 - `ChatOpsGateway.approval_card()` records mock approval cards for dangerous actions.
+- `loopos gateway approval telegram "git reset --hard" --run-id RUN_ID --risk high` persists a mock approval card.
+- `loopos gateway decide CARD_ID --approve` or `--deny` returns the structured resume decision for the Kernel.

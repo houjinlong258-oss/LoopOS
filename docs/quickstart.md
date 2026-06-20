@@ -66,6 +66,8 @@ python -m loopos.cli.app worktrees stale WORKTREE_ID
 python -m loopos.cli.app review list
 python -m loopos.cli.app providers route coding
 python -m loopos.cli.app gateway simulate telegram "run tests"
+python -m loopos.cli.app gateway approval telegram "git reset --hard" --run-id RUN_ID --risk high
+python -m loopos.cli.app gateway decide CARD_ID --deny
 python -m loopos.cli.app memory
 python -m loopos.cli.app memory search pytest
 python -m loopos.cli.app profile show
