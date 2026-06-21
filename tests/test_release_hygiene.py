@@ -328,6 +328,38 @@ def test_package_release_prunes_blocked_paths(tmp_path: Path) -> None:
     assert report.hygiene_errors, "expected hygiene errors to be surfaced"
 
 
+def test_package_script_strict_source_rejects_local_state(tmp_path: Path) -> None:
+    import subprocess
+    import sys
+
+    src = tmp_path / "src"
+    src.mkdir()
+    _scaffold_clean_tree(src)
+    (src / ".git").mkdir()
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(Path(__file__).resolve().parents[1] / "scripts" / "package_release.py"),
+            "--version",
+            "0.1.0",
+            "--source",
+            str(src),
+            "--output",
+            str(tmp_path / "dist"),
+            "--strict-source",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert payload["strict_source"] is True
+    assert any(item["path"] == ".git" for item in payload["errors"])
+
+
 def test_package_release_uses_top_level_allowlist(tmp_path: Path) -> None:
     src = tmp_path / "src"
     src.mkdir()

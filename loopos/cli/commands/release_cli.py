@@ -82,6 +82,7 @@ def release_command(
     ignore_local_only: bool = False,
     strict_source: bool = False,
     deep: bool = False,
+    timeout_per_check: int = 60,
     json_output: bool = False,
     target: str = "founding-preview",
 ) -> int:
@@ -110,6 +111,7 @@ def release_command(
             target=target,
             strict_source=strict_source,
             deep=deep,
+            timeout_per_check=timeout_per_check,
         )
         if json_output:
             print(report.model_dump_json(indent=2))

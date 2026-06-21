@@ -71,7 +71,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.strict_source:
-        source_report = check_release_clean(args.source, ignore_local_only=True)
+        source_report = check_release_clean(args.source, ignore_local_only=False)
         if not source_report.ok or source_report.warnings:
             if args.as_json:
                 payload = source_report.to_dict()

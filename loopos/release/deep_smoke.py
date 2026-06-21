@@ -13,6 +13,8 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -24,9 +26,29 @@ class SmokeCheck:
     status: str
     message: str
     evidence: list[str] = field(default_factory=list)
+    duration_ms: int = 0
+    command: str = ""
+    stdout_tail: str = ""
+    stderr_tail: str = ""
+    reason: str | None = None
+    timeout_seconds: int | None = None
 
 
-def run_deep_smoke(root: str | Path = ".") -> dict[str, Any]:
+_ACTIVE_COMMANDS: list[str] = []
+_ACTIVE_STDOUT: list[str] = []
+_ACTIVE_STDERR: list[str] = []
+_ACTIVE_TIMEOUT = False
+_TIMEOUT_PER_CHECK = 60
+_CHECK_DEADLINE: float | None = None
+
+
+def run_deep_smoke(
+    root: str | Path = ".",
+    *,
+    only: set[str] | None = None,
+    skip: set[str] | None = None,
+    timeout_per_check: int = 60,
+) -> dict[str, Any]:
     repo = Path(root).resolve()
     checks: list[SmokeCheck] = []
     with tempfile.TemporaryDirectory(prefix="loopos-deep-smoke-") as tmp:
@@ -34,21 +56,40 @@ def run_deep_smoke(root: str | Path = ".") -> dict[str, Any]:
         workspace = temp / "workspace"
         data_dir = temp / ".loopos"
         workspace.mkdir()
-        checks.append(_cli_help(repo))
-        checks.append(_hello_dry_run(repo, workspace, data_dir))
-        checks.append(_policy_remote_pipe(repo))
-        checks.append(_invalid_diff_gate(repo, temp))
-        checks.append(_sqlite_file_flow(repo, temp, data_dir))
-        checks.append(_fusion_trace(repo, data_dir))
-        checks.append(_webhook_flow(repo, data_dir))
-        checks.append(_trace_replay(repo, workspace, data_dir))
-        checks.append(_review_artifact(repo, workspace, data_dir))
-        checks.append(_registry_examples(repo, data_dir))
+        specs = [
+            ("cli_help", lambda: _cli_help(repo)),
+            ("hello_dry_run", lambda: _hello_dry_run(repo, workspace, data_dir)),
+            ("policy_remote_pipe", lambda: _policy_remote_pipe(repo)),
+            ("invalid_diff_gate", lambda: _invalid_diff_gate(repo, temp)),
+            ("sqlite_file_flow", lambda: _sqlite_file_flow(repo, temp, data_dir)),
+            ("fusion_trace", lambda: _fusion_trace(repo, data_dir)),
+            ("webhook_flow", lambda: _webhook_flow(repo, data_dir)),
+            ("trace_replay", lambda: _trace_replay(repo, workspace, data_dir)),
+            ("review_artifact", lambda: _review_artifact(repo, workspace, data_dir)),
+            ("registry_examples", lambda: _registry_examples(repo, data_dir)),
+        ]
+        known = {name for name, _ in specs}
+        requested = only or known
+        unknown = sorted(requested - known)
+        for name in unknown:
+            checks.append(
+                SmokeCheck(
+                    name=name,
+                    status="failed",
+                    message="unknown deep-smoke check",
+                    reason="unknown_check",
+                )
+            )
+        for name, check in specs:
+            if name not in requested or name in (skip or set()):
+                continue
+            checks.append(_timed_check(name, check, max(1, timeout_per_check)))
     passed = all(check.status == "passed" for check in checks)
     return {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "name": "founding-release-deep-smoke",
         "passed": passed,
+        "timeout_per_check": max(1, timeout_per_check),
         "checks": [asdict(check) for check in checks],
     }
 
@@ -57,15 +98,26 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run LoopOS Founding deep smoke.")
     parser.add_argument("--root", default=".")
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--only", action="append", default=[])
+    parser.add_argument("--skip", action="append", default=[])
+    parser.add_argument("--timeout-per-check", type=int, default=60)
     args = parser.parse_args(argv)
-    report = run_deep_smoke(args.root)
+    report = run_deep_smoke(
+        args.root,
+        only=set(args.only) or None,
+        skip=set(args.skip),
+        timeout_per_check=args.timeout_per_check,
+    )
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
         print("LoopOS Founding Deep Smoke")
         print("=" * 72)
         for check in report["checks"]:
-            print(f"[{check['status'].upper()}] {check['name']}: {check['message']}")
+            print(
+                f"[{check['status'].upper()}] {check['name']} "
+                f"({check['duration_ms']} ms): {check['message']}"
+            )
             for item in check["evidence"]:
                 print(f"  - {item}")
     return 0 if report["passed"] else 1
@@ -486,17 +538,80 @@ def _hello_run_json(
     )
 
 
+def _timed_check(
+    name: str,
+    check: Callable[[], SmokeCheck],
+    timeout_seconds: int,
+) -> SmokeCheck:
+    global _ACTIVE_COMMANDS, _ACTIVE_STDOUT, _ACTIVE_STDERR
+    global _ACTIVE_TIMEOUT, _TIMEOUT_PER_CHECK, _CHECK_DEADLINE
+    _ACTIVE_COMMANDS = []
+    _ACTIVE_STDOUT = []
+    _ACTIVE_STDERR = []
+    _ACTIVE_TIMEOUT = False
+    _TIMEOUT_PER_CHECK = timeout_seconds
+    started = time.perf_counter()
+    _CHECK_DEADLINE = started + timeout_seconds
+    try:
+        result = check()
+    except Exception as exc:  # pragma: no cover - defensive release boundary
+        result = SmokeCheck(
+            name=name,
+            status="failed",
+            message="deep-smoke check raised an exception",
+            evidence=[f"{type(exc).__name__}: {exc}"],
+            reason="exception",
+        )
+    result.duration_ms = int((time.perf_counter() - started) * 1000)
+    result.command = " && ".join(_ACTIVE_COMMANDS)
+    result.stdout_tail = "\n".join(_ACTIVE_STDOUT)[-1200:]
+    result.stderr_tail = "\n".join(_ACTIVE_STDERR)[-1200:]
+    if _ACTIVE_TIMEOUT:
+        result.status = "failed"
+        result.reason = "timeout"
+        result.timeout_seconds = timeout_seconds
+        result.message = f"check timed out after {timeout_seconds} seconds"
+    return result
+
+
 def _run(repo: Path, cmd: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        cmd,
-        cwd=repo,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=60,
-        check=False,
+    global _ACTIVE_TIMEOUT
+    _ACTIVE_COMMANDS.append(subprocess.list2cmdline(cmd))
+    remaining = (
+        _TIMEOUT_PER_CHECK
+        if _CHECK_DEADLINE is None
+        else max(0.001, _CHECK_DEADLINE - time.perf_counter())
     )
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=remaining,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        _ACTIVE_TIMEOUT = True
+        result = subprocess.CompletedProcess(
+            cmd,
+            124,
+            _timeout_text(exc.stdout),
+            _timeout_text(exc.stderr),
+        )
+    _ACTIVE_STDOUT.append(result.stdout[-1200:])
+    _ACTIVE_STDERR.append(result.stderr[-1200:])
+    return result
+
+
+def _timeout_text(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
 
 
 def _tail(result: subprocess.CompletedProcess[str]) -> str:

@@ -14,7 +14,9 @@ from loopos.policy_os.registry import PolicyRegistry
 
 # Safety inference patterns. Anchor on the canonical command string only.
 _ROOT_DELETE_RE = re.compile(r"rm\s+-rf\s+[/\\]\s*$")
-_REMOTE_CHAIN_RE = re.compile(r"(curl|wget)\b.*(\|\||&&|;|.).*\b(bash|sh)\b")
+_REMOTE_CHAIN_RE = re.compile(
+    r"\b(curl|wget)\b[^\n]*(\|\||&&|;|\|)\s*[^\n]*\b(bash|sh)\b"
+)
 _FORMAT_FS_RE = re.compile(r"\b(mkfs|mke2fs)\b")
 
 

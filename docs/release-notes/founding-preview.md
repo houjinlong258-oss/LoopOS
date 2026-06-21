@@ -26,3 +26,9 @@ same runtime:
 - Fusion runs write trace event IDs, so multi-model mock decisions are replayable.
 - Prompt Distillation v0.9 records source hashes, segment hashes, multi-label tags, activation
   workflow, and source-copy safeguards.
+- Kernel failures now flow through observation-driven evaluation, persistent progress accounting,
+  convergence, and final scheduler arbitration; each handoff is recorded in Trace.
+- Strict-source mode rejects development-state pollution. Default readiness may still report
+  `READY_TO_PACKAGE` when the isolated package is clean.
+- Deep Smoke supports per-check timeout, selection, skip filters, duration, command, and output-tail
+  evidence for reproducible local and CI diagnosis.

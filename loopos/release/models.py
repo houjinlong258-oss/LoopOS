@@ -43,6 +43,13 @@ class ReadinessDimension(BaseModel):
     check_ids: list[str] = Field(default_factory=list)
 
 
+class SourceTreeDetails(BaseModel):
+    """Structured source-tree evidence alongside the legacy status field."""
+
+    status: ReadinessStatus
+    blocked_paths: list[str] = Field(default_factory=list)
+
+
 class ReadinessReport(BaseModel):
     """Aggregate readiness result for one named release target."""
 
@@ -56,6 +63,10 @@ class ReadinessReport(BaseModel):
     packaged_artifact_clean: ReadinessStatus = "failed"
     test_report_verified: ReadinessStatus = "failed"
     deep_smoke_verified: ReadinessStatus = "warning"
+    source_tree_mode: Literal["strict", "package_from_dev_tree"] = "package_from_dev_tree"
+    source_tree_details: SourceTreeDetails = Field(
+        default_factory=lambda: SourceTreeDetails(status="warning")
+    )
     strict_source: bool = False
     deep: bool = False
     passed: int
@@ -93,6 +104,10 @@ class ReadinessReport(BaseModel):
             deep=deep,
             checks=checks,
         )
+        source_check = next(
+            (check for check in checks if check.check_id == "release.source_tree_clean"),
+            None,
+        )
         return cls(
             target=target,
             source=source,
@@ -102,6 +117,11 @@ class ReadinessReport(BaseModel):
             packaged_artifact_clean=package_status,
             test_report_verified=test_status,
             deep_smoke_verified=deep_status,
+            source_tree_mode="strict" if strict_source else "package_from_dev_tree",
+            source_tree_details=SourceTreeDetails(
+                status=source_status,
+                blocked_paths=list(source_check.evidence) if source_check is not None else [],
+            ),
             strict_source=strict_source,
             deep=deep,
             passed=sum(check.status == "passed" for check in checks),

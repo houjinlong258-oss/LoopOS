@@ -300,7 +300,12 @@ def latest_test_report_check(root: Path, *, require_generated: bool = False) -> 
     )
 
 
-def deep_smoke_check(root: Path, *, enabled: bool) -> ReadinessCheck:
+def deep_smoke_check(
+    root: Path,
+    *,
+    enabled: bool,
+    timeout_per_check: int = 60,
+) -> ReadinessCheck:
     if not enabled:
         return ReadinessCheck(
             check_id="release.deep_smoke",
@@ -311,13 +316,20 @@ def deep_smoke_check(root: Path, *, enabled: bool) -> ReadinessCheck:
             required_for_release=False,
         )
     result = subprocess.run(
-        [sys.executable, "-m", "loopos.release.deep_smoke", "--json"],
+        [
+            sys.executable,
+            "-m",
+            "loopos.release.deep_smoke",
+            "--timeout-per-check",
+            str(timeout_per_check),
+            "--json",
+        ],
         cwd=root,
         capture_output=True,
         text=True,
         encoding="utf-8",
         errors="replace",
-        timeout=120,
+        timeout=max(30, timeout_per_check * 10 + 30),
         check=False,
     )
     if result.returncode == 0:
@@ -325,7 +337,8 @@ def deep_smoke_check(root: Path, *, enabled: bool) -> ReadinessCheck:
         try:
             payload = json.loads(result.stdout or "{}")
             evidence = [
-                f"{item.get('name')}:{item.get('status')}" for item in payload.get("checks", [])
+                f"{item.get('name')}:{item.get('status')}:{item.get('duration_ms', 0)}ms"
+                for item in payload.get("checks", [])
             ]
         except json.JSONDecodeError:
             evidence = ["deep smoke passed"]

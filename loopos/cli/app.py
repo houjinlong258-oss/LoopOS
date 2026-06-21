@@ -595,6 +595,7 @@ if _HAS_TUI:
         ignore_local_only: bool = typer_mod.Option(False, "--ignore-local-only"),
         strict_source: bool = typer_mod.Option(False, "--strict-source"),
         deep: bool = typer_mod.Option(False, "--deep"),
+        timeout_per_check: int = typer_mod.Option(60, "--timeout-per-check", min=1),
         json_output: bool = typer_mod.Option(False, "--json"),
         target: str = typer_mod.Option("founding-preview", "--target"),
     ) -> None:
@@ -609,6 +610,7 @@ if _HAS_TUI:
                 ignore_local_only=ignore_local_only,
                 strict_source=strict_source,
                 deep=deep,
+                timeout_per_check=timeout_per_check,
                 json_output=json_output,
                 target=target,
             )

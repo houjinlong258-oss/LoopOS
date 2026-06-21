@@ -122,14 +122,19 @@ def test_readiness_reports_named_tiers(tmp_path: Path) -> None:
     assert report.deep_smoke_verified == "warning"
 
 
-def test_strict_source_ignores_local_only_files(tmp_path: Path) -> None:
+def test_default_readiness_packages_from_dev_tree_but_strict_source_fails(tmp_path: Path) -> None:
     _scaffold_release(tmp_path)
     (tmp_path / "task_plan.md").write_text("local planning only\n", encoding="utf-8")
     advisory = check_release_readiness(tmp_path)
     strict = check_release_readiness(tmp_path, strict_source=True)
     assert advisory.ready
-    assert strict.source_tree_clean == "passed"
-    assert strict.ready
+    assert advisory.source_tree_mode == "package_from_dev_tree"
+    assert advisory.source_tree_clean == "warning"
+    assert any("task_plan.md" in path for path in advisory.source_tree_details.blocked_paths)
+    assert strict.source_tree_mode == "strict"
+    assert strict.source_tree_clean == "failed"
+    assert strict.source_tree_details.status == "failed"
+    assert not strict.ready
 
 
 def test_strict_source_still_fails_on_leaked_dev_path(tmp_path: Path) -> None:

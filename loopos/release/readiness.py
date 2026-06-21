@@ -30,6 +30,7 @@ def check_release_readiness(
     target: str = "founding-preview",
     strict_source: bool = False,
     deep: bool = False,
+    timeout_per_check: int = 60,
 ) -> ReadinessReport:
     """Build an isolated package and evaluate its public release contracts."""
 
@@ -53,7 +54,7 @@ def check_release_readiness(
             deep=deep,
         )
 
-    source_report = check_release_clean(root, ignore_local_only=True)
+    source_report = check_release_clean(root, ignore_local_only=False)
     checks.append(source_tree_check(source_report, strict_source=strict_source))
     with TemporaryDirectory(prefix="loopos-readiness-") as temp:
         package = package_release(
@@ -92,7 +93,7 @@ def check_release_readiness(
             policy_explain_check(),
             release_notes_check(root),
             latest_test_report_check(root, require_generated=target != "founding-preview"),
-            deep_smoke_check(root, enabled=deep),
+            deep_smoke_check(root, enabled=deep, timeout_per_check=timeout_per_check),
         ]
     )
     return ReadinessReport.from_checks(

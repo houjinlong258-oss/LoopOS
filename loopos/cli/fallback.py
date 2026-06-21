@@ -261,6 +261,7 @@ def fallback_main(argv: list[str] | None = None) -> int:
     release_parser.add_argument("--ignore-local-only", action="store_true")
     release_parser.add_argument("--strict-source", action="store_true")
     release_parser.add_argument("--deep", action="store_true")
+    release_parser.add_argument("--timeout-per-check", type=int, default=60)
     release_parser.add_argument("--target", default="founding-preview")
     release_parser.add_argument("--json", dest="json_output", action="store_true")
 
@@ -480,6 +481,7 @@ def fallback_main(argv: list[str] | None = None) -> int:
             ignore_local_only=args.ignore_local_only,
             strict_source=args.strict_source,
             deep=args.deep,
+            timeout_per_check=args.timeout_per_check,
             target=args.target,
             json_output=args.json_output,
         )
