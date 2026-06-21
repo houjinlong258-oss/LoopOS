@@ -8,14 +8,24 @@ from loopos.agents.intent_compiler import DeterministicIntentCompiler
 from loopos.agents.skill_extractor import SkillExtractor
 from loopos.ail.models import AILInstruction
 from loopos.context import ContextCompiler
-from loopos.convergence import ConvergenceEngine, EvaluationResult, ProgressDelta
+from loopos.convergence import ConvergenceEngine, EvaluationResult, LoopDecision, ProgressDelta
 from loopos.kernel.boot import KernelRuntime
-from loopos.kernel.models import PendingApproval, RunRecord, RunSpec
+from loopos.kernel.models import KernelPhase, KernelRunStatus, PendingApproval, RunRecord, RunSpec
 from loopos.kernel.scheduler import LoopScheduler, SchedulerInput
 from loopos.kernel.state_machine import KernelStateMachine
+from loopos.kernel.trace import TraceKind
 from loopos.kernel.transition import TransitionEngine
 from loopos.memory.repository import MemoryRepository
 from loopos.syscalls import SyscallCall, SyscallResult
+
+# Convergence actions that always resolve to a halt regardless of the scheduler.
+_CONVERGENCE_HALT_ACTIONS = frozenset({"halt_success", "halt_failure", "halt_blocked"})
+# Convergence action sets whose intent is preserved as a scheduler input signal.
+_CONVERGENCE_REPAIR_ACTIONS = frozenset({"repair"})
+_CONVERGENCE_REPLAN_ACTIONS = frozenset({"replan"})
+_CONVERGENCE_ASK_ACTIONS = frozenset({"ask_user"})
+_CONVERGENCE_WAIT_ACTIONS = frozenset({"wait_approval"})
+_CONVERGENCE_CONTINUE_ACTIONS = frozenset({"continue"})
 
 _SYSCALLS = {
     "TERM.EXEC": "terminal.exec",
@@ -96,7 +106,11 @@ class KernelLoopEngine:
             self._trace(
                 "instruction",
                 run,
-                {"op": instruction.op, "args": instruction.args, "instruction": instruction.model_dump(mode="json")},
+                {
+                    "op": instruction.op,
+                    "args": instruction.args,
+                    "instruction": instruction.model_dump(mode="json"),
+                },
                 instruction_id=instruction.id,
                 step=instruction.step,
             )
@@ -233,13 +247,20 @@ class KernelLoopEngine:
                     instruction_id=instruction.id,
                     step=instruction.step,
                 )
-                decision = self.scheduler.decide(
-                    SchedulerInput(
-                        step=run.step,
-                        max_steps=run.max_steps,
-                        evaluation_success=True,
-                    )
+                scheduler_input = self._scheduler_input_from_convergence(run, convergence)
+                self._trace(
+                    "decision",
+                    run,
+                    {
+                        "source": "convergence_to_scheduler",
+                        "convergence_action": convergence.action,
+                        "convergence_reason_code": convergence.reason_code,
+                        "scheduler_input": scheduler_input.model_dump(mode="json"),
+                    },
+                    instruction_id=instruction.id,
+                    step=instruction.step,
                 )
+                decision = self.scheduler.decide(scheduler_input)
                 self.state_machine.apply_schedule(run, decision)
                 self._trace_transition(run, decision.reason_code)
                 self._trace(
@@ -254,6 +275,77 @@ class KernelLoopEngine:
                 return run
             self.runtime.run_manager.save(run)
         return run
+
+    def _scheduler_input_from_convergence(
+        self,
+        run: RunRecord,
+        convergence: LoopDecision,
+    ) -> SchedulerInput:
+        """Translate a convergence ``LoopDecision`` into a ``SchedulerInput``.
+
+        The scheduler remains the final authority (it preserves the fixed
+        precedence chain), but the convergence engine's judgment now flows into
+        the scheduler as structured input signals instead of being dropped:
+
+        - halt_success / halt_failure / halt_blocked -> evaluation_success/
+          evaluation_failed signal so the scheduler's halt path fires
+        - repair -> repairable=True (scheduler may still overrule via precedence)
+        - replan -> no_progress=True (scheduler may still overrule via precedence)
+        - ask_user -> approval_required=True (maps to wait_approval precedence)
+        - wait_approval -> approval_required=True (kept as wait_approval)
+        - continue -> baseline continue signal
+        """
+
+        action = convergence.action
+        step = run.step
+        max_steps = run.max_steps
+
+        if action in _CONVERGENCE_HALT_ACTIONS:
+            if action == "halt_success":
+                return SchedulerInput(
+                    step=step,
+                    max_steps=max_steps,
+                    evaluation_success=True,
+                )
+            if action == "halt_failure":
+                return SchedulerInput(
+                    step=step,
+                    max_steps=max_steps,
+                    evaluation_failed=True,
+                )
+            # halt_blocked: surface as a policy-blocked halt so the scheduler's
+            # halt_blocked precedence path is exercised.
+            return SchedulerInput(
+                step=step,
+                max_steps=max_steps,
+                policy_allowed=False,
+            )
+
+        if action in _CONVERGENCE_REPAIR_ACTIONS:
+            return SchedulerInput(
+                step=step,
+                max_steps=max_steps,
+                evaluation_failed=True,
+                repairable=True,
+            )
+
+        if action in _CONVERGENCE_REPLAN_ACTIONS:
+            return SchedulerInput(
+                step=step,
+                max_steps=max_steps,
+                no_progress=True,
+            )
+
+        if action in _CONVERGENCE_ASK_ACTIONS or action in _CONVERGENCE_WAIT_ACTIONS:
+            return SchedulerInput(
+                step=step,
+                max_steps=max_steps,
+                approval_required=True,
+            )
+
+        # continue (and any future unknown action) keeps the baseline continue
+        # behavior so the scheduler's default continue path applies.
+        return SchedulerInput(step=step, max_steps=max_steps)
 
     def _compile_context(self, run: RunRecord) -> dict[str, Any]:
         if self.memory_repository is None:
@@ -294,8 +386,8 @@ class KernelLoopEngine:
     def _transition(
         self,
         run: RunRecord,
-        status: Any,
-        phase: Any,
+        status: KernelRunStatus,
+        phase: KernelPhase,
         *,
         reason: str | None = None,
     ) -> None:
@@ -319,7 +411,7 @@ class KernelLoopEngine:
 
     def _trace(
         self,
-        kind: Any,
+        kind: TraceKind,
         run: RunRecord,
         payload: dict[str, Any],
         *,
