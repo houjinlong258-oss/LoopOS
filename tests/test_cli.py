@@ -19,6 +19,7 @@ class CliTests(unittest.TestCase):
             cwd=cwd or str(Path.cwd()),
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=20,
         )
 

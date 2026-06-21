@@ -1,19 +1,17 @@
 # Terminal CLI
 
-LoopOS exposes concise Rich terminal output and a strict JSON mode. Core commands are `run`, `status`, `trace`, `step replay`, `policy explain`, `tools list`, `memory`, `skills`, and `ail validate`.
+The CLI is the Alpha product surface. Typer/Rich provides interactive output and a standard-library
+fallback preserves bootstrapping. `--json` output contains only machine-readable JSON.
 
-`--dry-run` evaluates the complete kernel path without workspace side effects. `--yes` may satisfy medium-risk approval only. High-risk actions require an explicit interactive approval; blocked actions cannot be approved.
+Core groups: `run`, `resume`, `status`, `history`, `trace`, `step`, `tools`, `goal`, `policy`, `ail`,
+`memory`, `profile`, `skills`, `db`, `index`, `search`, `files`, `mode`, `registry`, `tasks`,
+`triggers`, `worktrees`, `review`, `providers`, `models`, and `gateway`.
 
-## Command Modularization
+`loopos/cli/app.py` owns Typer registration and REPL startup. Command behavior is under
+`loopos/cli/commands/`, fallback parsing is isolated in `loopos/cli/fallback.py`, and reusable
+Rich/JSON rendering is under `loopos/cli/renderers/`.
 
-Phase 1 modularization has started without changing public command behavior:
-
-- `loopos/cli/context.py` owns the shared data-path layout.
-- `loopos/cli/commands/tasks.py`, `triggers.py`, `worktrees.py`, and `review.py` own outer-loop command logic.
-- `loopos/cli/commands/models.py` owns provider and multi-model commands.
-- `loopos/cli/commands/gateway.py` owns ChatOps commands.
-- `loopos/cli/commands/goal.py` owns Goal Negotiation commands and option parsing.
-- `loopos/cli/commands/memory.py` owns memory, profile, and skill commands.
-- `loopos/cli/commands/policy.py`, `ail.py`, and `config.py` own their command logic.
-- `loopos/cli/app.py` retains compatible imports plus Typer/argparse registration while remaining command groups are migrated.
-- Modularization contracts verify that the app exports the same command callables and data paths.
+`run --dry-run` executes planning, policy, and trace without invoking side-effecting adapters.
+`--yes` can satisfy medium-risk approval but cannot bypass L3 interactive, L4 user-only, or L5
+blocked decisions. Medium-ambiguity goals require `--confirm-goal`; high-ambiguity goals require a
+selected `--goal-option`.

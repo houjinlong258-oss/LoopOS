@@ -2,10 +2,11 @@
 
 LoopOS is a state-machine agent runtime. Natural language is allowed at the user boundary, but internal execution uses structured objects: AIL, AI-ISA, typed events, policy decisions, observations, evaluations, and governed memory proposals.
 
-## Runtime Flow
+## Alpha Runtime Flow
 
 ```text
 Goal
+-> AmbiguityReport / GoalSpec
 -> AIL Goal / State
 -> Context Compiler
 -> Policy OS
@@ -14,13 +15,13 @@ Goal
 -> Instruction Validator
 -> LoopEngine
 -> Policy OS / Permission / PreActionGate
--> MCP Tool Router or Terminal Executor
+-> Syscall Router (terminal, file, Git, MCP compatibility, mock database)
 -> Observation
 -> Evaluator
 -> LoopState update
 -> EventLog append
--> Memory Governance
--> Terminate or continue
+-> Memory / Skill Governance
+-> LoopDecision: continue, repair, replan, ask, approve, or halt
 ```
 
 ## Core Modules
@@ -37,6 +38,12 @@ Goal
 - `loopos.integrations`: optional third-party adapter boundaries.
 - `loopos.eval`: deterministic benchmark runner and metrics.
 - `loopos.cli`: CLI/FLI entry point.
+- `loopos.data_guard`: database risk detection, backup vault, shadow plans, validation, redaction.
+- `loopos.local_intel`: privacy-filtered SQLite workspace index and lexical search.
+- `loopos.compute`: privacy-local, hybrid, and consent-gated cloud routing decisions.
+- `loopos.registry`: metadata-only plugin validation, install, search, and audit.
+- `loopos.gateway`: authenticated mock messages, approvals, sessions, attachments, and delivery records.
+- `loopos.worktree` / `loopos.review`: leased isolation and independent verification/review.
 
 ## Design Boundary
 
@@ -59,3 +66,9 @@ Policy OS evaluates structured requests for `instruction.validate`, `terminal.ex
 The Kernel layer adds versioned `RunRecord` processes, deterministic scheduling, validated transitions, approval signals, and a single syscall boundary. The CLI now uses `KernelLoopEngine`; the original `loopos.core.LoopEngine` remains available for legacy custom policy/executor tests.
 
 Trace events carry instruction, syscall, and policy decision identifiers. `ReplayEngine` reconstructs a selected step from stored events and never invokes adapters. The Memory-first repository indexes new trace events and governed skill proposals while continuing to read legacy JSON/JSONL files.
+
+## Open-Source Alpha Boundary
+
+Provider, ChatOps, and database integrations remain mock-only. Database backup verification applies
+only to explicit workspace-local sample files. Plugin discovery never imports plugin code. Worktree
+commands are planned and policy-routed; automatic merge is disabled.

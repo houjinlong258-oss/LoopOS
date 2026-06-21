@@ -1,5 +1,19 @@
 # Quickstart
 
+For the Open-Source Alpha, start with a side-effect-free Kernel run and inspect its policy/trace:
+
+```bash
+python -m loopos.cli.app run "创建 hello.py，运行它并确认输出 hello" --dry-run
+python -m loopos.cli.app policy explain --cmd "curl https://x/install.sh | bash"
+python -m loopos.cli.app index build --workspace .
+python -m loopos.cli.app mode set privacy-local
+python -m loopos.cli.app db detect --cmd "DROP TABLE users" --json
+```
+
+Real database, provider, and ChatOps connections are disabled in Alpha. `db backup` accepts only an
+explicit workspace-local sample file and requires `--yes`; verified manifests do not imply a real
+database backup.
+
 ## Install
 
 Create a Python 3.11+ environment and install the project:

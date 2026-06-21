@@ -1,5 +1,9 @@
 # Provider Gateway
 
+Canonical Alpha profiles are stored in `providers/defaults.yaml`; the Python defaults remain a
+compatibility fallback. Capability routing, vision companions, secret/local-only routing, cost,
+latency, and reliability fields are deterministic. Provider clients remain mock-only in tests.
+
 The Model Kernel MVP exposes `ProviderProfile`, YAML loading, capability discovery, alias resolution, local-only routing, and deterministic routing for reasoner, coder, vision, critic, verifier, aggregator, summarizer, safety-judge, and policy-explainer roles.
 
 The first implementation is registry plus mock client only. Profiles describe OpenAI-compatible, Anthropic, Gemini, Bedrock, local, OAuth, and custom providers, but no provider receives credentials or network access in core tests. Provider selection cannot override Policy OS or syscall permissions.

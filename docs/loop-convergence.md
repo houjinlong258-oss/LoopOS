@@ -1,5 +1,11 @@
-# Loop Convergence Kernel
+# Loop Convergence
 
-Convergence uses structured `EvaluationResult`, `ProgressDelta`, `LoopDecision`, and `HaltCondition` models. The deterministic engine can continue, repair, replan, ask the user, wait for approval, or halt with success, failure, or blocked status.
+Every Kernel iteration records an observation, `EvaluationResult`, `ProgressDelta`, and
+`LoopDecision`. Evidence includes acceptance-criterion state, failure type, regression, score delta,
+no-progress count, repeated failure count, repeated action count, and trace references.
 
-Every evaluation, progress measurement, decision, and halt condition is written to the trace. Model text cannot directly set process status; the Scheduler and TransitionEngine enforce the lifecycle and max-step bound.
+The deterministic outcomes are `continue`, `repair`, `replan`, `ask_user`, `wait_approval`,
+`halt_success`, `halt_failure`, and `halt_blocked`. Regression prefers repair when possible; repeated
+actions or no progress trigger replan; repeated unrecoverable failures halt. Database tasks cannot
+converge successfully without verified backup, shadow validation, rollback evidence, and no sensitive
+trace leakage.

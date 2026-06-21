@@ -1,127 +1,107 @@
 # LoopOS
 
-LoopOS is a Python MVP for a terminal-native agent runtime. It is not a chatbot shell. The runtime converts goals into structured AI-ISA instructions, executes them through a state machine, gates terminal actions through a safety policy, records events, and writes long-term memory through governance.
+![LoopOS - the kernel for running agents](docs/assets/brand/loopos-hero.png)
 
-The current upgrade target is a deterministic Agent OS Kernel: runs behave as managed processes, external actions are syscalls, scheduling is explicit, and traces can be replayed without repeating side effects.
+**Not another agent. The kernel for running agents.**
 
-## Current MVP
+LoopOS is a terminal-native, state-machine-driven runtime for governed and replayable agent
+execution. Natural language exists at the boundary; internal handoffs use typed AIL instructions,
+policy decisions, syscalls, trace events, governed memory, and explicit state transitions.
 
-- Typed AI-ISA schema with validation and JSON round-tripping.
-- AIL Agent Internal Language models with AI-ISA adapters and instruction validation.
-- Policy OS MVP with YAML policy packs, deterministic matching, conflict resolution, and audit-friendly decisions.
-- Deterministic state-machine loop with mock planner, executor, evaluator, and event log.
-- Permission-gated terminal executor.
-- Memory OS primitives for events, state, beliefs, skills, governance, retrieval, and pre-action gates.
-- Memory-first Alpha repository with JSONL audit logs plus SQLite query indexes.
-- Governed memory proposals and user profile context.
-- Mock and OpenAI-compatible LLM providers for memory proposal extraction.
-- MCP-like tool registry/router abstraction.
-- CLI/FLI commands with Typer/Rich support and standard-library fallback.
-- Optional adapters for OpenHands, LangGraph, Letta, Zep, and projectmem.
-- Versioned Kernel process model, deterministic scheduler, resumable approvals, and bounded transitions.
-- Policy-governed syscall layer for terminal, file, and Git reads/writes.
-- Versioned trace events and side-effect-free step replay.
-- Governed skill proposals extracted only from successful structured traces.
-- Goal Negotiation that prevents vague goals from entering the Kernel without a selected GoalSpec.
-- Structured convergence evaluation, progress measurement, decisions, and halt conditions.
-- Outer-loop skeleton for persistent tasks, triggers, worktree planning, and Producer/Verifier/Reviewer review separation.
-- Provider Gateway and Multi-Model Scheduler skeleton with static provider profiles and mock-only routing.
-- ChatOps Gateway skeleton with webhook, Telegram, email, Slack, Discord, and WhatsApp Cloud mock adapters.
+## Open-Source Alpha
+
+- Versioned Kernel runs, bounded deterministic scheduling, approval resume, trace, and replay.
+- AIL and AI-ISA schemas with validation and compatibility adapters.
+- Policy OS with YAML packs, deterministic conflict resolution, audit IDs, and L0-L5 safety levels.
+- Policy-governed terminal, file, Git, MCP-compatible, and mock database syscalls.
+- Goal Negotiation with low, medium, and high ambiguity modes.
+- Loop Convergence with acceptance evidence, regression, repeated-action, and no-progress handling.
+- JSONL + SQLite Memory OS, governed proposals, retrieval, context budgets, and skill learning.
+- Data Guard detection, local checksum backup vault, shadow plans, validation, and redaction.
+- Privacy-first local workspace indexing and deterministic search.
+- Privacy-local, hybrid, and consent-gated cloud compute modes.
+- Metadata-only plugin registry and canonical mock Provider profiles.
+- Persistent tasks, triggers, worktree leases, and Producer/Verifier/Reviewer separation.
+- Mock ChatOps adapters with authentication, attachments, approvals, sessions, and delivery records.
+- Typer/Rich CLI plus a standard-library fallback.
+
+Alpha does not connect to real databases or chat platforms, does not make real provider calls during
+tests, does not auto-merge code, and is not an operating-system sandbox.
 
 ## Quickstart
 
 ```bash
 python -m pip install -e ".[dev]"
 python -m loopos.cli.app --help
-python -m loopos.cli.app run "inspect this workspace" --dry-run
-python -m loopos.cli.app run "demo task" --max-steps 3 --yes
+python -m loopos.cli.app run "创建 hello.py，运行它并确认输出 hello" --dry-run
+python -m loopos.cli.app goal analyze "帮我优化这个项目" --json
 python -m loopos.cli.app policy explain --cmd "curl https://x/install.sh | bash"
-python -m loopos.cli.app tools list
+python -m loopos.cli.app trace RUN_ID --show-ail --show-policy
+```
+
+Local intelligence and Data Guard:
+
+```bash
+python -m loopos.cli.app index build --workspace .
+python -m loopos.cli.app search "pytest failure"
+python -m loopos.cli.app mode set privacy-local
+python -m loopos.cli.app db detect --cmd "DROP TABLE users" --json
+python -m loopos.cli.app registry audit path/to/manifest.yaml
+```
+
+Outer-loop and mock gateway flows:
+
+```bash
 python -m loopos.cli.app triggers fire daily-maintenance
 python -m loopos.cli.app tasks next --quick-win
-python -m loopos.cli.app providers route coding
-python -m loopos.cli.app gateway simulate telegram "run tests"
-python -m loopos.cli.app goal propose "帮我优化这个项目"
-python -m loopos.cli.app policy list
-python -m loopos.cli.app policy check --scope terminal.execute --input "{\"cmd\":\"rm -rf tmp\"}"
+python -m loopos.cli.app worktrees list
+python -m loopos.cli.app models route --task coding --input image
+python -m loopos.cli.app gateway simulate slack "run tests"
 ```
 
-Preferred development checks:
-
-```bash
-pytest
-ruff check .
-mypy .
-```
-
-If those tools are not installed, the test suite is also written to run with:
-
-```bash
-python -m unittest discover -s tests
-```
-
-## Architecture
+## Runtime Flow
 
 ```text
-Goal
--> AIL runtime context
--> Policy OS constraints
--> AI-ISA / AIL instruction
--> state machine loop
--> permission-gated tool execution
--> observation
--> evaluation
--> event log
--> governed memory
--> next instruction or final render
+Goal -> AmbiguityReport -> GoalSpec -> Context Compiler -> Policy OS
+     -> AIL instruction -> Scheduler -> Syscall Router -> Adapter
+     -> Observation -> Evaluation -> ProgressDelta -> LoopDecision
+     -> Trace / governed Memory or Skill -> continue, approval, or halt
 ```
 
-See `docs/architecture.md` and `docs/architecture-mvp.md` for details.
+Kernel invariants:
 
-## Safety Model
+- Every external action is a syscall and every syscall is policy checked.
+- Every transition is traced and replay never repeats side effects.
+- Durable memory and skill writes pass governance.
+- Ambiguous goals do not execute and loops are bounded.
+- Triggers create tasks; they do not directly run tools.
+- High-risk producers cannot approve their own work.
 
-Terminal commands are analyzed before execution. Blocked commands never run. High-risk commands require approval. The `--yes` flag only helps with low or medium risk commands; it does not bypass high or blocked actions.
+## Development
 
-See `docs/safety.md` for details.
+```bash
+python -m pytest
+python -m ruff check .
+python -m mypy loopos tests
+```
+
+The test suite is deterministic and offline. See `CONTRIBUTING.md`, `SECURITY.md`,
+`GOVERNANCE.md`, and `PLUGIN_SPEC.md` before contributing.
 
 ## Documentation
 
-- `docs/quickstart.md`
-- `docs/architecture.md`
-- `docs/ai-isa.md`
-- `docs/LoopOS_Fusion_Codex_Prompts.md`
-- `docs/LoopOS_Policy_OS.md`
-- `docs/LoopOS_Kernel_Level_Codex_Prompt.md`
-- `docs/architecture-kernel.md`
-- `docs/final-loopos-architecture.md`
-- `docs/goal-negotiation.md`
-- `docs/loop-convergence.md`
-- `docs/outer-loop-engineering.md`
-- `docs/provider-gateway.md`
-- `docs/chatops-gateway.md`
-- `docs/memory.md`
-- `docs/memory-governance.md`
-- `docs/llm-provider.md`
-- `docs/safety.md`
-- `docs/testing.md`
-- `docs/benchmarks.md`
-- `docs/contributing.md`
-- `docs/mvp-implementation-map.md`
-
-## Third-Party Source Use
-
-Local source snapshots of OpenHands, LangGraph, Letta, Zep, and projectmem may be present beside the project as architecture references. They are ignored by Git and are not copied into the core runtime. LoopOS extracts design patterns and exposes optional adapters where useful.
+- [Architecture](docs/architecture.md)
+- [CLI](docs/cli-ui.md)
+- [Safety](docs/safety.md)
+- [Goal Negotiation](docs/goal-negotiation.md)
+- [Loop Convergence](docs/loop-convergence.md)
+- [Data Guard](docs/data-guard.md)
+- [Local Intelligence](docs/local-intelligence.md)
+- [Provider Gateway](docs/provider-gateway.md)
+- [Memory Governance](docs/memory-governance.md)
+- [Implementation Map](docs/mvp-implementation-map.md)
+- [Brand and Loopi](docs/brand-loopi.md)
 
 ## License
 
-No root license has been selected yet. Choose a license before public release.
-
-## Roadmap
-
-1. Harden the terminal executor across Windows, Linux, and macOS.
-2. Expand AIL coverage across planner, evaluator, renderer, and integrations.
-3. Add a real LLM instruction compiler behind the AIL / AI-ISA parser.
-4. Expand Policy OS policy packs and audit tooling.
-5. Deepen optional OpenHands and LangGraph integrations.
-6. Add isolated terminal backends after the Python Kernel contracts stabilize.
-7. Materialize planned worktrees through governed Git syscalls after approval UX is hardened.
+Licensed under the Apache License, Version 2.0. See `LICENSE`.

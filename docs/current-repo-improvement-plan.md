@@ -223,6 +223,14 @@ Typer/Rich and standard-library fallback behavior are both implemented, but comm
 
 ## Implementation Progress
 
+### Open-Source Alpha Completion - 2026-06-21
+
+- Completed CLI runtime/fallback/renderer modularization.
+- Added Goal Negotiation v1, Loop Convergence evidence, and Policy OS L0-L5.
+- Added mock-only Data Guard, local workspace intelligence, compute modes, and plugin registry.
+- Added canonical Provider YAML, Gateway authentication/session/delivery records, and worktree leases.
+- Added Apache-2.0 governance, brand assets, updated documentation, and Alpha acceptance coverage.
+
 ### Phase 1 Increment 1 - 2026-06-20
 
 - Added shared `loopos/cli/context.py` data paths.

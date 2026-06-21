@@ -182,3 +182,12 @@ The Kernel prompt is stored in `docs/LoopOS_Kernel_Level_Codex_Prompt.md`. Herme
 - CLI: `triggers`, `tasks`, `worktrees`, `review`, `providers`, and `gateway`.
 
 This stage intentionally does not call real model APIs, real chat platform APIs, or materialize Git worktrees directly. Those actions must go through Policy OS and syscalls when enabled.
+
+## Open-Source Alpha Additions
+
+- Goal Negotiation v1, Loop Convergence evidence, and Policy OS L0-L5 contracts.
+- Data Guard models, local backup vault, redaction, database policy packs, nine mock syscalls, and CLI.
+- Privacy-first SQLite workspace index, compute modes, and metadata-only plugin registry.
+- Canonical Provider YAML profiles, Gateway authentication/attachments/sessions/delivery, and worktree leases.
+- Apache-2.0 license, governance/security/plugin/RFC/conduct/roadmap documents, and brand assets.
+- Alpha acceptance tests remain deterministic, offline, and side-effect bounded.

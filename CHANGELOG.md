@@ -18,9 +18,15 @@
 - CLI/FLI commands.
 - Optional adapter boundaries for OpenHands, LangGraph, Letta, Zep, and projectmem.
 - Deterministic tests, golden trace test, CI workflow, and benchmark runner.
+- Modular CLI command, fallback, and renderer packages with UTF-8 output.
+- Goal Negotiation v1, convergence evidence, and Policy OS L0-L5 safety contracts.
+- Mock-only Data Guard with local backup verification, redaction, and database syscalls.
+- Privacy-first local indexing, compute modes, plugin registry, and canonical Provider YAML.
+- Gateway authentication/session/delivery records and leased worktree review flow.
+- Apache-2.0 license, governance documents, and Loopi brand assets.
 
 ### Notes
 
-- No real LLM integration yet.
+- Real provider, ChatOps, and database connections remain disabled in Alpha tests.
 - No Web UI.
-- No root license selected yet.
+- Licensed under Apache-2.0.

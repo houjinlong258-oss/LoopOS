@@ -34,6 +34,8 @@ LoopOS benchmarks are JSON task definitions that can run against the determinist
 - user preference context injection
 - policy compliance
 - kernel trace replay
+- Open-Source Alpha acceptance: goal negotiation, L5 policy, Data Guard, local privacy index,
+  compute routing, plugin audit, gateway approval, and worktree review
 
 ## Running from Python
 

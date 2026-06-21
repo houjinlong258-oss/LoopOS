@@ -1,38 +1,19 @@
 # Safety Model
 
-LoopOS treats terminal execution as privileged behavior. The runtime must analyze a command before it is executed.
+Policy OS classifies actions from L0 through L5:
 
-## Risk Levels
+- L0: observation and read-only metadata.
+- L1: bounded local tests, temporary work, and safe local processing.
+- L2: project writes and medium-risk changes requiring a visible plan and confirmation.
+- L3: destructive Git, restore, production-like, or broad changes requiring explicit approval,
+  trace, and rollback evidence.
+- L4: user-only actions such as payment, irreversible external submission, or raw private export.
+- L5: blocked behavior such as remote script pipes, destructive system commands, secret
+  exfiltration, policy bypass, and real database execution in Alpha.
 
-- `low`: read-only or locally bounded commands such as listing files, reading workspace files, running deterministic tests, and git status.
-- `medium`: commands that may write project files, install dependencies, or make local state changes.
-- `high`: destructive or broad operations that could lose work or alter the machine, such as recursive deletion, hard git resets, privileged Docker, or network upload.
-- `blocked`: commands that should never run in the MVP, such as disk formatting, `curl | bash`, private key reads, broad process kills, or global git config changes.
+Deny overrides allow; approval overrides silent execution. `--dry-run` and replay never invoke
+side-effecting adapters. Paths stay inside the workspace. Database operations require Data Guard;
+only local samples can produce a verified Alpha backup manifest.
 
-## Approval Rules
-
-- `blocked`: never execute.
-- `high`: requires explicit approval and is rejected in non-interactive mode.
-- `medium`: may execute only when policy permits the path and command shape.
-- `low`: can execute when path and timeout checks pass.
-
-The `--yes` CLI flag only applies to low and medium risk behavior. It cannot bypass high or blocked decisions.
-
-Kernel `--dry-run` evaluates policies and records planned syscalls, but bypasses approval prompts only because no adapter is executed. Replay is also side-effect free. Medium-risk guarded actions require `--yes` or a persisted approval/resume cycle; high-risk actions require an explicit `resume --approve` signal and blocked actions cannot be resumed.
-
-## Terminal Policy Checks
-
-`PermissionPolicy` checks:
-
-1. Command risk from `CommandRiskAnalyzer`.
-2. Allowlisted working directories.
-3. Denylisted patterns.
-4. Approval-required patterns.
-5. Timeout caps.
-6. Network restrictions.
-
-## Known MVP Limits
-
-- Command parsing is conservative string analysis, not a full shell parser.
-- Windows shell built-ins are supported by running through the system shell after policy checks.
-- Future hardening should add per-platform command tokenization, seccomp/container isolation, and stronger filesystem sandboxing.
+String command analysis remains conservative and is not an OS sandbox. Future production releases
+need isolated execution backends and platform-specific command parsing.

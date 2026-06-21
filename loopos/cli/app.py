@@ -497,6 +497,7 @@ if _HAS_TUI:
 
 
 def main(argv: list[str] | None = None) -> int:
+    _configure_utf8_streams()
     if _HAS_TUI and argv is None:
         if len(sys.argv) == 1 and sys.stdin.isatty():
             return repl_command()
@@ -505,6 +506,15 @@ def main(argv: list[str] | None = None) -> int:
     return fallback_main(argv)
 
 
+def _configure_utf8_streams() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            try:
+                reconfigure(encoding="utf-8")
+            except (AttributeError, OSError):
+                pass
+
+
 if __name__ == "__main__":
     raise SystemExit(main())
-

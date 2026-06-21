@@ -1,7 +1,12 @@
-# Goal Negotiation Kernel
+# Goal Negotiation
 
-`GoalNegotiator` analyzes user input before a Run is created. Concrete goals finalize directly as `GoalSpec`; vague project-wide goals return five bounded options: architecture audit, MVP delivery, Kernel upgrade, CLI priority, or custom/merged scope.
+`AmbiguityReport` records a deterministic score, low/medium/high level, missing fields, risk factors,
+confirmation/negotiation requirements, and reason codes.
 
-An ambiguous goal cannot enter `KernelLoopEngine` without selected option IDs. A finalized GoalSpec records the objective, success criteria, constraints, and selected options and is emitted as a trace event. A one-time selection is not persisted as a global preference.
+- Low: finalize directly.
+- Medium: show missing information and require explicit confirmation.
+- High: do not execute; generate three to five structured proposals for selection or merging.
 
-CLI entry points are `loopos goal analyze`, `loopos goal propose`, `loopos goal finalize --option`, and `loopos run --goal-option`.
+Proposals include scope, non-goals, deliverables, acceptance criteria, risk, estimated steps, and a
+recommendation. Final `GoalSpec` records its origin and compatibility defaults for older stored runs.
+Database goals receive read-only audit, backup/shadow/validation, and manual checklist alternatives.
