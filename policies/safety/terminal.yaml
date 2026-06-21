@@ -26,22 +26,22 @@ rules:
       - any:
           - field: cmd
             operator: regex
-            value: '\brm\s+-rf\b'
+            value: '\brm\s+-rf\s+[/\\](\s|$)'
           - field: cmd
             operator: regex
             value: '\bsudo\b'
           - field: cmd
             operator: regex
-            value: '\bmkfs(\.|)\w*\b'
+            value: '\b(mkfs|mke2fs)\b(\.|\w)*'
           - field: cmd
             operator: regex
             value: '\bdd\s+if='
           - field: cmd
             operator: regex
-            value: '\bcurl\b.*\|\s*(bash|sh)\b'
+            value: '\bcurl\b.*(\|\||&&|;|\|)\s*(bash|sh)\b'
           - field: cmd
             operator: regex
-            value: '\bwget\b.*\|\s*(bash|sh)\b'
+            value: '\bwget\b.*(\|\||&&|;|\|)\s*(bash|sh)\b'
           - field: cmd
             operator: regex
             value: '\bgit\s+config\s+--global\b'
