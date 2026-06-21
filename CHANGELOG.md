@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.1.0 - Unreleased
+## 0.1.0 - 2026-06-21
+
+Founding Release. See docs/release-notes/founding-preview.md for details.
 
 ### Added
 
