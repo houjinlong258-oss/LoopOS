@@ -1,9 +1,17 @@
-"""Optional graph-loop facade."""
+"""Optional graph-loop facade.
+
+Note: this facade still depends on the deprecated ``LoopEngine``. Callers should
+migrate to ``loopos.kernel.loop_engine.KernelLoopEngine`` for plan-driven execution.
+The legacy fallback here is retained only for backward compatibility and will be
+removed in v0.2.
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
+# Legacy import: ``LoopEngine`` is deprecated. Migrate callers to
+# ``loopos.kernel.loop_engine.KernelLoopEngine``. Will be removed in v0.2.
 from loopos.core.loop_engine import LoopEngine
 from loopos.core.state import LoopState
 
@@ -42,6 +50,11 @@ def create_loop_graph() -> Any:
 
 
 def run_graph(goal: str, *, max_steps: int = 5) -> LoopState:
-    """Run the graph backend, falling back to the native engine for the MVP."""
+    """Run the graph backend, falling back to the native engine for the MVP.
+
+    Note: the fallback uses the deprecated ``LoopEngine``. New callers should run
+    via ``loopos.kernel.loop_engine.KernelLoopEngine``. Behavior is unchanged here
+    and will be updated when the graph backend is migrated to the kernel engine.
+    """
 
     return LoopEngine().run(goal, max_steps=max_steps)

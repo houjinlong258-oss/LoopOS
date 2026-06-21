@@ -1,7 +1,13 @@
-"""State-machine loop engine."""
+"""State-machine loop engine.
+
+Deprecated: loopos.core.loop_engine.LoopEngine is superseded by
+loopos.kernel.loop_engine.KernelLoopEngine. This module is retained for backward
+compatibility and will be removed in v0.2.
+"""
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -89,7 +95,21 @@ class SimpleEvaluator:
 
 
 class LoopEngine:
-    """Bounded, deterministic state machine for LoopOS runs."""
+    """Bounded, deterministic state machine for LoopOS runs.
+
+    Deprecated: use loopos.kernel.loop_engine.KernelLoopEngine. Will be removed in v0.2.
+
+    The legacy Instruction-driven engine is retained only for backward compatibility.
+    New code should depend on the plan-driven KernelLoopEngine, which routes external
+    actions through the SyscallRouter and is governed by the Policy OS, Convergence,
+    and Scheduler contracts.
+    """
+
+    __deprecated__: bool = True
+    _DEPRECATION_MESSAGE = (
+        "loopos.core.loop_engine.LoopEngine is deprecated; "
+        "use loopos.kernel.loop_engine.KernelLoopEngine. Will be removed in v0.2."
+    )
 
     def __init__(
         self,
@@ -106,6 +126,11 @@ class LoopEngine:
         propose_memory: bool = False,
         policy_engine: PolicyEngine | None = None,
     ) -> None:
+        warnings.warn(
+            self._DEPRECATION_MESSAGE,
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.policy = policy or DeterministicDemoPolicy()
         self.executor = executor or MockInstructionExecutor()
         self.evaluator = evaluator or SimpleEvaluator()
@@ -114,7 +139,9 @@ class LoopEngine:
         self.pre_action_gate = pre_action_gate
         self.memory_repository = memory_repository
         self.policy_engine = policy_engine or PolicyEngine.load_default()
-        self.context_compiler = context_compiler or ContextCompiler(policy_engine=self.policy_engine)
+        self.context_compiler = context_compiler or ContextCompiler(
+            policy_engine=self.policy_engine
+        )
         self.proposal_extractor = proposal_extractor
         self.propose_memory = propose_memory
 
@@ -134,16 +161,22 @@ class LoopEngine:
         memories = repo.retrieve(limit=20)
         skills = repo.skills.list()
         return cls(
-            event_log=repo.events if memory_repository is not None else EventLog(base / "events.jsonl"),
+            event_log=repo.events
+            if memory_repository is not None
+            else EventLog(base / "events.jsonl"),
             state_store=repo.states if memory_repository is not None else StateStore(base / "runs"),
-            pre_action_gate=PreActionGate(events=repo.events.list(), memories=memories, skills=skills),
+            pre_action_gate=PreActionGate(
+                events=repo.events.list(), memories=memories, skills=skills
+            ),
             memory_repository=repo,
             proposal_extractor=MemoryProposalExtractor(llm_provider) if propose_memory else None,
             propose_memory=propose_memory,
             policy_engine=engine,
         )
 
-    def run(self, goal: str, *, max_steps: int = 5, timeout_seconds: int | None = None) -> LoopState:
+    def run(
+        self, goal: str, *, max_steps: int = 5, timeout_seconds: int | None = None
+    ) -> LoopState:
         if max_steps <= 0:
             raise ValueError("max_steps must be positive")
 
@@ -204,7 +237,9 @@ class LoopEngine:
 
         state.status = "failed"
         state.errors.append("max_steps exceeded")
-        self._append("run_finished", state, {"status": state.status, "reason": "max_steps exceeded"})
+        self._append(
+            "run_finished", state, {"status": state.status, "reason": "max_steps exceeded"}
+        )
         self._save(state)
         return state
 
@@ -221,7 +256,11 @@ class LoopEngine:
             self.state_store.save(state)
 
     def _maybe_propose_memory(self, run_id: str) -> None:
-        if not self.propose_memory or self.memory_repository is None or self.proposal_extractor is None:
+        if (
+            not self.propose_memory
+            or self.memory_repository is None
+            or self.proposal_extractor is None
+        ):
             return
         events = self.memory_repository.events.list(run_id)
         proposals, errors = self.proposal_extractor.extract(
