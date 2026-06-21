@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import builtins
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, Sequence
 from uuid import uuid4
@@ -27,8 +28,8 @@ class Skill(BaseModel):
     success_count: int = Field(default=1, ge=0)
     failure_count: int = Field(default=0, ge=0)
     success_rate: float = Field(default=1.0, ge=0.0, le=1.0)
-    created_at: object = Field(default_factory=utc_now)
-    updated_at: object = Field(default_factory=utc_now)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
     version: int = 1
 
     @field_validator("confidence")
@@ -84,7 +85,9 @@ class SkillStore:
                     skills[skill.id] = skill
         return list(skills.values())
 
-    def find_by_tags(self, tags: Sequence[str], *, min_confidence: float = 0.5) -> builtins.list[Skill]:
+    def find_by_tags(
+        self, tags: Sequence[str], *, min_confidence: float = 0.5
+    ) -> builtins.list[Skill]:
         tag_set: set[str] = set(tags)
         return [
             skill

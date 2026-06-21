@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import builtins
+from datetime import datetime
 from pathlib import Path
-from typing import Literal, Sequence
+from typing import Any, Literal, Sequence
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -28,15 +29,15 @@ class MemoryItem(BaseModel):
     source: str
     layer: MemoryLayer = "belief"
     scope: MemoryScope = "project"
-    created_at: object = Field(default_factory=utc_now)
-    updated_at: object = Field(default_factory=utc_now)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
     version: int = 1
     tags: list[str] = Field(default_factory=list)
     conflicts: list[str] = Field(default_factory=list)
     status: MemoryStatus = "active"
-    metadata: dict[str, object] = Field(default_factory=dict)
-    expires_at: object | None = None
-    last_used_at: object | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    expires_at: datetime | None = None
+    last_used_at: datetime | None = None
     usage_count: int = 0
     success_count: int = 0
     failure_count: int = 0

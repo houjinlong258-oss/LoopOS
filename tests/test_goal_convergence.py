@@ -81,6 +81,18 @@ class ConvergenceTests(unittest.TestCase):
         self.assertEqual(repeated.action, "replan")
         self.assertEqual(repeated.reason_code, "convergence.repeated_action_or_no_progress")
 
+    def test_repeated_failures_triggers_halt_failure(self) -> None:
+        decision = ConvergenceEngine().decide(
+            EvaluationResult(score=0.5),
+            ProgressDelta(
+                previous_score=0.5,
+                current_score=0.5,
+                delta=0.0,
+                repeated_failures=3,
+            ),
+        )
+        self.assertEqual(decision.action, "halt_failure")
+
 
 if __name__ == "__main__":
     unittest.main()

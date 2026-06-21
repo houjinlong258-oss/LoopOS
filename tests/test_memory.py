@@ -82,6 +82,17 @@ class MemoryTests(unittest.TestCase):
             store.add(skill)
             self.assertEqual(len(store.find_by_tags(["plan"])), 1)
 
+    def test_low_confidence_memory_is_rejected(self) -> None:
+        item = MemoryItem(
+            type="belief",
+            content="low confidence belief",
+            confidence=0.1,
+            source="test",
+            tags=["low"],
+        )
+        decision = MemoryGovernance().review(item)
+        self.assertEqual(decision.action, "reject")
+
 
 if __name__ == "__main__":
     unittest.main()
