@@ -42,7 +42,9 @@ def staged_hygiene_checks(report: ReleaseReport) -> list[ReadinessCheck]:
     readme_errors = [error for error in report.errors if error.code.startswith("README_LINK_")]
     secret_errors = [error for error in report.errors if _is_sensitive_finding(error)]
     other_errors = [
-        error for error in report.errors if error not in readme_errors and error not in secret_errors
+        error
+        for error in report.errors
+        if error not in readme_errors and error not in secret_errors
     ]
     return [
         _finding_check(
@@ -73,10 +75,7 @@ def source_tree_check(report: ReleaseReport, *, strict_source: bool) -> Readines
     status = "passed"
     if findings:
         status = "failed" if strict_source else "warning"
-    evidence = [
-        f"{finding.code}:{finding.path or '<root>'}"
-        for finding in findings[:20]
-    ]
+    evidence = [f"{finding.code}:{finding.path or '<root>'}" for finding in findings[:20]]
     if len(findings) > 20:
         evidence.append(f"... {len(findings) - 20} more finding(s)")
     return ReadinessCheck(
@@ -93,7 +92,9 @@ def source_tree_check(report: ReleaseReport, *, strict_source: bool) -> Readines
     )
 
 
-def required_paths_check(root: Path, paths: tuple[str, ...], check_id: str, name: str) -> ReadinessCheck:
+def required_paths_check(
+    root: Path, paths: tuple[str, ...], check_id: str, name: str
+) -> ReadinessCheck:
     missing = [path for path in paths if not (root / path).is_file()]
     return ReadinessCheck(
         check_id=check_id,
@@ -127,7 +128,9 @@ def plugin_examples_check(root: Path) -> ReadinessCheck:
         check_id="release.plugin_examples",
         name="Plugin examples",
         status="failed" if failures else "passed",
-        message=f"{len(manifests)} plugin examples validated" if not failures else "plugin examples failed",
+        message=f"{len(manifests)} plugin examples validated"
+        if not failures
+        else "plugin examples failed",
         evidence=failures or evidence,
     )
 
@@ -145,14 +148,24 @@ def pyproject_metadata_check(root: Path) -> ReadinessCheck:
             message="pyproject.toml cannot be read",
             evidence=[str(exc)],
         )
-    for key in ("name", "version", "description", "readme", "license", "requires-python", "scripts"):
+    for key in (
+        "name",
+        "version",
+        "description",
+        "readme",
+        "license",
+        "requires-python",
+        "scripts",
+    ):
         if not project.get(key):
             missing.append(key)
     return ReadinessCheck(
         check_id="release.pyproject",
         name="Project metadata",
         status="failed" if missing else "passed",
-        message="required project metadata is present" if not missing else "project metadata is incomplete",
+        message="required project metadata is present"
+        if not missing
+        else "project metadata is incomplete",
         evidence=missing,
     )
 
@@ -173,7 +186,9 @@ def policy_explain_check() -> ReadinessCheck:
         check_id="release.policy_explain",
         name="Blocked policy explanation",
         status="passed" if clean else "failed",
-        message="blocked command explanation is unambiguous" if clean else "policy explanation is contradictory",
+        message="blocked command explanation is unambiguous"
+        if clean
+        else "policy explanation is contradictory",
         evidence=decision.reason_codes + decision.active_rules,
     )
 
@@ -260,11 +275,14 @@ def latest_test_report_check(root: Path, *, require_generated: bool = False) -> 
                 warnings.append(f"test report is {age_days} day(s) old")
         except ValueError:
             failures.append("generated_at is not ISO-8601")
-    current_commit = _git_head(root)
-    if current_commit:
+    allowed_commits = _git_head_and_parent(root)
+    if allowed_commits:
         report_commit = payload.get("git_commit")
-        if require_generated and report_commit != current_commit:
-            failures.append("git_commit does not match current HEAD")
+        if require_generated and report_commit not in allowed_commits:
+            failures.append(
+                "git_commit does not match current HEAD or its parent "
+                "(report must be regenerated if HEAD moved)"
+            )
     else:
         warnings.append("current git commit could not be verified")
     status = "failed" if failures else "warning" if warnings else "passed"
@@ -307,8 +325,7 @@ def deep_smoke_check(root: Path, *, enabled: bool) -> ReadinessCheck:
         try:
             payload = json.loads(result.stdout or "{}")
             evidence = [
-                f"{item.get('name')}:{item.get('status')}"
-                for item in payload.get("checks", [])
+                f"{item.get('name')}:{item.get('status')}" for item in payload.get("checks", [])
             ]
         except json.JSONDecodeError:
             evidence = ["deep smoke passed"]
@@ -342,6 +359,31 @@ def _git_head(root: Path) -> str | None:
     if result.returncode != 0:
         return None
     return result.stdout.strip() or None
+
+
+def _git_head_and_parent(root: Path) -> set[str]:
+    """Return ``{HEAD, HEAD^}`` for ``root`` (best-effort, missing entries skipped).
+
+    The release report is generated *before* the report file itself is
+    committed; once that commit lands, ``HEAD`` advances past the commit
+    recorded in the report.  Accepting the parent of HEAD lets CI regenerate
+    the report and commit it without invalidating the readiness gate.
+    """
+
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD", "HEAD^"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=10,
+        check=False,
+    )
+    if result.returncode != 0:
+        head = _git_head(root)
+        return {head} if head else set()
+    return {line.strip() for line in result.stdout.splitlines() if line.strip()}
 
 
 def _finding_check(
