@@ -8,6 +8,8 @@ description: >
   acceptance passes or no progress is made. Successful traces can be
   compressed into a SkillSpec via Memory Governance.
 version: 0.1.0
+license: Apache-2.0
+documentation: README.md
 compatibility:
   loopos: ">=0.1.0"
 required_tools:

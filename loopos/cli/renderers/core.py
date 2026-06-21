@@ -146,3 +146,172 @@ def print_tools(specs: Iterable[SyscallSpec], *, json_output: bool = False) -> N
     for spec in rows:
         table.add_row(spec.name, spec.risk, spec.policy_scope)
     Console().print(table)
+
+
+def render_policy_decision_text(payload: dict[str, Any], *, cmd: str | None = None) -> str:
+    """Render a policy decision for human review without changing JSON contracts."""
+
+    allowed = bool(payload.get("allowed"))
+    status = "ALLOWED" if allowed else "BLOCKED"
+    action = str(payload.get("action", "unknown")).replace("_", " ").upper()
+    safety = payload.get("safety_level") or payload.get("risk") or payload.get("severity")
+    lines = [
+        "LoopOS Policy Explain",
+        "=" * 72,
+    ]
+    if cmd:
+        lines.append(f"Command:         {cmd}")
+    lines.extend(
+        [
+            f"Decision:        {status}",
+            f"Action:          {action}",
+            f"Safety level:    {safety or 'unknown'}",
+            f"Risk:            {payload.get('risk', 'unknown')}",
+            f"Approval:        {bool(payload.get('requires_approval'))}",
+            f"Audit required:  {bool(payload.get('audit_required'))}",
+        ]
+    )
+    reason_codes = payload.get("reason_codes") or []
+    if reason_codes:
+        lines.append("-" * 72)
+        lines.append("Reason codes")
+        for code in reason_codes:
+            lines.append(f"  - {code}")
+    active_rules = payload.get("active_rules") or []
+    if active_rules:
+        lines.append("-" * 72)
+        lines.append("Matched policy rules")
+        for rule in active_rules:
+            lines.append(f"  - {rule}")
+    constraints = payload.get("constraints") or {}
+    if constraints:
+        lines.append("-" * 72)
+        lines.append("Constraints")
+        for key, value in sorted(constraints.items()):
+            lines.append(f"  - {key}: {value}")
+    lines.append("=" * 72)
+    return "\n".join(lines)
+
+
+def render_db_payload_text(payload: object) -> str:
+    """Render Data Guard payloads for human inspection."""
+
+    if not isinstance(payload, dict):
+        return json.dumps(payload, ensure_ascii=False, indent=2)
+    operation = str(payload.get("operation") or payload.get("flow") or "data-guard")
+    lines = [
+        "LoopOS Data Guard",
+        "=" * 72,
+        f"Operation:       {operation}",
+    ]
+    detection = payload.get("risk_level")
+    if detection:
+        lines.extend(
+            [
+                f"Risk:            {payload.get('risk_level')}",
+                f"Backup required: {payload.get('requires_backup')}",
+                f"Destructive:     {payload.get('destructive')}",
+            ]
+        )
+    inspection = payload.get("inspection") or payload.get("step1_inspection")
+    if isinstance(inspection, dict):
+        lines.extend(
+            [
+                "-" * 72,
+                "Inspection",
+                f"  Exists:         {inspection.get('exists')}",
+                f"  SQLite:         {inspection.get('is_sqlite')}",
+                f"  Tables:         {', '.join(inspection.get('tables') or []) or 'none'}",
+            ]
+        )
+    manifest = payload.get("backup_manifest") or payload.get("step2_backup_manifest")
+    if isinstance(manifest, dict):
+        lines.extend(
+            [
+                "-" * 72,
+                "Backup",
+                f"  Backup id:      {manifest.get('backup_id')}",
+                f"  Files:          {len(manifest.get('files') or [])}",
+            ]
+        )
+    if "step3_checksum_verified" in payload:
+        lines.append(f"Checksum:        {payload.get('step3_checksum_verified')}")
+    if "shadow_path" in payload or "step4_shadow_path" in payload:
+        lines.append(f"Shadow path:     {payload.get('shadow_path') or payload.get('step4_shadow_path')}")
+    validation = payload.get("validation") or payload.get("step5_validation")
+    if isinstance(validation, dict):
+        lines.extend(
+            [
+                "-" * 72,
+                "Validation",
+                f"  Passed:         {validation.get('passed')}",
+                f"  Backup id:      {validation.get('backup_id')}",
+            ]
+        )
+    if "reports" in payload and isinstance(payload["reports"], list):
+        lines.append(f"Reports:         {len(payload['reports'])}")
+    lines.append("=" * 72)
+    return "\n".join(lines)
+
+
+def render_review_artifact_text(payload: dict[str, Any]) -> str:
+    """Render a review artifact as a concise handoff summary."""
+
+    lines = [
+        "LoopOS Review Artifact",
+        "=" * 72,
+        f"Run:             {payload.get('run_id')}",
+        f"Decision:        {str(payload.get('decision', 'unknown')).replace('_', ' ').upper()}",
+        f"Tests:           {len(payload.get('tests_run') or [])}",
+        f"Policy checks:   {len(payload.get('policy_checks') or [])}",
+        f"Data checks:     {len(payload.get('data_guard_checks') or [])}",
+        f"Trace events:    {len(payload.get('trace_event_ids') or [])}",
+    ]
+    maintainability = payload.get("maintainability_gate")
+    if isinstance(maintainability, dict):
+        lines.extend(
+            [
+                "-" * 72,
+                "Maintainability gate",
+                f"  Blocks merge:   {maintainability.get('blocks_merge')}",
+                f"  Human review:   {maintainability.get('requires_human_review')}",
+            ]
+        )
+        for code in maintainability.get("reason_codes") or []:
+            lines.append(f"  - {code}")
+    required_changes = payload.get("required_changes") or []
+    if required_changes:
+        lines.append("-" * 72)
+        lines.append("Required changes")
+        for item in required_changes:
+            lines.append(f"  - {item}")
+    lines.append("=" * 72)
+    return "\n".join(lines)
+
+
+def render_review_gate_text(payload: dict[str, Any]) -> str:
+    """Render the risk-aware merge gate result for humans."""
+
+    allowed = bool(payload.get("allowed_to_merge"))
+    lines = [
+        "LoopOS Merge Gate",
+        "=" * 72,
+        f"Status:          {'READY' if allowed else 'BLOCKED'}",
+        f"Review artifact: {payload.get('review_artifact_id')}",
+        f"Risk:            {payload.get('risk_level', 'unknown')}",
+        f"Allowed:         {allowed}",
+    ]
+    blockers = payload.get("blockers") or []
+    if blockers:
+        lines.append("-" * 72)
+        lines.append("Blockers")
+        for blocker in blockers:
+            lines.append(f"  - {blocker}")
+    warnings = payload.get("warnings") or []
+    if warnings:
+        lines.append("-" * 72)
+        lines.append("Warnings")
+        for warning in warnings:
+            lines.append(f"  - {warning}")
+    lines.append("=" * 72)
+    return "\n".join(lines)

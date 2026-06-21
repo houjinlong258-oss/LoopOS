@@ -7,13 +7,15 @@ description: >
   any `git reset`, `git clean`, `sudo`, `chmod -R`, and flags broad
   `rm -rf` patterns outside the workspace temp directory.
 version: 0.1.0
+license: Apache-2.0
+documentation: README.md
 compatibility:
   loopos: ">=0.1.0"
 required_tools:
   - terminal.exec
 permissions:
   - policy:enforce:terminal
-risk_level: low
+risk_level: medium
 maintainers:
   - loopos-community
 tests:

@@ -101,3 +101,26 @@ def test_inspect_creates_hash() -> None:
     source = distiller.inspect("test content")
     assert source.content_hash
     assert len(source.content_hash) == 16
+    assert source.source_sha256
+    assert len(source.source_sha256) == 64
+
+
+def test_v09_segment_hash_tags_and_activation_audit() -> None:
+    distiller = PromptDistiller()
+    source = distiller.inspect(_SYNTHETIC_PROMPT)
+    segments = distiller.segment(
+        _SYNTHETIC_PROMPT,
+        source_id=source.source_id,
+        source_hash=source.source_sha256,
+    )
+    assert segments[0].segment_hash
+    assert segments[0].source_hash == source.source_sha256
+    assert segments[0].tags
+    behavior = distiller.extract_behavior(segments)
+    renderer = distiller.extract_renderer(segments)
+    draft = distiller.extract_policy_draft(segments, source_id=source.source_id)
+    audit = distiller.audit(source, segments, behavior, renderer, draft)
+    assert not audit.source_text_copied
+    assert audit.activation_ready == (not audit.policy_conflicts)
+    assert behavior.activation_required
+    assert draft.activation_workflow

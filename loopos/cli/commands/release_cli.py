@@ -12,7 +12,12 @@ from __future__ import annotations
 import json
 import sys
 
-from loopos.release import check_release_clean, package_release
+from loopos.release import (
+    check_release_clean,
+    check_release_readiness,
+    package_release,
+    render_readiness,
+)
 
 
 _CHECKLIST_LINES: tuple[str, ...] = (
@@ -31,7 +36,7 @@ _CHECKLIST_LINES: tuple[str, ...] = (
     "       zep / projectmem / hermes-agent-*) in the tree",
     "   [ ] no local planning notes (task_plan.md / findings.md / progress.md)",
     "       in the tree",
-    "   [ ] no absolute dev paths (D:\\\\LoopOS / /home/.../LoopOS) in source",
+    "   [ ] no absolute developer workspace paths in source",
     "",
     "3. Tests & types",
     "   [ ] pytest passes",
@@ -74,12 +79,21 @@ def release_command(
     output: str = "dist",
     no_zip: bool = False,
     strict: bool = False,
+    ignore_local_only: bool = False,
+    strict_source: bool = False,
+    deep: bool = False,
     json_output: bool = False,
+    target: str = "founding-preview",
 ) -> int:
     """Entry point for ``loopos release <action>``."""
 
     if action == "check":
-        return _check(source=source, strict=strict, json_output=json_output)
+        return _check(
+            source=source,
+            strict=strict,
+            ignore_local_only=ignore_local_only,
+            json_output=json_output,
+        )
     if action == "package":
         return _package(
             version=version,
@@ -90,12 +104,30 @@ def release_command(
         )
     if action == "checklist":
         return _checklist(json_output=json_output)
+    if action == "readiness":
+        report = check_release_readiness(
+            source,
+            target=target,
+            strict_source=strict_source,
+            deep=deep,
+        )
+        if json_output:
+            print(report.model_dump_json(indent=2))
+        else:
+            print(render_readiness(report))
+        return 0 if report.ready else 1
     print(f"Unknown release action: {action}", file=sys.stderr)
     return 1
 
 
-def _check(*, source: str, strict: bool, json_output: bool) -> int:
-    report = check_release_clean(source)
+def _check(
+    *,
+    source: str,
+    strict: bool,
+    ignore_local_only: bool,
+    json_output: bool,
+) -> int:
+    report = check_release_clean(source, ignore_local_only=ignore_local_only)
     if json_output:
         print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
     else:

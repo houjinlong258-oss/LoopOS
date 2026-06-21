@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import json
 import sys
+from pathlib import Path
 
-from loopos.fusion.aggregator import FusionAggregator
-from loopos.fusion.judge import FusionJudge
+from loopos.cli.context import data_paths
 from loopos.fusion.models import FusionRequest, ModelResponse
 from loopos.fusion.router import FusionRouter
+from loopos.fusion.trace import FusionRunner
+from loopos.kernel import TraceStore
 
 
 def fusion_command(
@@ -25,6 +27,7 @@ def fusion_command(
     task_type: str = "unknown",
     risk: str = "medium",
     privacy: str = "hybrid",
+    data_dir: str | Path = ".loopos",
     json_output: bool = False,
 ) -> int:
     """Entry point for ``loopos fusion <action>``."""
@@ -45,6 +48,7 @@ def fusion_command(
             task_type=task_type,
             risk=risk,
             privacy=privacy,
+            data_dir=data_dir,
             json_output=json_output,
         )
     if action == "inspect":
@@ -82,12 +86,11 @@ def _plan(
         risk=risk,
         privacy=privacy,
     )
-    router = FusionRouter()
-    fusion_panel = router.plan(request)
+    fusion_panel = FusionRouter().plan(request)
     if json_output:
         print(fusion_panel.model_dump_json(indent=2))
     else:
-        print(f"Fusion Plan — {request.task_type}")
+        print(f"Fusion Plan - {request.task_type}")
         print(f"  panel: {', '.join(fusion_panel.models) or '(empty)'}")
         print(f"  judge: {fusion_panel.judge_model}")
         print(f"  cost:  {fusion_panel.estimated_cost_class}")
@@ -104,6 +107,7 @@ def _run(
     task_type: str,
     risk: str,
     privacy: str,
+    data_dir: str | Path,
     json_output: bool,
 ) -> int:
     if not prompt:
@@ -127,16 +131,21 @@ def _run(
         )
         for model_id in fusion_panel.models
     ]
-    judge = FusionJudge()
-    report = judge.judge(request.request_id, responses)
-    aggregator = FusionAggregator()
-    result = aggregator.aggregate(request.request_id, responses, report)
+    paths = data_paths(data_dir)
+    runner = FusionRunner(TraceStore(paths["events"]), router=router)
+    result = runner.run(
+        request,
+        run_id=f"fusion-{request.request_id}",
+        mock_responses=responses,
+    )
+    report = result.judge_report
     if json_output:
         print(result.model_dump_json(indent=2))
     else:
-        print(f"Fusion Result — {result.fusion_result_id}")
+        print(f"Fusion Result - {result.fusion_result_id}")
         print(f"  contributing models: {', '.join(result.contributing_models)}")
         print(f"  confidence:          {report.confidence:.2f}")
+        print(f"  trace events:        {len(result.trace_event_ids)}")
         print(f"  consensus:           {len(report.consensus)}")
         print(f"  contradictions:      {len(report.contradictions)}")
         if result.cost_estimate is not None:

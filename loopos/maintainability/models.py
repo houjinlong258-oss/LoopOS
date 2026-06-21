@@ -38,11 +38,17 @@ FindingCategory = Literal[
     "naming",
     "dependency_risk",
     "migration_risk",
+    "empty_diff",
+    "invalid_diff_format",
+    "diff_without_file_header",
+    "unparsed_added_lines",
+    "risk_content_in_unparsed_diff",
 ]
 
 FindingSeverity = Literal["info", "warning", "error", "blocker"]
 
 RiskLevel = Literal["low", "medium", "high", "blocked"]
+DiffParseStatus = Literal["parsed", "empty", "non_diff", "partial", "invalid"]
 
 Recommendation = Literal[
     "approve",
@@ -64,6 +70,8 @@ class CodeChangeSummary(BaseModel):
     run_id: str | None = None
     base_ref: str | None = None
     head_ref: str | None = None
+    parse_status: DiffParseStatus = "parsed"
+    parse_warnings: list[str] = Field(default_factory=list)
     changed_files: list[str] = Field(default_factory=list)
     added_lines: int = 0
     removed_lines: int = 0
@@ -98,6 +106,7 @@ class MaintainabilityReport(BaseModel):
     report_id: str = Field(default_factory=lambda: str(uuid4()))
     run_id: str | None = None
     step: int | None = None
+    parse_status: DiffParseStatus = "parsed"
     changed_files: list[str] = Field(default_factory=list)
     score: float = 100.0
     risk_level: RiskLevel = "low"

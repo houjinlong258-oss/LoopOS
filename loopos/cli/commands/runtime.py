@@ -199,12 +199,22 @@ def history_command(run_id: str, *, data_dir: str | Path = ".loopos") -> int:
 
 def trace_command(
     run_id: str,
+    value: str | None = None,
     *,
     data_dir: str | Path = ".loopos",
     show_ail: bool = False,
     show_policy: bool = False,
     json_output: bool = False,
 ) -> int:
+    if run_id == "tree":
+        if not value:
+            print("trace tree requires RUN_ID", file=sys.stderr)
+            return 1
+        from loopos.cli.commands.kernel_cli import kernel_command
+
+        return kernel_command(
+            "trace-tree", value, data_dir=data_dir, json_output=json_output
+        )
     events = TraceStore(data_paths(data_dir)["events"]).list(run_id)
     if not events:
         print(f"No events for run: {run_id}", file=sys.stderr)

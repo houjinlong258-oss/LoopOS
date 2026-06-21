@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "loopos"
 version = "0.1.0"
-description = "Terminal-native AI-ISA agent runtime with governed memory."
+description = "The open operating runtime for AI agents with policy-governed syscalls, trace replay, memory governance, data guard, maintainability gates, and plugin standards."
 readme = "README.md"
 license = {file = "LICENSE"}
 requires-python = ">=3.11"

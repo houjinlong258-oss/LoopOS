@@ -33,6 +33,38 @@ class LocalIntelligenceTests(unittest.TestCase):
                 connection.close()
             self.assertNotIn(".env", paths)
 
+    def test_indexes_python_symbols_imports_and_explains_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "workspace"
+            workspace.mkdir()
+            (workspace / "guard.py").write_text(
+                """import sqlite3
+from pathlib import Path
+
+class BackupGuard:
+    def verify(self) -> bool:
+        return True
+
+async def run_guard() -> None:
+    pass
+""",
+                encoding="utf-8",
+            )
+            indexer = WorkspaceIndexer(workspace, Path(tmp) / "index.sqlite3")
+            status = indexer.build()
+
+            symbols = indexer.search_symbols("Guard")
+            explanation = indexer.explain_file("guard.py")
+
+            self.assertEqual(status.indexed_symbols, 3)
+            self.assertEqual(status.indexed_imports, 2)
+            self.assertEqual(
+                [item.name for item in symbols], ["BackupGuard", "run_guard", "verify"]
+            )
+            imports = explanation["imports"]
+            self.assertIsInstance(imports, list)
+            self.assertEqual(len(imports), 2)  # type: ignore[arg-type]
+
 
 if __name__ == "__main__":
     unittest.main()

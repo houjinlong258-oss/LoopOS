@@ -8,11 +8,18 @@ from __future__ import annotations
 
 import re
 
-from loopos.maintainability.models import CodeChangeSummary
+from loopos.maintainability.models import CodeChangeSummary, DiffParseStatus
 
 
 def parse_diff(diff_text: str, *, run_id: str | None = None) -> CodeChangeSummary:
     """Parse unified diff text into a CodeChangeSummary."""
+    if not diff_text.strip():
+        return CodeChangeSummary(
+            run_id=run_id,
+            parse_status="empty",
+            parse_warnings=["diff input is empty"],
+        )
+
     changed_files: list[str] = []
     test_files: list[str] = []
     docs_files: list[str] = []
@@ -23,15 +30,28 @@ def parse_diff(diff_text: str, *, run_id: str | None = None) -> CodeChangeSummar
     new_apis: list[str] = []
     deleted_apis: list[str] = []
     risk_flags: list[str] = []
+    parse_warnings: list[str] = []
 
     current_file: str | None = None
+    saw_diff_header = False
+    saw_hunk = False
+    added_without_file = 0
+    removed_without_file = 0
 
     for line in diff_text.splitlines():
+        if line.startswith("diff --git "):
+            saw_diff_header = True
+            current_file = None
+            continue
+        if line.startswith("@@"):
+            saw_hunk = True
+            continue
         # Detect file paths from diff headers
         file_match = re.match(r"^\+\+\+ b/(.+)$", line)
         if file_match:
             current_file = file_match.group(1)
-            changed_files.append(current_file)
+            if current_file not in changed_files:
+                changed_files.append(current_file)
             if _is_test_file(current_file):
                 test_files.append(current_file)
             if _is_doc_file(current_file):
@@ -43,6 +63,8 @@ def parse_diff(diff_text: str, *, run_id: str | None = None) -> CodeChangeSummar
         if line.startswith("+") and not line.startswith("+++"):
             added += 1
             content = line[1:]
+            if current_file is None:
+                added_without_file += 1
             # Detect new dependencies
             dep = _detect_dependency(content)
             if dep:
@@ -58,12 +80,30 @@ def parse_diff(diff_text: str, *, run_id: str | None = None) -> CodeChangeSummar
         elif line.startswith("-") and not line.startswith("---"):
             removed += 1
             content = line[1:]
+            if current_file is None:
+                removed_without_file += 1
             api = _detect_public_api(content)
             if api:
                 deleted_apis.append(api)
 
+    parse_status: DiffParseStatus = "parsed"
+    if not changed_files:
+        has_diff_shape = saw_diff_header or saw_hunk or added or removed
+        parse_status = "partial" if has_diff_shape else "non_diff"
+        parse_warnings.append("no unified-diff file headers were parsed")
+    elif added_without_file or removed_without_file:
+        parse_status = "partial"
+        parse_warnings.append("some changed lines appeared before a file header")
+    if saw_diff_header and not changed_files:
+        parse_status = "invalid"
+        parse_warnings.append("diff headers were present but no +++ b/<path> headers were parsed")
+    if risk_flags and not changed_files:
+        parse_warnings.append("risk patterns were found in unparsed diff content")
+
     return CodeChangeSummary(
         run_id=run_id,
+        parse_status=parse_status,
+        parse_warnings=parse_warnings,
         changed_files=changed_files,
         added_lines=added,
         removed_lines=removed,

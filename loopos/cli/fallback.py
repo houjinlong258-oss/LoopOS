@@ -20,6 +20,7 @@ from loopos.cli.commands import (
     profile_command,
     providers_command,
     registry_command,
+    release_command,
     replay_command,
     resume_command,
     review_command,
@@ -82,6 +83,7 @@ def fallback_main(argv: list[str] | None = None) -> int:
 
     trace_parser = sub.add_parser("trace")
     trace_parser.add_argument("run_id")
+    trace_parser.add_argument("value", nargs="?")
     trace_parser.add_argument("--data-dir", default=".loopos")
     trace_parser.add_argument("--show-ail", action="store_true")
     trace_parser.add_argument("--show-policy", action="store_true")
@@ -118,6 +120,7 @@ def fallback_main(argv: list[str] | None = None) -> int:
     db_parser.add_argument("--workspace", default=".")
     db_parser.add_argument("--yes", action="store_true")
     db_parser.add_argument("--json", dest="json_output", action="store_true")
+    db_parser.add_argument("--human", dest="human_output", action="store_true")
 
     tasks_parser = sub.add_parser("tasks")
     tasks_parser.add_argument("action", nargs="?", default="list")
@@ -140,6 +143,7 @@ def fallback_main(argv: list[str] | None = None) -> int:
 
     search_parser = sub.add_parser("search")
     search_parser.add_argument("query")
+    search_parser.add_argument("value", nargs="?")
     search_parser.add_argument("--workspace", default=".")
     search_parser.add_argument("--data-dir", default=".loopos")
     search_parser.add_argument("--limit", type=int, default=20)
@@ -187,6 +191,11 @@ def fallback_main(argv: list[str] | None = None) -> int:
     review_parser.add_argument("--reviewer", default="reviewer")
     review_parser.add_argument("--actor")
     review_parser.add_argument("--note")
+    review_parser.add_argument("--run-id")
+    review_parser.add_argument("--high-risk", action="store_true")
+    review_parser.add_argument("--maintainability-blocked", action="store_true")
+    review_parser.add_argument("--diff", dest="diff_file")
+    review_parser.add_argument("--human", dest="human_output", action="store_true")
 
     providers_parser = sub.add_parser("providers")
     providers_parser.add_argument("action", nargs="?", default="list")
@@ -232,6 +241,7 @@ def fallback_main(argv: list[str] | None = None) -> int:
     policy_parser.add_argument("--verbose", action="store_true")
     policy_parser.add_argument("--cmd")
     policy_parser.add_argument("--data-dir", default=".loopos")
+    policy_parser.add_argument("--human", dest="human_output", action="store_true")
 
     ail_parser = sub.add_parser("ail")
     ail_parser.add_argument("action", nargs="?", default="validate")
@@ -240,6 +250,19 @@ def fallback_main(argv: list[str] | None = None) -> int:
 
     config_parser = sub.add_parser("config")
     config_parser.add_argument("--data-dir", default=".loopos")
+
+    release_parser = sub.add_parser("release")
+    release_parser.add_argument("action", nargs="?", default="check")
+    release_parser.add_argument("--version", default="0.1.0")
+    release_parser.add_argument("--source", "--workspace", default=".")
+    release_parser.add_argument("--output", default="dist")
+    release_parser.add_argument("--no-zip", action="store_true")
+    release_parser.add_argument("--strict", action="store_true")
+    release_parser.add_argument("--ignore-local-only", action="store_true")
+    release_parser.add_argument("--strict-source", action="store_true")
+    release_parser.add_argument("--deep", action="store_true")
+    release_parser.add_argument("--target", default="founding-preview")
+    release_parser.add_argument("--json", dest="json_output", action="store_true")
 
     args = parser.parse_args(argv)
     if args.command == "run":
@@ -279,6 +302,7 @@ def fallback_main(argv: list[str] | None = None) -> int:
     if args.command == "trace":
         return trace_command(
             args.run_id,
+            args.value,
             data_dir=args.data_dir,
             show_ail=args.show_ail,
             show_policy=args.show_policy,
@@ -321,6 +345,7 @@ def fallback_main(argv: list[str] | None = None) -> int:
             workspace=args.workspace,
             yes=args.yes,
             json_output=args.json_output,
+            human_output=args.human_output,
         )
     if args.command == "tasks":
         return tasks_command(
@@ -342,6 +367,7 @@ def fallback_main(argv: list[str] | None = None) -> int:
     if args.command == "search":
         return search_command(
             args.query,
+            args.value,
             workspace=args.workspace,
             data_dir=args.data_dir,
             limit=args.limit,
@@ -390,6 +416,11 @@ def fallback_main(argv: list[str] | None = None) -> int:
             reviewer=args.reviewer,
             actor=args.actor,
             note=args.note,
+            run_id=args.run_id,
+            high_risk=args.high_risk,
+            maintainability_blocked=args.maintainability_blocked,
+            diff_file=args.diff_file,
+            human_output=args.human_output,
         )
     if args.command == "providers":
         return providers_command(args.action, args.value, json_output=args.json_output)
@@ -432,10 +463,25 @@ def fallback_main(argv: list[str] | None = None) -> int:
             data_dir=args.data_dir,
             verbose=args.verbose,
             cmd=args.cmd,
+            human_output=args.human_output,
         )
     if args.command == "ail":
         return ail_command(args.action, args.file, verbose=args.verbose)
     if args.command == "config":
         return config_command(data_dir=args.data_dir)
+    if args.command == "release":
+        return release_command(
+            args.action,
+            version=args.version,
+            source=args.source,
+            output=args.output,
+            no_zip=args.no_zip,
+            strict=args.strict,
+            ignore_local_only=args.ignore_local_only,
+            strict_source=args.strict_source,
+            deep=args.deep,
+            target=args.target,
+            json_output=args.json_output,
+        )
     parser.print_help()
     return 0

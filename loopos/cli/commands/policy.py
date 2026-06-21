@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 
 from loopos.cli.context import data_paths
+from loopos.cli.renderers import render_policy_decision_text
+from loopos.core.safety import CommandRiskAnalyzer
 from loopos.policy_os.audit import PolicyAuditLog
 from loopos.policy_os.engine import PolicyEngine
 
@@ -20,6 +22,7 @@ def policy_command(
     data_dir: str | Path = ".loopos",
     verbose: bool = False,
     cmd: str | None = None,
+    human_output: bool = False,
 ) -> int:
     engine = PolicyEngine.load_default()
     if action == "list":
@@ -64,7 +67,11 @@ def policy_command(
         decision = engine.evaluate(scope, subject=subject)
         if decision.audit_required:
             PolicyAuditLog(data_paths(data_dir)["policy_audit"]).append(scope, subject, decision)
-        print(decision.model_dump_json(indent=2))
+        payload = decision.model_dump(mode="json")
+        if human_output:
+            print(render_policy_decision_text(payload))
+        else:
+            print(decision.model_dump_json(indent=2))
         return 0 if decision.allowed else 2
     if action == "audit":
         rows = PolicyAuditLog(data_paths(data_dir)["policy_audit"]).list()
@@ -77,13 +84,22 @@ def policy_command(
         if not cmd:
             print("policy explain requires --cmd CMD.", file=sys.stderr)
             return 1
+        assessment = CommandRiskAnalyzer().analyze(cmd)
         decision = engine.evaluate(
             "terminal.execute",
-            subject={"cmd": cmd, "risk_level": "medium"},
+            subject={
+                "cmd": cmd,
+                "risk_level": assessment.risk_level,
+                "matched_patterns": assessment.matched_patterns,
+            },
             tags=["terminal", "explain"],
-            risk_level="medium",
+            risk_level=assessment.risk_level,
         )
-        print(decision.model_dump_json(indent=2))
+        payload = decision.model_dump(mode="json")
+        if human_output:
+            print(render_policy_decision_text(payload, cmd=cmd))
+        else:
+            print(decision.model_dump_json(indent=2))
         return 0 if decision.allowed else 2
     print(f"Unknown policy action: {action}", file=sys.stderr)
     return 1

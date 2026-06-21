@@ -1,0 +1,5 @@
+--- a/loopos/example.py
++++ b/loopos/example.py
+@@ -0,0 +1,2 @@
++import os
++os.system("echo bypass")

@@ -62,15 +62,16 @@ class FusionRunner:
             effective_request = request.model_copy(update={"privacy_mode": "local_only"})
 
         panel = self.router.plan(effective_request)
-        self._trace_panel(run_id, request, panel, sensitive)
+        trace_ids: list[str] = []
+        trace_ids.extend(self._trace_panel(run_id, request, panel, sensitive))
 
         responses = mock_responses or self._mock_responses(panel, request)
         report = self.judge.judge(request.request_id, responses)
-        self._trace_judge(run_id, request, report)
+        trace_ids.extend(self._trace_judge(run_id, request, report))
 
         result = self.aggregator.aggregate(request.request_id, responses, report)
-        self._trace_result(run_id, request, result)
-        return result
+        trace_ids.extend(self._trace_result(run_id, request, result))
+        return result.model_copy(update={"trace_event_ids": trace_ids})
 
     def _mock_responses(self, panel: FusionPanel, request: FusionRequest) -> list[ModelResponse]:
         return [
@@ -89,37 +90,41 @@ class FusionRunner:
         request: FusionRequest,
         panel: FusionPanel,
         sensitive: bool,
-    ) -> None:
+    ) -> list[str]:
         if self.trace_store is None:
-            return
+            return []
         payload: dict[str, Any] = {
             "request_id": request.request_id,
             "task_type": request.task_type,
             "privacy_mode": request.privacy_mode,
-            "effective_privacy_mode": panel.request_id and request.privacy_mode,
+            "effective_privacy_mode": "local_only" if sensitive else request.privacy_mode,
             "sensitive_context": sensitive,
             "selected_models": panel.models,
             "judge_model": panel.judge_model,
             "routing_reason": panel.routing_reason,
             "estimated_cost_class": panel.estimated_cost_class,
         }
-        self.trace_store.append("decision", run_id, 0, payload, event_type="fusion_panel")
+        event = self.trace_store.append("decision", run_id, 0, payload, event_type="fusion_panel")
+        return [event.id]
 
-    def _trace_judge(self, run_id: str, request: FusionRequest, report: Any) -> None:
+    def _trace_judge(self, run_id: str, request: FusionRequest, report: Any) -> list[str]:
         if self.trace_store is None:
-            return
-        self.trace_store.append(
+            return []
+        event = self.trace_store.append(
             "evaluation",
             run_id,
             0,
             report.model_dump(mode="json"),
             event_type="fusion_judge",
         )
+        return [event.id]
 
-    def _trace_result(self, run_id: str, request: FusionRequest, result: FusionResult) -> None:
+    def _trace_result(
+        self, run_id: str, request: FusionRequest, result: FusionResult
+    ) -> list[str]:
         if self.trace_store is None:
-            return
-        self.trace_store.append(
+            return []
+        event = self.trace_store.append(
             "observation",
             run_id,
             0,
@@ -132,3 +137,4 @@ class FusionRunner:
             },
             event_type="fusion_result",
         )
+        return [event.id]

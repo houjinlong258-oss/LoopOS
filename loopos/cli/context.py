@@ -11,6 +11,7 @@ def data_paths(data_dir: str | Path) -> dict[str, Path]:
         "base": base,
         "events": base / "events.jsonl",
         "runs": base / "runs",
+        "checkpoints": base / "checkpoints",
         "skills": base / "skills.jsonl",
         "beliefs": base / "beliefs.jsonl",
         "policy_audit": base / "policy_audit.jsonl",

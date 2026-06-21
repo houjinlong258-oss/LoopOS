@@ -52,7 +52,10 @@ def _summary(args: list[str]) -> None:
         print(json.dumps(summary.model_dump(mode="json"), indent=2, ensure_ascii=False))
     else:
         print(f"Changed files: {len(summary.changed_files)}")
+        print(f"Parse status: {summary.parse_status}")
         print(f"Added: +{summary.added_lines}  Removed: -{summary.removed_lines}")
+        if summary.parse_warnings:
+            print(f"Parse warnings: {', '.join(summary.parse_warnings)}")
         if summary.risk_flags:
             print(f"Risk flags: {', '.join(summary.risk_flags)}")
         if summary.new_dependencies:
@@ -107,13 +110,19 @@ def _extract_added_lines(diff_text: str) -> dict[str, str]:
 
     files: dict[str, list[str]] = {}
     current: str | None = None
+    unparsed: list[str] = []
     for line in diff_text.splitlines():
         if line.startswith("+++ b/"):
             current = line[6:]
             files.setdefault(current, [])
             continue
-        if current is not None and line.startswith("+") and not line.startswith("+++"):
-            files[current].append(line[1:])
+        if line.startswith("+") and not line.startswith("+++"):
+            if current is not None:
+                files[current].append(line[1:])
+            else:
+                unparsed.append(line[1:])
+    if unparsed:
+        files.setdefault("__unparsed_diff__.py", []).extend(unparsed)
     return {path: "\n".join(lines) for path, lines in files.items() if lines}
 
 

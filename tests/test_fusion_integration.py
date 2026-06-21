@@ -69,9 +69,10 @@ def test_runner_records_trace_events(tmp_path: Path) -> None:
         budget="cheap",
         privacy_mode="hybrid",
     )
-    runner.run(request, run_id="run-1")
+    result = runner.run(request, run_id="run-1")
     events = trace.list("run-1")
     assert len(events) == 3
+    assert result.trace_event_ids == [event.id for event in events]
     assert events[0].type == "fusion_panel"
     assert events[1].type == "fusion_judge"
     assert events[2].type == "fusion_result"

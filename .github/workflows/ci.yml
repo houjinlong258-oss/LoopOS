@@ -34,3 +34,14 @@ jobs:
 
       - name: Founding acceptance
         run: make test-acceptance
+
+      - name: Generate CI report
+        if: matrix.python-version == '3.11'
+        run: python scripts/ci_report.py --run --output docs/reports/latest-test-report.json
+
+      - name: Upload CI report
+        if: matrix.python-version == '3.11'
+        uses: actions/upload-artifact@v4
+        with:
+          name: latest-test-report
+          path: docs/reports/latest-test-report.json

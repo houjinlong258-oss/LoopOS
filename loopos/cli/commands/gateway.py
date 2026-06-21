@@ -29,6 +29,16 @@ def gateway_command(
     approve: bool = False,
     deny: bool = False,
 ) -> int:
+    if action == "webhook-flow" and text == "hello" and channel not in {
+        "telegram",
+        "email",
+        "slack",
+        "discord",
+        "whatsapp_cloud",
+        "webhook",
+    }:
+        text = channel
+        channel = "webhook"
     gateway = ChatOpsGateway()
     paths = data_paths(data_dir)
     store = GatewayStore(

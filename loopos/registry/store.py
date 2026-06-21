@@ -18,6 +18,17 @@ _UNSAFE_PERMISSIONS = {
     "policy.bypass",
 }
 _HIGH_RISK_TOOLS = {"terminal.exec", "database.run_migration", "database.restore"}
+_PERMISSION_EXPLANATIONS = {
+    "benchmark:run": "Allows the plugin metadata to describe benchmark tasks.",
+    "workspace:read": "Allows reading files inside the active workspace only.",
+    "workspace:write": "Allows proposing or performing guarded writes inside the workspace.",
+    "terminal:pytest": "Allows guarded pytest execution through terminal.exec policy checks.",
+    "policy:enforce:terminal": "Allows a policy pack to constrain terminal execution.",
+    "gateway:auth:token": "Requires token-based authentication for mock gateway traffic.",
+    "gateway:allowlist": "Requires configured user or channel allowlists.",
+    "env:OPENAI_API_KEY": "Declares a provider credential requirement; tests must not read it.",
+    "network:outbound:https": "Declares outbound HTTPS capability, disabled until policy approval.",
+}
 
 
 def load_manifest(path: str | Path) -> PluginManifest:
@@ -30,6 +41,12 @@ def load_manifest(path: str | Path) -> PluginManifest:
 
 def audit_manifest(manifest: PluginManifest) -> PluginAuditResult:
     findings: list[str] = []
+    if not manifest.license:
+        findings.append("missing_license")
+    if not manifest.documentation:
+        findings.append("missing_documentation")
+    if manifest.entrypoint:
+        findings.append("entrypoint_declared_metadata_only")
     unsafe = sorted(set(manifest.permissions).intersection(_UNSAFE_PERMISSIONS))
     if unsafe:
         findings.extend(f"unsafe_permission:{item}" for item in unsafe)
@@ -42,12 +59,22 @@ def audit_manifest(manifest: PluginManifest) -> PluginAuditResult:
         findings.append("missing_tests")
     blocked = any(item.startswith("unsafe_permission:policy.bypass") for item in findings)
     risk = "blocked" if blocked else "high" if unsafe else "medium" if findings else manifest.risk_level
+    permission_explanations = {
+        permission: _PERMISSION_EXPLANATIONS.get(
+            permission,
+            "Custom permission; contributor must document purpose and policy gate.",
+        )
+        for permission in manifest.permissions
+    }
     return PluginAuditResult(
         plugin_id=manifest.id,
         safe=not unsafe and not blocked,
         risk_level=risk,  # type: ignore[arg-type]
         findings=findings,
         permissions_reviewed=manifest.permissions,
+        permission_explanations=permission_explanations,
+        risk_explanation=_risk_explanation(manifest.risk_level, risk, findings),
+        examples_validated=bool(manifest.metadata),
     )
 
 
@@ -85,3 +112,16 @@ class PluginRegistry:
             if manifest.id == plugin_id:
                 return audit_manifest(manifest)
         raise KeyError(f"plugin not found: {plugin_id}")
+
+
+def _risk_explanation(declared: str, effective: str, findings: list[str]) -> str:
+    if effective == "blocked":
+        return "Blocked because the manifest requests a permission that can bypass policy."
+    if effective == "high":
+        return "High risk because the manifest requests sensitive permissions."
+    if findings:
+        return (
+            f"Declared {declared}, raised to {effective} because audit findings require "
+            "maintainer review."
+        )
+    return f"Declared and effective risk are both {declared}."

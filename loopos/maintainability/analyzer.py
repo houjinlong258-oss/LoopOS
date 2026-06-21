@@ -45,6 +45,10 @@ _DEDUCTIONS: dict[str, dict[str, int]] = {
     "under_abstraction": {"warning": 3, "error": 8},
     "migration_risk": {"warning": 5, "error": 10},
     "error_swallowing": {"warning": 5, "error": 10},
+    "empty_diff": {"warning": 15, "error": 25},
+    "invalid_diff_format": {"warning": 15, "error": 35},
+    "diff_without_file_header": {"warning": 10, "error": 30},
+    "unparsed_added_lines": {"warning": 15, "error": 25},
 }
 
 # Blockers automatically set score to 0 and block
@@ -54,6 +58,7 @@ _BLOCKER_CATEGORIES = {
     "data_guard_bypass",
     "memory_bypass",
     "trace_bypass",
+    "risk_content_in_unparsed_diff",
 }
 
 
@@ -76,6 +81,8 @@ class MaintainabilityAnalyzer:
     ) -> MaintainabilityReport:
         files = files or {}
         findings: list[MaintainabilityFinding] = []
+
+        findings.extend(self._check_parse_integrity(summary))
 
         # Summary-level rules
         findings.extend(check_large_diff(summary))
@@ -107,6 +114,7 @@ class MaintainabilityAnalyzer:
 
         return MaintainabilityReport(
             run_id=summary.run_id,
+            parse_status=summary.parse_status,
             changed_files=summary.changed_files,
             score=score,
             risk_level=risk_level,
@@ -173,7 +181,8 @@ class MaintainabilityAnalyzer:
         recommendation: Recommendation,
     ) -> str:
         parts: list[str] = []
-        parts.append(f"Score: {score:.0f}/100 — {recommendation.replace('_', ' ').title()}")
+        parts.append(f"Score: {score:.0f}/100 - {recommendation.replace('_', ' ').title()}")
+        parts.append(f"Parse: {summary.parse_status}")
         parts.append(f"Files: {len(summary.changed_files)} changed")
         parts.append(f"Lines: +{summary.added_lines} / -{summary.removed_lines}")
 
@@ -189,3 +198,69 @@ class MaintainabilityAnalyzer:
             parts.append(f"Warnings: {len(warnings)}")
 
         return " | ".join(parts)
+
+    def _check_parse_integrity(
+        self, summary: CodeChangeSummary
+    ) -> list[MaintainabilityFinding]:
+        findings: list[MaintainabilityFinding] = []
+        if summary.parse_status == "empty":
+            findings.append(
+                MaintainabilityFinding(
+                    category="empty_diff",
+                    severity="warning",
+                    message="No diff content was provided; the change cannot be fully reviewed.",
+                    suggested_fix="Provide the actual unified diff before approving code changes.",
+                    evidence=summary.parse_warnings,
+                )
+            )
+            return findings
+        if summary.parse_status == "non_diff":
+            findings.append(
+                MaintainabilityFinding(
+                    category="invalid_diff_format",
+                    severity="error",
+                    message="Input did not look like a unified diff.",
+                    suggested_fix="Generate a standard git diff and rerun the maintainability check.",
+                    evidence=summary.parse_warnings,
+                )
+            )
+            return findings
+        if summary.parse_status in {"partial", "invalid"}:
+            findings.append(
+                MaintainabilityFinding(
+                    category="invalid_diff_format",
+                    severity="error",
+                    message="Diff parsing was incomplete, so this change cannot be auto-approved.",
+                    suggested_fix="Provide a complete unified diff with file headers and hunks.",
+                    evidence=summary.parse_warnings,
+                )
+            )
+            if not summary.changed_files and (summary.added_lines or summary.removed_lines):
+                findings.append(
+                    MaintainabilityFinding(
+                        category="diff_without_file_header",
+                        severity="error",
+                        message="Changed lines were present but no target file header was parsed.",
+                        suggested_fix="Include the diff header, for example '+++ b/path/to/file.py'.",
+                    )
+                )
+            if summary.added_lines:
+                findings.append(
+                    MaintainabilityFinding(
+                        category="unparsed_added_lines",
+                        severity="warning",
+                        message="Added lines were not fully attributable to parsed files.",
+                        suggested_fix="Review the complete diff before approving.",
+                    )
+                )
+        if summary.risk_flags and summary.parse_status != "parsed":
+            findings.append(
+                MaintainabilityFinding(
+                    category="risk_content_in_unparsed_diff",
+                    severity="blocker",
+                    message="Risk patterns appeared in diff content that was not safely parsed.",
+                    suggested_fix="Reject the artifact until a complete diff is supplied.",
+                    evidence=summary.risk_flags,
+                )
+            )
+        return findings

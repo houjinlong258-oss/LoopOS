@@ -20,6 +20,21 @@ def index_command(
         payload = indexer.build()
     elif action == "status":
         payload = indexer.status()
+    elif action == "symbols":
+        print(
+            json.dumps(
+                [item.model_dump(mode="json") for item in indexer.search_symbols()],
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0
+    elif action == "imports":
+        print(json.dumps(indexer.import_graph(), ensure_ascii=False, indent=2))
+        return 0
+    elif action == "diff":
+        print(json.dumps(indexer.git_diff_index(), ensure_ascii=False, indent=2))
+        return 0
     else:
         print(f"Unknown index action: {action}", file=sys.stderr)
         return 1
@@ -29,13 +44,21 @@ def index_command(
 
 def search_command(
     query: str,
+    value: str | None = None,
     *,
     workspace: str | Path = ".",
     data_dir: str | Path = ".loopos",
     limit: int = 20,
 ) -> int:
-    rows = WorkspaceIndexer(workspace, Path(data_dir) / "workspace-index.sqlite3").search(query, limit=limit)
-    print(json.dumps([row.model_dump(mode="json") for row in rows], ensure_ascii=False, indent=2))
+    indexer = WorkspaceIndexer(workspace, Path(data_dir) / "workspace-index.sqlite3")
+    if query == "symbols":
+        payload = [
+            row.model_dump(mode="json")
+            for row in indexer.search_symbols(value or "", limit=limit)
+        ]
+    else:
+        payload = [row.model_dump(mode="json") for row in indexer.search(query, limit=limit)]
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0
 
 
@@ -46,6 +69,10 @@ def files_command(
     workspace: str | Path = ".",
     data_dir: str | Path = ".loopos",
 ) -> int:
+    indexer = WorkspaceIndexer(workspace, Path(data_dir) / "workspace-index.sqlite3")
+    if action == "explain":
+        print(json.dumps(indexer.explain_file(query), ensure_ascii=False, indent=2))
+        return 0
     if action != "find":
         print(f"Unknown files action: {action}", file=sys.stderr)
         return 1

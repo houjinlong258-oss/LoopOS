@@ -87,3 +87,25 @@ def test_report_json_serializable() -> None:
     assert "score" in data
     assert "findings" in data
     assert "recommendation" in data
+
+
+def test_empty_diff_cannot_score_as_perfect() -> None:
+    summary = CodeChangeSummary(parse_status="empty", parse_warnings=["empty"])
+    report = MaintainabilityAnalyzer().analyze(summary)
+    assert report.score < 100
+    assert report.recommendation == "approve_with_warnings"
+    assert any(f.category == "empty_diff" for f in report.findings)
+
+
+def test_risky_unparsed_diff_blocks_gate() -> None:
+    summary = CodeChangeSummary(
+        parse_status="partial",
+        parse_warnings=["no file header"],
+        added_lines=1,
+        risk_flags=["subprocess_call"],
+    )
+    report = MaintainabilityAnalyzer().analyze(summary)
+    decision = MaintainabilityGate().evaluate(report)
+    assert report.recommendation == "block"
+    assert decision.blocks_merge
+    assert "blocker:risk_content_in_unparsed_diff" in decision.reason_codes

@@ -7,7 +7,9 @@ from typing import Any
 from loopos.review.artifact import (
     MergeGateDecision,
     ReviewArtifact,
+    ReviewChangeType,
     ReviewDecision,
+    ReviewRiskLevel,
 )
 
 
@@ -19,6 +21,13 @@ class ReviewArtifactBuilder:
 
     def set_diff_summary(self, summary: dict[str, Any]) -> "ReviewArtifactBuilder":
         self._artifact.diff_summary = summary
+        self._artifact.change_types = _derive_change_types(
+            [str(path) for path in summary.get("changed_files", [])]
+        )
+        self._artifact.risk_level = _derive_risk_level(
+            self._artifact.change_types,
+            [str(flag) for flag in summary.get("risk_flags", [])],
+        )
         return self
 
     def add_test_result(self, result: dict[str, Any]) -> "ReviewArtifactBuilder":
@@ -35,6 +44,18 @@ class ReviewArtifactBuilder:
 
     def set_maintainability_report(self, report_id: str) -> "ReviewArtifactBuilder":
         self._artifact.maintainability_report_id = report_id
+        return self
+
+    def set_maintainability_evidence(
+        self, report: dict[str, Any], gate: dict[str, Any]
+    ) -> "ReviewArtifactBuilder":
+        self._artifact.maintainability_report = report
+        self._artifact.maintainability_report_id = str(report.get("report_id", "")) or None
+        self._artifact.maintainability_gate = gate
+        return self
+
+    def set_trace_events(self, event_ids: list[str]) -> "ReviewArtifactBuilder":
+        self._artifact.trace_event_ids = list(event_ids)
         return self
 
     def set_acceptance(self, criteria: dict[str, str]) -> "ReviewArtifactBuilder":
@@ -101,18 +122,34 @@ class MergeGate:
     ) -> MergeGateDecision:
         blockers: list[str] = []
         reason_codes: list[str] = []
+        required_actions: list[str] = []
+        warnings: list[str] = []
 
         # Rule 1: Tests must pass
-        tests_passed = all(
-            t.get("passed", t.get("status") == "passed")
-            for t in artifact.tests_run
-        ) if artifact.tests_run else True  # No tests is not itself a blocker here
+        tests_present = bool(artifact.tests_run)
+        tests_passed = (
+            all(t.get("passed", t.get("status") == "passed") for t in artifact.tests_run)
+            if tests_present
+            else False
+        )
 
-        if not tests_passed:
+        if tests_present and not tests_passed:
             blockers.append("tests_failed")
+        elif not tests_present:
+            if _is_test_required_change(artifact.change_types):
+                if _is_high_risk_change(artifact.change_types, artifact.risk_level, high_risk):
+                    blockers.append("tests_required_for_high_risk_change")
+                else:
+                    reason_codes.append("tests_required_for_code_change")
+                    required_actions.append("Add or cite deterministic tests for this code change.")
+            else:
+                warnings.append("no tests recorded for non-code or docs-only change")
 
         # Rule 2: Maintainability block
-        if maintainability_blocked:
+        embedded_maintainability_block = bool(
+            artifact.maintainability_gate.get("blocks_merge", False)
+        )
+        if maintainability_blocked or embedded_maintainability_block:
             blockers.append("maintainability_blocked")
 
         # Rule 3: Policy violations
@@ -137,25 +174,92 @@ class MergeGate:
         requires_human = has_unknown
 
         # Rule 7: High-risk without reviewer
-        if high_risk and not artifact.reviewer_run_id:
+        effective_high_risk = _is_high_risk_change(
+            artifact.change_types,
+            artifact.risk_level,
+            high_risk,
+        )
+
+        if effective_high_risk and not artifact.reviewer_run_id:
             blockers.append("high_risk_without_reviewer")
 
         # Rule 8: Producer self-approval
-        if producer_is_reviewer and high_risk:
+        if producer_is_reviewer and effective_high_risk:
             blockers.append("producer_self_approval")
 
         # Decision
         if artifact.decision == "blocked":
             blockers.append("review_blocked")
 
-        allowed = len(blockers) == 0
+        allowed = len(blockers) == 0 and len(required_actions) == 0
         if blockers:
             reason_codes.extend(blockers)
 
         return MergeGateDecision(
             review_artifact_id=artifact.artifact_id,
             allowed_to_merge=allowed,
-            requires_human_approval=requires_human,
+            requires_human_approval=requires_human or bool(required_actions),
             reason_codes=reason_codes,
             blockers=blockers,
+            required_actions=required_actions,
+            warnings=warnings,
         )
+
+
+def _derive_change_types(paths: list[str]) -> list[ReviewChangeType]:
+    if not paths:
+        return ["unknown"]
+    types: set[ReviewChangeType] = set()
+    for raw in paths:
+        path = raw.replace("\\", "/").lower()
+        name = path.rsplit("/", 1)[-1]
+        if path.startswith("docs/") or name.endswith((".md", ".rst", ".txt")):
+            types.add("docs")
+        if "test" in path and path.endswith(".py"):
+            types.add("tests")
+        if path.startswith("loopos/kernel/"):
+            types.add("kernel")
+        if path.startswith("loopos/policy_os/") or path.startswith("policies/"):
+            types.add("policy")
+        if path.startswith("loopos/data_guard/") or "database" in path:
+            types.add("data")
+        if path.startswith("loopos/syscalls/"):
+            types.add("syscall")
+        if path.startswith("loopos/memory/"):
+            types.add("memory")
+        if path.startswith("loopos/registry/") or path.startswith("examples/plugins/"):
+            types.add("plugin")
+        if path.startswith("loopos/providers/") or path.startswith("providers/"):
+            types.add("provider")
+        if name in {"pyproject.toml", "setup.py"} or name.endswith((".yaml", ".yml", ".toml")):
+            types.add("config")
+        if path.endswith(".py") and "tests/" not in path:
+            types.add("code")
+    return sorted(types or {"unknown"})
+
+
+def _derive_risk_level(
+    change_types: list[ReviewChangeType], risk_flags: list[str]
+) -> ReviewRiskLevel:
+    if risk_flags:
+        return "high"
+    high_risk_types = {"kernel", "policy", "data", "syscall", "memory"}
+    if high_risk_types.intersection(change_types):
+        return "high"
+    if "code" in change_types or "provider" in change_types or "plugin" in change_types:
+        return "medium"
+    return "low"
+
+
+def _is_test_required_change(change_types: list[ReviewChangeType]) -> bool:
+    return bool(set(change_types).intersection({"code", "kernel", "policy", "data", "syscall", "memory", "provider", "plugin", "config"}))
+
+
+def _is_high_risk_change(
+    change_types: list[ReviewChangeType],
+    risk_level: ReviewRiskLevel,
+    explicit_high_risk: bool,
+) -> bool:
+    return explicit_high_risk or risk_level in {"high", "blocked"} or bool(
+        set(change_types).intersection({"kernel", "policy", "data", "syscall", "memory"})
+    )

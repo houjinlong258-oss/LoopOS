@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.1",
+  "generated_by": "scripts/ci_report.py",
+  "target": "founding-preview",
+  "generated_at": "2026-06-21T10:56:56+00:00",
+  "git_commit": "facb24a9303fc4718e5820b8fd31fa4dfaf9a2f8",
+  "python": "3.13.2",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "offline": true,
+  "commands": {
+    "pytest": "python -m pytest",
+    "ruff": "python -m ruff check .",
+    "mypy": "python -m mypy loopos tests"
+  },
+  "tests_passed": 366,
+  "subtests_passed": 19,
+  "tests_failed": 0,
+  "ruff": "passed",
+  "mypy": "passed"
+}

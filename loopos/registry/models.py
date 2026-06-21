@@ -19,6 +19,9 @@ class PluginManifest(BaseModel):
     name: str
     description: str = ""
     version: str
+    license: str | None = None
+    entrypoint: str | None = None
+    documentation: str | None = None
     compatibility: dict[str, str] = Field(default_factory=dict)
     required_tools: list[str] = Field(default_factory=list)
     permissions: list[str] = Field(default_factory=list)
@@ -42,3 +45,6 @@ class PluginAuditResult(BaseModel):
     risk_level: PluginRisk
     findings: list[str] = Field(default_factory=list)
     permissions_reviewed: list[str] = Field(default_factory=list)
+    permission_explanations: dict[str, str] = Field(default_factory=dict)
+    risk_explanation: str = ""
+    examples_validated: bool = False

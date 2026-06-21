@@ -1,7 +1,9 @@
 import tempfile
 import unittest
+import sqlite3
 from pathlib import Path
 
+from loopos.cli.commands.data_guard import db_command
 from loopos.data_guard import BackupVault, DataGuardService, detect_data_operation, redact_rows
 from loopos.goal import GoalNegotiator
 from loopos.syscalls import SyscallCall, create_default_syscall_router
@@ -71,6 +73,37 @@ class DataGuardTests(unittest.TestCase):
         self.assertIn("备份", proposal.options[1].title)
         spec = negotiator.finalize("帮我执行数据库迁移", option_ids=[2])
         self.assertIn("backup verified", spec.acceptance_criteria)
+
+
+    def test_sqlite_file_flow_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db_path = root / "sample.sqlite"
+            conn = sqlite3.connect(str(db_path))
+            try:
+                conn.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
+                conn.execute("INSERT INTO users (id, name) VALUES (1, 'ada')")
+                conn.commit()
+            finally:
+                conn.close()
+            data_dir = root / "state"
+            self.assertEqual(
+                db_command("sqlite-inspect", str(db_path), data_dir=data_dir, json_output=True),
+                0,
+            )
+            self.assertEqual(
+                db_command("sqlite-backup", str(db_path), data_dir=data_dir, json_output=True),
+                0,
+            )
+            self.assertEqual(
+                db_command("sqlite-shadow", data_dir=data_dir, json_output=True),
+                0,
+            )
+            self.assertEqual(
+                db_command("sqlite-validate", str(db_path), data_dir=data_dir, json_output=True),
+                0,
+            )
+            self.assertEqual(db_command("sqlite-report", data_dir=data_dir, json_output=True), 0)
 
 
 if __name__ == "__main__":

@@ -90,6 +90,10 @@ class SQLiteAdapter:
             dst_conn.close()
 
         checksum = self._file_checksum(backup_path)
+        try:
+            backup_path.chmod(0o444)
+        except OSError:
+            pass
 
         return BackupManifest(
             backup_id=backup_id,

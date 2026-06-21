@@ -20,6 +20,21 @@ def _utc_now() -> datetime:
 AcceptanceStatus = Literal["passed", "failed", "unknown"]
 ReviewDecision = Literal["approve", "request_changes", "reject", "blocked"]
 MergeDecision = Literal["merge_allowed", "merge_blocked"]
+ReviewChangeType = Literal[
+    "docs",
+    "tests",
+    "code",
+    "kernel",
+    "policy",
+    "data",
+    "syscall",
+    "memory",
+    "plugin",
+    "provider",
+    "config",
+    "unknown",
+]
+ReviewRiskLevel = Literal["low", "medium", "high", "blocked"]
 
 
 class ReviewArtifact(BaseModel):
@@ -32,10 +47,15 @@ class ReviewArtifact(BaseModel):
     verifier_run_id: str | None = None
     reviewer_run_id: str | None = None
     diff_summary: dict[str, Any] = Field(default_factory=dict)
+    change_types: list[ReviewChangeType] = Field(default_factory=list)
+    risk_level: ReviewRiskLevel = "low"
     tests_run: list[dict[str, Any]] = Field(default_factory=list)
     policy_checks: list[dict[str, Any]] = Field(default_factory=list)
     data_guard_checks: list[dict[str, Any]] = Field(default_factory=list)
     maintainability_report_id: str | None = None
+    maintainability_report: dict[str, Any] = Field(default_factory=dict)
+    maintainability_gate: dict[str, Any] = Field(default_factory=dict)
+    trace_event_ids: list[str] = Field(default_factory=list)
     acceptance_status: dict[str, AcceptanceStatus] = Field(default_factory=dict)
     findings: list[str] = Field(default_factory=list)
     required_changes: list[str] = Field(default_factory=list)
@@ -52,3 +72,5 @@ class MergeGateDecision(BaseModel):
     requires_human_approval: bool = False
     reason_codes: list[str] = Field(default_factory=list)
     blockers: list[str] = Field(default_factory=list)
+    required_actions: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)

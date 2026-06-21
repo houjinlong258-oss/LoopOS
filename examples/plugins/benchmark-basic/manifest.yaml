@@ -7,6 +7,8 @@ description: >
   policy explain, and maintainability bypass detection. Use it to
   verify a LoopOS checkout still meets the Founding acceptance bar.
 version: 0.1.0
+license: Apache-2.0
+documentation: README.md
 compatibility:
   loopos: ">=0.1.0"
 required_tools:
@@ -17,7 +19,7 @@ required_tools:
 permissions:
   - benchmark:run
   - workspace:read
-risk_level: low
+risk_level: medium
 maintainers:
   - loopos-community
 tests:

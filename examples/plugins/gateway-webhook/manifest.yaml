@@ -7,6 +7,8 @@ description: >
   declares its platform, auth model, and routing contract. The in-tree
   reference implementation lives in loopos.gateway.webhook.
 version: 0.1.0
+license: Apache-2.0
+documentation: README.md
 compatibility:
   loopos: ">=0.1.0"
 required_tools:

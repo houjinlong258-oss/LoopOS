@@ -56,6 +56,14 @@ def test_parse_diff_empty() -> None:
     summary = parse_diff("")
     assert summary.changed_files == []
     assert summary.added_lines == 0
+    assert summary.parse_status == "empty"
+
+
+def test_parse_diff_without_file_header_is_partial() -> None:
+    summary = parse_diff("+subprocess.run('rm -rf /', shell=True)\n")
+    assert summary.parse_status == "partial"
+    assert summary.changed_files == []
+    assert "subprocess_call" in summary.risk_flags
 
 
 def test_parse_diff_new_public_api() -> None:

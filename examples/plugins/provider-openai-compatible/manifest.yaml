@@ -7,6 +7,8 @@ description: >
   env vars, and policy constraints. Alpha plugins are metadata-only;
   LoopOS never imports plugin code during discovery or install.
 version: 0.1.0
+license: Apache-2.0
+documentation: README.md
 compatibility:
   loopos: ">=0.1.0"
 required_tools:

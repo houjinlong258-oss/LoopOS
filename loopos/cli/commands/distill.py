@@ -46,7 +46,11 @@ def distill_command(
 
     if action == "draft":
         source = distiller.inspect(text)
-        segments = distiller.segment(text, source_id=source.source_id)
+        segments = distiller.segment(
+            text,
+            source_id=source.source_id,
+            source_hash=source.source_sha256,
+        )
         behavior = distiller.extract_behavior(segments, name=path.stem)
         renderer = distiller.extract_renderer(segments)
         policy_draft = distiller.extract_policy_draft(segments, source_id=source.source_id)
@@ -78,7 +82,11 @@ def distill_command(
 
     if action == "audit":
         source = distiller.inspect(text)
-        segments = distiller.segment(text, source_id=source.source_id)
+        segments = distiller.segment(
+            text,
+            source_id=source.source_id,
+            source_hash=source.source_sha256,
+        )
         behavior = distiller.extract_behavior(segments)
         renderer = distiller.extract_renderer(segments)
         policy_draft = distiller.extract_policy_draft(segments, source_id=source.source_id)
@@ -92,6 +100,7 @@ def distill_command(
             print(f"Policy rules proposed:    {audit.policy_rules_proposed}")
             print(f"Safety conflicts:         {len(audit.safety_conflicts)}")
             print(f"Source text copied:        {audit.source_text_copied}")
+            print(f"Activation ready:          {audit.activation_ready}")
         return 0
 
     print(f"Unknown distill action: {action}", file=sys.stderr)

@@ -89,6 +89,26 @@ def test_merge_gate_blocks_self_approval() -> None:
     assert "producer_self_approval" in decision.blockers
 
 
+def test_merge_gate_requests_tests_for_code_change() -> None:
+    builder = ReviewArtifactBuilder("run-1")
+    builder.set_diff_summary({"changed_files": ["loopos/feature.py"]})
+    artifact = builder.build()
+    decision = MergeGate().evaluate(artifact)
+    assert not decision.allowed_to_merge
+    assert "tests_required_for_code_change" in decision.reason_codes
+    assert not decision.blockers
+
+
+def test_merge_gate_blocks_high_risk_code_without_tests() -> None:
+    builder = ReviewArtifactBuilder("run-1")
+    builder.set_diff_summary({"changed_files": ["loopos/kernel/scheduler.py"]})
+    builder.set_roles(reviewer="reviewer")
+    artifact = builder.build()
+    decision = MergeGate().evaluate(artifact)
+    assert not decision.allowed_to_merge
+    assert "tests_required_for_high_risk_change" in decision.blockers
+
+
 def test_merge_gate_requires_human_for_unknown() -> None:
     builder = ReviewArtifactBuilder("run-1")
     builder.set_acceptance({"performance": "unknown"})

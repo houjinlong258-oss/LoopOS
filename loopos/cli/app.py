@@ -160,6 +160,7 @@ if _HAS_TUI:
     @app.command("trace")
     def _typer_trace(
         run_id: str,
+        value: str | None = typer_mod.Argument(None),
         data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
         show_ail: bool = typer_mod.Option(False, "--show-ail"),
         show_policy: bool = typer_mod.Option(False, "--show-policy"),
@@ -168,6 +169,7 @@ if _HAS_TUI:
         raise typer_mod.Exit(
             trace_command(
                 run_id,
+                value,
                 data_dir=data_dir,
                 show_ail=show_ail,
                 show_policy=show_policy,
@@ -231,6 +233,7 @@ if _HAS_TUI:
         workspace: str = typer_mod.Option(".", "--workspace"),
         yes: bool = typer_mod.Option(False, "--yes"),
         json_output: bool = typer_mod.Option(False, "--json"),
+        human_output: bool = typer_mod.Option(False, "--human"),
     ) -> None:
         raise typer_mod.Exit(
             db_command(
@@ -245,6 +248,7 @@ if _HAS_TUI:
                 workspace=workspace,
                 yes=yes,
                 json_output=json_output,
+                human_output=human_output,
             )
         )
 
@@ -291,12 +295,15 @@ if _HAS_TUI:
     @app.command("search")
     def _typer_search(
         query: str,
+        value: str | None = typer_mod.Argument(None),
         workspace: str = typer_mod.Option(".", "--workspace"),
         data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
         limit: int = typer_mod.Option(20, "--limit"),
     ) -> None:
         raise typer_mod.Exit(
-            search_command(query, workspace=workspace, data_dir=data_dir, limit=limit)
+            search_command(
+                query, value, workspace=workspace, data_dir=data_dir, limit=limit
+            )
         )
 
     @app.command("files")
@@ -387,6 +394,8 @@ if _HAS_TUI:
         run_id: str | None = typer_mod.Option(None, "--run-id"),
         high_risk: bool = typer_mod.Option(False, "--high-risk"),
         maintainability_blocked: bool = typer_mod.Option(False, "--maintainability-blocked"),
+        diff_file: str | None = typer_mod.Option(None, "--diff"),
+        human_output: bool = typer_mod.Option(False, "--human"),
     ) -> None:
         raise typer_mod.Exit(
             review_command(
@@ -401,6 +410,8 @@ if _HAS_TUI:
                 run_id=run_id,
                 high_risk=high_risk,
                 maintainability_blocked=maintainability_blocked,
+                diff_file=diff_file,
+                human_output=human_output,
             )
         )
 
@@ -485,6 +496,7 @@ if _HAS_TUI:
         data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
         verbose: bool = typer_mod.Option(False, "--verbose"),
         cmd: str | None = typer_mod.Option(None, "--cmd"),
+        human_output: bool = typer_mod.Option(False, "--human"),
     ) -> None:
         raise typer_mod.Exit(
             policy_command(
@@ -495,6 +507,7 @@ if _HAS_TUI:
                 data_dir=data_dir,
                 verbose=verbose,
                 cmd=cmd,
+                human_output=human_output,
             )
         )
 
@@ -529,6 +542,7 @@ if _HAS_TUI:
         task_type: str = typer_mod.Option("unknown", "--task-type"),
         risk: str = typer_mod.Option("medium", "--risk"),
         privacy: str = typer_mod.Option("hybrid", "--privacy"),
+        data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
         json_output: bool = typer_mod.Option(False, "--json"),
     ) -> None:
         raise typer_mod.Exit(
@@ -539,6 +553,7 @@ if _HAS_TUI:
                 task_type=task_type,
                 risk=risk,
                 privacy=privacy,
+                data_dir=data_dir,
                 json_output=json_output,
             )
         )
@@ -573,11 +588,15 @@ if _HAS_TUI:
     def _typer_release(
         action: str = typer_mod.Argument("check"),
         version: str = typer_mod.Option("0.1.0", "--version"),
-        source: str = typer_mod.Option(".", "--source"),
+        source: str = typer_mod.Option(".", "--source", "--workspace"),
         output: str = typer_mod.Option("dist", "--output"),
         no_zip: bool = typer_mod.Option(False, "--no-zip"),
         strict: bool = typer_mod.Option(False, "--strict"),
+        ignore_local_only: bool = typer_mod.Option(False, "--ignore-local-only"),
+        strict_source: bool = typer_mod.Option(False, "--strict-source"),
+        deep: bool = typer_mod.Option(False, "--deep"),
         json_output: bool = typer_mod.Option(False, "--json"),
+        target: str = typer_mod.Option("founding-preview", "--target"),
     ) -> None:
         raise typer_mod.Exit(
             release_command(
@@ -587,7 +606,11 @@ if _HAS_TUI:
                 output=output,
                 no_zip=no_zip,
                 strict=strict,
+                ignore_local_only=ignore_local_only,
+                strict_source=strict_source,
+                deep=deep,
                 json_output=json_output,
+                target=target,
             )
         )
 
