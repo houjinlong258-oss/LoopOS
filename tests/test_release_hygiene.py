@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 import zipfile
 from pathlib import Path
 
@@ -358,6 +359,47 @@ def test_package_script_strict_source_rejects_local_state(tmp_path: Path) -> Non
     payload = json.loads(result.stdout)
     assert payload["strict_source"] is True
     assert any(item["path"] == ".git" for item in payload["errors"])
+
+
+def test_package_script_strict_source_does_not_create_bytecode(tmp_path: Path) -> None:
+    import subprocess
+    import sys
+
+    repo = Path(__file__).resolve().parents[1]
+    src = tmp_path / "clean-source"
+    src.mkdir()
+    _scaffold_clean_tree(src)
+    shutil.rmtree(src / "loopos")
+    shutil.copytree(
+        repo / "loopos",
+        src / "loopos",
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+    )
+    scripts = src / "scripts"
+    scripts.mkdir()
+    shutil.copy2(repo / "scripts" / "package_release.py", scripts / "package_release.py")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(scripts / "package_release.py"),
+            "--version",
+            "test",
+            "--source",
+            str(src),
+            "--output",
+            str(tmp_path / "dist"),
+            "--strict-source",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not list(src.rglob("__pycache__"))
+    assert not list(src.rglob("*.pyc"))
 
 
 def test_package_release_uses_top_level_allowlist(tmp_path: Path) -> None:

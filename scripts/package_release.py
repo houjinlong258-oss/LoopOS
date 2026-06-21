@@ -28,6 +28,10 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Strict-source packaging must not create ``__pycache__`` in the source tree
+# while importing the packager itself. The packaged runtime is unaffected.
+sys.dont_write_bytecode = True
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
