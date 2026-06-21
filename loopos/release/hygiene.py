@@ -44,6 +44,7 @@ __all__ = [
     "LEAKED_PATH_RE",
     "ReleaseFinding",
     "ReleaseReport",
+    "MAX_ARTIFACT_SIZE_BYTES",
     "check_release_clean",
 ]
 
@@ -77,12 +78,23 @@ BLOCKED_FILES: tuple[str, ...] = (
     "task_plan.md",
     "findings.md",
     "progress.md",
+    "id_rsa",
+    "id_ed25519",
 )
 
 BLOCKED_FILE_GLOBS: tuple[str, ...] = (
     "*.pyc",
     "*.pyo",
     "*.pyd",
+    "*.sqlite",
+    "*.sqlite3",
+    "*.db",
+    "*.db-wal",
+    "*.db-shm",
+    "*.log",
+    ".env*",
+    "*.pem",
+    "*.key",
 )
 
 REQUIRED_TOP_LEVEL_FILES: tuple[str, ...] = (
@@ -94,8 +106,13 @@ REQUIRED_TOP_LEVEL_FILES: tuple[str, ...] = (
     "CONTRIBUTING.md",
     "SECURITY.md",
     "CODE_OF_CONDUCT.md",
+    "GOVERNANCE.md",
+    "PLUGIN_SPEC.md",
     "pyproject.toml",
 )
+
+MAX_ARTIFACT_SIZE_BYTES = 20 * 1024 * 1024
+_MARKDOWN_LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
 
 LEAKED_PATH_RE = re.compile(
     r"(?:[A-Za-z]:\\\\?LoopOS|/home/[^/\s]+/LoopOS|/Users/[^/\s]+/LoopOS)"
@@ -121,6 +138,7 @@ class ReleaseReport:
     warnings: list[ReleaseFinding] = field(default_factory=list)
     scanned_files: int = 0
     scanned_dirs: int = 0
+    total_bytes: int = 0
 
     @property
     def ok(self) -> bool:
@@ -132,13 +150,15 @@ class ReleaseReport:
             "ok": self.ok,
             "scanned_files": self.scanned_files,
             "scanned_dirs": self.scanned_dirs,
+            "total_bytes": self.total_bytes,
             "errors": [asdict(f) for f in self.errors],
             "warnings": [asdict(f) for f in self.warnings],
         }
 
 
 def _matches_any_glob(name: str, patterns: Iterable[str]) -> bool:
-    return any(fnmatchcase(name, pat) for pat in patterns)
+    lowered = name.lower()
+    return any(fnmatchcase(lowered, pat.lower()) for pat in patterns)
 
 
 def _iter_source_files(root: Path) -> Iterable[tuple[Path, Path]]:
@@ -243,6 +263,10 @@ def check_release_clean(source: str | os.PathLike[str]) -> ReleaseReport:
             continue
 
         report.scanned_files += 1
+        try:
+            report.total_bytes += full.stat().st_size
+        except OSError:
+            pass
 
         leaked = _scan_file_for_leaked_paths(full)
         if leaked:
@@ -278,7 +302,59 @@ def check_release_clean(source: str | os.PathLike[str]) -> ReleaseReport:
                     )
             report.scanned_dirs += 1
 
+    if report.total_bytes > MAX_ARTIFACT_SIZE_BYTES:
+        report.errors.append(
+            ReleaseFinding(
+                severity="error",
+                code="ARTIFACT_TOO_LARGE",
+                message=(
+                    f"release source is {report.total_bytes / 1024 / 1024:.1f} MiB; "
+                    "maximum is 20 MiB"
+                ),
+            )
+        )
+
+    report.errors.extend(_validate_readme_links(root))
+
     return report
+
+
+def _validate_readme_links(root: Path) -> list[ReleaseFinding]:
+    readme = root / "README.md"
+    if not readme.is_file():
+        return []
+    try:
+        text = readme.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    findings: list[ReleaseFinding] = []
+    for raw_target in _MARKDOWN_LINK_RE.findall(text):
+        target = raw_target.strip().strip("<>").split("#", 1)[0]
+        if not target or target.startswith(("http://", "https://", "mailto:", "#")):
+            continue
+        path = (root / target).resolve()
+        try:
+            path.relative_to(root)
+        except ValueError:
+            findings.append(
+                ReleaseFinding(
+                    severity="error",
+                    code="README_LINK_OUTSIDE_SOURCE",
+                    message=f"README link escapes release source: {raw_target}",
+                    path=raw_target,
+                )
+            )
+            continue
+        if not path.exists():
+            findings.append(
+                ReleaseFinding(
+                    severity="error",
+                    code="README_LINK_MISSING",
+                    message=f"README local link does not exist: {raw_target}",
+                    path=raw_target,
+                )
+            )
+    return findings
 
 
 def _scan_file_for_leaked_paths(path: Path) -> re.Match[str] | None:
