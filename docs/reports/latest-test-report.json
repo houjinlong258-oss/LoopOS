@@ -1,9 +1,9 @@
 {
   "schema_version": "1.1",
   "generated_by": "scripts/ci_report.py",
-  "target": "founding-preview",
-  "generated_at": "2026-06-21T10:56:56+00:00",
-  "git_commit": "facb24a9303fc4718e5820b8fd31fa4dfaf9a2f8",
+  "target": "founding-release",
+  "generated_at": "2026-06-21T13:34:51+00:00",
+  "git_commit": "5de1147ecfe1958fb3af944ebd301dffd508720c",
   "python": "3.13.2",
   "platform": "Windows-11-10.0.26200-SP0",
   "offline": true,
@@ -12,9 +12,15 @@
     "ruff": "python -m ruff check .",
     "mypy": "python -m mypy loopos tests"
   },
-  "tests_passed": 366,
+  "tests_passed": 379,
   "subtests_passed": 19,
   "tests_failed": 0,
   "ruff": "passed",
-  "mypy": "passed"
+  "mypy": "passed",
+  "pytest_exit_code": 0,
+  "pytest_output_tail": "........................................................................ [ 18%]\n............................................................................................................................. [ 51%]\n........................................................................ [ 70%]\n........................................................................ [ 89%]\n......................................                                   [100%]\n============================== warnings summary ===============================\ntests/test_eval_runner.py::EvalRunnerTests::test_load_and_run_tasks\ntests/test_eval_runner.py::EvalRunnerTests::test_load_and_run_tasks\ntests/test_golden_trace.py::GoldenTraceTests::test_demo_event_type_sequence\ntests/test_loop_engine.py::LoopEngineTests::test_success_path\ntests/test_policy_os.py::PolicyOSTests::test_loop_engine_blocks_policy_denied_terminal_instruction\n  D:\\LoopOS\\loopos\\core\\loop_engine.py:163: DeprecationWarning: loopos.core.loop_engine.LoopEngine is deprecated; use loopos.kernel.loop_engine.KernelLoopEngine. Will be removed in v0.2.\n    return cls(\n\ntests/test_integrations.py::IntegrationTests::test_langgraph_fallback_runs\n  D:\\LoopOS\\loopos\\core\\graph_loop.py:60: DeprecationWarning: loopos.core.loop_engine.LoopEngine is deprecated; use loopos.kernel.loop_engine.KernelLoopEngine. Will be removed in v0.2.\n    return LoopEngine().run(goal, max_steps=max_steps)\n\ntests/test_loop_engine.py::LoopEngineTests::test_max_steps_failure\n  D:\\LoopOS\\tests\\test_loop_engine.py:26: DeprecationWarning: loopos.core.loop_engine.LoopEngine is deprecated; use loopos.kernel.loop_engine.KernelLoopEngine. Will be removed in v0.2.\n    engine = LoopEngine(policy=NeverTerminatePolicy())\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n379 passed, 7 warnings, 19 subtests passed in 99.65s (0:01:39)",
+  "ruff_exit_code": 0,
+  "ruff_output_tail": "All checks passed!",
+  "mypy_exit_code": 0,
+  "mypy_output_tail": "Success: no issues found in 252 source files"
 }
