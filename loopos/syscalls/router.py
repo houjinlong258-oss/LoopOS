@@ -12,6 +12,7 @@ from loopos.execution.terminal import TerminalExecutor
 from loopos.policy_os.engine import PolicyEngine
 from loopos.policy_os.models import PolicyDecision
 from loopos.syscalls.registry import SyscallRegistry
+from loopos.syscalls.builtin import register_database_syscalls
 from loopos.syscalls.types import SyscallCall, SyscallResult, SyscallSpec
 
 
@@ -153,6 +154,7 @@ class SyscallRouter:
 def create_default_syscall_router(
     workspace: str | Path,
     *,
+    data_dir: str | Path | None = None,
     policy_engine: PolicyEngine | None = None,
     trace_store: Any | None = None,
     auto_approve_medium: bool = False,
@@ -219,6 +221,7 @@ def create_default_syscall_router(
     ]
     for spec, handler in specs:
         registry.register(spec, handler)
+    register_database_syscalls(registry, workspace=root, data_dir=data_dir)
     return router
 
 

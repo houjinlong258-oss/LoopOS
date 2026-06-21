@@ -32,6 +32,13 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertIn("TERM.EXEC", result.stdout)
 
+    def test_db_detect_reports_dangerous_sql(self) -> None:
+        result = self.run_cli("db", "detect", "--cmd", "DROP TABLE users", "--json")
+        self.assertEqual(result.returncode, 0)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["risk_level"], "critical")
+        self.assertTrue(payload["requires_backup"])
+
     def test_status_nonexistent(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             result = self.run_cli("status", "missing", "--data-dir", tmp)

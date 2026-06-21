@@ -8,6 +8,7 @@ from typing import Any
 from loopos.cli.commands import (
     ail_command as ail_command,
     config_command as config_command,
+    db_command as db_command,
     gateway_command as gateway_command,
     goal_command as goal_command,
     memory_command as memory_command,
@@ -203,6 +204,36 @@ if _HAS_TUI:
                 raw_goal,
                 option=option,
                 confirmed=confirmed,
+                json_output=json_output,
+            )
+        )
+
+    @app.command("db")
+    def _typer_db(
+        action: str = typer_mod.Argument("detect"),
+        arg: str | None = typer_mod.Argument(None),
+        cmd: str | None = typer_mod.Option(None, "--cmd"),
+        target: str | None = typer_mod.Option(None, "--target"),
+        source: str | None = typer_mod.Option(None, "--source"),
+        backup_id: str | None = typer_mod.Option(None, "--backup-id"),
+        migration: str | None = typer_mod.Option(None, "--migration"),
+        data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+        workspace: str = typer_mod.Option(".", "--workspace"),
+        yes: bool = typer_mod.Option(False, "--yes"),
+        json_output: bool = typer_mod.Option(False, "--json"),
+    ) -> None:
+        raise typer_mod.Exit(
+            db_command(
+                action,
+                arg,
+                cmd=cmd,
+                target=target,
+                source=source,
+                backup_id=backup_id,
+                migration=migration,
+                data_dir=data_dir,
+                workspace=workspace,
+                yes=yes,
                 json_output=json_output,
             )
         )
@@ -405,6 +436,5 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
 
 

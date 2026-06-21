@@ -8,6 +8,7 @@ import sys
 from loopos.cli.commands import (
     ail_command,
     config_command,
+    db_command,
     gateway_command,
     goal_command,
     history_command,
@@ -99,6 +100,19 @@ def fallback_main(argv: list[str] | None = None) -> int:
     goal_parser.add_argument("--option")
     goal_parser.add_argument("--confirm", action="store_true")
     goal_parser.add_argument("--json", dest="json_output", action="store_true")
+
+    db_parser = sub.add_parser("db")
+    db_parser.add_argument("action", nargs="?", default="detect")
+    db_parser.add_argument("arg", nargs="?")
+    db_parser.add_argument("--cmd")
+    db_parser.add_argument("--target")
+    db_parser.add_argument("--source")
+    db_parser.add_argument("--backup-id")
+    db_parser.add_argument("--migration")
+    db_parser.add_argument("--data-dir", default=".loopos")
+    db_parser.add_argument("--workspace", default=".")
+    db_parser.add_argument("--yes", action="store_true")
+    db_parser.add_argument("--json", dest="json_output", action="store_true")
 
     tasks_parser = sub.add_parser("tasks")
     tasks_parser.add_argument("action", nargs="?", default="list")
@@ -256,6 +270,20 @@ def fallback_main(argv: list[str] | None = None) -> int:
             args.raw_goal,
             option=args.option,
             confirmed=args.confirm,
+            json_output=args.json_output,
+        )
+    if args.command == "db":
+        return db_command(
+            args.action,
+            args.arg,
+            cmd=args.cmd,
+            target=args.target,
+            source=args.source,
+            backup_id=args.backup_id,
+            migration=args.migration,
+            data_dir=args.data_dir,
+            workspace=args.workspace,
+            yes=args.yes,
             json_output=args.json_output,
         )
     if args.command == "tasks":

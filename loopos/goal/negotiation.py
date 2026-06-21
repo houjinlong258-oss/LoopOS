@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from loopos.goal.models import GoalAnalysis, GoalOption, GoalProposal, GoalSpec
+from loopos.data_guard.detector import detect_data_operation
 
 _VAGUE_PHRASES = (
     "优化这个项目",
@@ -51,6 +52,9 @@ class GoalNegotiator:
         concrete = any(marker in lowered for marker in _CONCRETE_MARKERS)
         has_acceptance = any(marker in lowered for marker in _ACCEPTANCE_MARKERS)
         risk_factors = [marker for marker in _RISK_MARKERS if marker in lowered]
+        data_detection = detect_data_operation(value)
+        if data_detection.detected:
+            risk_factors.extend(data_detection.reason_codes)
         score = 0.0
         missing: list[str] = []
         reasons: list[str] = []
@@ -72,6 +76,10 @@ class GoalNegotiator:
         if risk_factors and not has_acceptance:
             score += 0.1
             reasons.append("goal.risk_needs_confirmation")
+        if data_detection.requires_backup:
+            score = max(score, 0.7)
+            reasons.append("goal.data_guard_required")
+            missing.extend(["backup_plan", "rollback_plan"])
         score = min(1.0, score)
         level = "high" if score >= 0.65 else "medium" if score >= 0.35 else "low"
         if level == "low":
@@ -90,6 +98,44 @@ class GoalNegotiator:
 
     def propose(self, raw_goal: str) -> GoalProposal:
         analysis = self.analyze(raw_goal)
+        if detect_data_operation(raw_goal).detected:
+            options = [
+                GoalOption(
+                    id=1,
+                    title="只读数据库风险审计",
+                    objective="只生成备份、迁移和回滚计划，不执行数据库写操作",
+                    scope=["database metadata and migration files"],
+                    non_goals=["database writes"],
+                    deliverables=["risk report", "backup plan", "rollback checklist"],
+                    acceptance_criteria=["no database connection opened", "rollback plan exists"],
+                    risk="low",
+                    estimated_steps=3,
+                ),
+                GoalOption(
+                    id=2,
+                    title="备份、Shadow Run 与验证",
+                    objective="验证本地备份，在隔离 mock shadow 中生成迁移和验证报告",
+                    scope=["workspace-local samples and migration plans"],
+                    non_goals=["production migration execution"],
+                    deliverables=["verified backup", "shadow plan", "validation report"],
+                    acceptance_criteria=_data_acceptance_criteria(),
+                    risk="high",
+                    estimated_steps=7,
+                    recommended=True,
+                ),
+                GoalOption(
+                    id=3,
+                    title="手工执行清单",
+                    objective="仅生成供用户手工执行和确认的命令与检查清单",
+                    scope=["manual migration guidance"],
+                    non_goals=["agent-executed database writes"],
+                    deliverables=["manual checklist"],
+                    acceptance_criteria=["human approval recorded", "rollback plan exists"],
+                    risk="medium",
+                    estimated_steps=4,
+                ),
+            ]
+            return GoalProposal(analysis=analysis, options=options, recommended_option_id=2)
         options = [
             self._option(1, "架构审计优先", "审计当前架构、依赖和风险并给出任务清单", 4),
             self._option(2, "MVP 快速落地", "完成最小可运行、可测试的用户价值增量", 5, recommended=True),
@@ -132,6 +178,8 @@ class GoalNegotiator:
             origin = "manual" if manual_objective else "confirmed" if confirmed else "direct"
             risk = "medium" if proposal.analysis.risk_factors else "low"
             estimated_steps = 3
+        if detect_data_operation(raw_goal).detected:
+            criteria = list(dict.fromkeys([*criteria, *_data_acceptance_criteria()]))
         return GoalSpec(
             raw_goal=raw_goal.strip(),
             objective=objective,
@@ -166,3 +214,13 @@ class GoalNegotiator:
             estimated_steps=estimated_steps,
             recommended=recommended,
         )
+
+
+def _data_acceptance_criteria() -> list[str]:
+    return [
+        "backup verified",
+        "shadow migration passed",
+        "validation passed",
+        "rollback plan exists",
+        "no sensitive data leaked to trace",
+    ]

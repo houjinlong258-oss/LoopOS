@@ -1,0 +1,31 @@
+id: sensitive-data
+name: Sensitive Data Context Policy
+version: 0.1.0
+priority: 995
+rules:
+  - id: sensitive.block.raw_context
+    scope: context.compile
+    priority: 995
+    severity: critical
+    conditions:
+      - field: runtime.raw_sensitive_data
+        operator: equals
+        value: true
+    actions:
+      - type: deny
+        reason_code: sensitive.raw_data_to_context_blocked
+        safety_level: L5
+        audit_required: true
+  - id: sensitive.block.raw_memory
+    scope: memory.write
+    priority: 995
+    severity: critical
+    conditions:
+      - field: content_sensitive
+        operator: equals
+        value: true
+    actions:
+      - type: deny
+        reason_code: sensitive.raw_data_to_memory_blocked
+        safety_level: L5
+        audit_required: true

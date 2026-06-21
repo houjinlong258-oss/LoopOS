@@ -1,0 +1,75 @@
+id: data-safety
+name: Data Safety Policy
+version: 0.1.0
+priority: 990
+rules:
+  - id: data.block.production_execution
+    scope: data.migrate
+    priority: 1000
+    severity: critical
+    conditions: []
+    actions:
+      - type: deny
+        reason_code: data.real_database_execution_disabled
+        safety_level: L5
+        audit_required: true
+  - id: data.block.production_restore
+    scope: data.restore
+    priority: 1000
+    severity: critical
+    conditions: []
+    actions:
+      - type: deny
+        reason_code: data.real_database_restore_disabled
+        safety_level: L5
+        audit_required: true
+  - id: data.approve.local_backup
+    scope: data.backup
+    priority: 800
+    severity: medium
+    conditions:
+      - field: risk_level
+        operator: equals
+        value: medium
+    actions:
+      - type: require_approval
+        reason_code: data.local_backup_requires_approval
+        safety_level: L2
+        audit_required: true
+  - id: data.allow.read_only
+    scope: data.inspect
+    priority: 100
+    severity: low
+    conditions: []
+    actions:
+      - type: allow
+        reason_code: data.read_only_allowed
+        safety_level: L0
+  - id: data.allow.validation
+    scope: data.validate
+    priority: 100
+    severity: low
+    conditions: []
+    actions:
+      - type: allow
+        reason_code: data.validation_allowed
+        safety_level: L1
+  - id: data.approve.shadow_plan
+    scope: data.shadow
+    priority: 800
+    severity: medium
+    conditions: []
+    actions:
+      - type: require_approval
+        reason_code: data.shadow_plan_requires_approval
+        safety_level: L2
+        audit_required: true
+  - id: data.allow.redacted_read
+    scope: data.read
+    priority: 100
+    severity: low
+    conditions: []
+    actions:
+      - type: allow
+        reason_code: data.redacted_read_allowed
+        safety_level: L0

@@ -2,6 +2,7 @@
 
 from loopos.cli.commands.ail import ail_command
 from loopos.cli.commands.config import config_command
+from loopos.cli.commands.data_guard import db_command
 from loopos.cli.commands.gateway import gateway_command
 from loopos.cli.commands.goal import goal_command, parse_goal_options
 from loopos.cli.commands.memory import memory_command, profile_command, skills_command
@@ -25,6 +26,7 @@ from loopos.cli.commands.worktrees import worktrees_command
 __all__ = [
     "ail_command",
     "config_command",
+    "db_command",
     "gateway_command",
     "goal_command",
     "memory_command",

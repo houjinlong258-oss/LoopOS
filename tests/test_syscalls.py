@@ -17,13 +17,16 @@ class SyscallRouterTests(unittest.TestCase):
             **kwargs,
         )
 
-    def test_default_registry_contains_five_syscalls(self) -> None:
+    def test_default_registry_contains_core_and_database_syscalls(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             router = create_default_syscall_router(tmp)
+            names = [spec.name for spec in router.registry.list()]
             self.assertEqual(
-                [spec.name for spec in router.registry.list()],
+                names[:5],
                 ["terminal.exec", "file.read", "file.write", "git.status", "git.diff"],
             )
+            self.assertIn("database.backup", names)
+            self.assertIn("database.run_migration", names)
 
     def test_file_write_requires_approval(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

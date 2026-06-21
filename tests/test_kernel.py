@@ -51,7 +51,10 @@ class KernelProcessTests(unittest.TestCase):
             runtime = KernelBoot().start(
                 KernelConfig(workspace=tmp, data_dir=str(Path(tmp) / ".loopos"))
             )
-            self.assertEqual(len(runtime.syscall_router.registry.list()), 5)
+            names = [spec.name for spec in runtime.syscall_router.registry.list()]
+            self.assertEqual(len(names), 14)
+            self.assertIn("database.backup", names)
+            self.assertIn("database.run_migration", names)
             self.assertTrue((Path(tmp) / ".loopos" / "runs").is_dir())
 
     def test_boot_rejects_missing_workspace(self) -> None:
