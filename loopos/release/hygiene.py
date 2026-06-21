@@ -76,6 +76,11 @@ LOCAL_ONLY_DIRS: tuple[str, ...] = (
     ".agents",
     ".codex",
     "zep-main",
+    # Build outputs are gitignored and never shipped; they may live inside
+    # the source tree during local packaging, so strict-source scanning
+    # must treat them as local state rather than as leaked release content.
+    "dist",
+    "build",
 )
 
 LOCAL_ONLY_DIR_GLOBS: tuple[str, ...] = (
@@ -143,9 +148,7 @@ REQUIRED_TOP_LEVEL_FILES: tuple[str, ...] = (
 MAX_ARTIFACT_SIZE_BYTES = 20 * 1024 * 1024
 _MARKDOWN_LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
 
-LEAKED_PATH_RE = re.compile(
-    r"(?:[A-Za-z]:\\\\?LoopOS|/home/[^/\s]+/LoopOS|/Users/[^/\s]+/LoopOS)"
-)
+LEAKED_PATH_RE = re.compile(r"(?:[A-Za-z]:\\\\?LoopOS|/home/[^/\s]+/LoopOS|/Users/[^/\s]+/LoopOS)")
 
 
 @dataclass(frozen=True)
@@ -204,14 +207,8 @@ def _iter_source_files(
 
     for dirpath, dirnames, filenames in os.walk(root):
         if ignore_local_only:
-            dirnames[:] = sorted(
-                name
-                for name in dirnames
-                if not _is_local_only_dir_name(name)
-            )
-            filenames = [
-                name for name in filenames if name not in LOCAL_ONLY_FILES
-            ]
+            dirnames[:] = sorted(name for name in dirnames if not _is_local_only_dir_name(name))
+            filenames = [name for name in filenames if name not in LOCAL_ONLY_FILES]
         else:
             dirnames[:] = sorted(dirnames)
         rel_dir = Path(dirpath).relative_to(root)
@@ -274,17 +271,14 @@ def check_release_clean(
 
         if blocked_parent:
             already = any(
-                f.code == "BLOCKED_DIR" and f.path.endswith(blocked_parent)
-                for f in report.errors
+                f.code == "BLOCKED_DIR" and f.path.endswith(blocked_parent) for f in report.errors
             )
             if not already:
                 report.errors.append(
                     ReleaseFinding(
                         severity="error",
                         code="BLOCKED_DIR",
-                        message=(
-                            f"blocked directory leaked into release: {blocked_parent}"
-                        ),
+                        message=(f"blocked directory leaked into release: {blocked_parent}"),
                         path=str(rel.parent),
                     )
                 )
@@ -326,10 +320,7 @@ def check_release_clean(
                 ReleaseFinding(
                     severity="warning",
                     code="LEAKED_DEV_PATH",
-                    message=(
-                        f"absolute development path '{leaked.group(0)}' "
-                        "found in source file"
-                    ),
+                    message=(f"absolute development path '{leaked.group(0)}' found in source file"),
                     path=str(rel),
                 )
             )
@@ -340,17 +331,14 @@ def check_release_clean(
                 continue
             if child.name in BLOCKED_DIRS or _matches_any_glob(child.name, BLOCKED_DIR_GLOBS):
                 already = any(
-                    f.code == "BLOCKED_DIR" and f.path == child.name
-                    for f in report.errors
+                    f.code == "BLOCKED_DIR" and f.path == child.name for f in report.errors
                 )
                 if not already:
                     report.errors.append(
                         ReleaseFinding(
                             severity="error",
                             code="BLOCKED_DIR",
-                            message=(
-                                f"blocked directory leaked into release: {child.name}"
-                            ),
+                            message=(f"blocked directory leaked into release: {child.name}"),
                             path=child.name,
                         )
                     )

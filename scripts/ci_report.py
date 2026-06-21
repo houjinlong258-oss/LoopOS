@@ -21,6 +21,30 @@ from typing import Any
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
+def _sanitize_local_paths(text: str) -> str:
+    """Strip the local repository root from CI output tails.
+
+    The release hygiene scanner flags absolute dev paths (the local repo
+    root echoed by pytest/mypy tracbacks) inside release sources.  The CI
+    report itself ships inside the source tree, so any such path in the
+    output tail would trip the gate.  Rewrite the repo root to a stable
+    placeholder so the report stays portable without losing context.
+    """
+
+    if not text:
+        return text
+    candidate = str(_REPO_ROOT)
+    replacements = {candidate, candidate.replace("\\", "/")}
+    # Also normalize the drive-letter form used by Windows tracbacks.
+    drive_form = candidate.replace("/", "\\")
+    replacements |= {drive_form, drive_form.replace("\\", "\\\\")}
+    sanitized = text
+    for token in sorted(replacements, key=len, reverse=True):
+        if token:
+            sanitized = sanitized.replace(token, "<repo>")
+    return sanitized
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Generate LoopOS CI report JSON.")
     parser.add_argument("--output", default="docs/reports/latest-test-report.json")
@@ -59,9 +83,9 @@ def main(argv: list[str] | None = None) -> int:
 
     exit_code = 0
     if args.run:
-        pytest_result = _run_command(args.pytest_command, timeout=180)
+        pytest_result = _run_command(args.pytest_command, timeout=240)
         payload["pytest_exit_code"] = pytest_result["exit_code"]
-        payload["pytest_output_tail"] = pytest_result["tail"]
+        payload["pytest_output_tail"] = _sanitize_local_paths(pytest_result["tail"])
         counts = _parse_pytest_counts(pytest_result["stdout"] + "\n" + pytest_result["stderr"])
         payload.update(counts)
         if pytest_result["exit_code"] != 0:
@@ -69,14 +93,14 @@ def main(argv: list[str] | None = None) -> int:
 
         ruff_result = _run_command(args.ruff_command, timeout=90)
         payload["ruff_exit_code"] = ruff_result["exit_code"]
-        payload["ruff_output_tail"] = ruff_result["tail"]
+        payload["ruff_output_tail"] = _sanitize_local_paths(ruff_result["tail"])
         payload["ruff"] = "passed" if ruff_result["exit_code"] == 0 else "failed"
         if ruff_result["exit_code"] != 0:
             exit_code = 1
 
         mypy_result = _run_command(args.mypy_command, timeout=180)
         payload["mypy_exit_code"] = mypy_result["exit_code"]
-        payload["mypy_output_tail"] = mypy_result["tail"]
+        payload["mypy_output_tail"] = _sanitize_local_paths(mypy_result["tail"])
         payload["mypy"] = "passed" if mypy_result["exit_code"] == 0 else "failed"
         if mypy_result["exit_code"] != 0:
             exit_code = 1
