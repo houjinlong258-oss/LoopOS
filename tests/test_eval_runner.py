@@ -11,7 +11,8 @@ class EvalRunnerTests(unittest.TestCase):
         runner = EvalRunner()
         tasks = runner.load_tasks("benchmarks/tasks")
         self.assertGreaterEqual(len(tasks), 2)
-        report = runner.run_all(tasks)
+        with self.assertWarns(DeprecationWarning):
+            report = runner.run_all(tasks)
         self.assertEqual(report["metrics"]["success_rate"], 1.0)
         self.assertGreaterEqual(report["metrics"]["command_count"], 2)
 
