@@ -11,6 +11,15 @@ from loopos.cli.commands.memory import memory_command, profile_command, skills_c
 from loopos.cli.commands.models import models_command, providers_command
 from loopos.cli.commands.policy import policy_command
 from loopos.cli.commands.review import review_command
+from loopos.cli.commands.runtime import (
+    history_command,
+    replay_command,
+    resume_command,
+    run_command,
+    status_command,
+    tools_command,
+    trace_command,
+)
 from loopos.cli.commands.tasks import tasks_command
 from loopos.cli.commands.triggers import triggers_command
 from loopos.cli.commands.worktrees import worktrees_command
@@ -33,6 +42,13 @@ class CliModularizationTests(unittest.TestCase):
         self.assertIs(cli_app.policy_command, policy_command)
         self.assertIs(cli_app.ail_command, ail_command)
         self.assertIs(cli_app.config_command, config_command)
+        self.assertIs(cli_app.run_command, run_command)
+        self.assertIs(cli_app.resume_command, resume_command)
+        self.assertIs(cli_app.status_command, status_command)
+        self.assertIs(cli_app.history_command, history_command)
+        self.assertIs(cli_app.trace_command, trace_command)
+        self.assertIs(cli_app.replay_command, replay_command)
+        self.assertIs(cli_app.tools_command, tools_command)
         self.assertIs(getattr(cli_app, "_parse_goal_options"), parse_goal_options)
 
     def test_shared_data_paths_preserve_layout(self) -> None:
