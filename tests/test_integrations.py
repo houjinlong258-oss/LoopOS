@@ -22,7 +22,8 @@ class IntegrationTests(unittest.TestCase):
             self.assertEqual(read.data["content"], "hello")
 
     def test_langgraph_fallback_runs(self) -> None:
-        state = LangGraphAdapter().run_graph("demo", max_steps=3)
+        with self.assertWarns(DeprecationWarning):
+            state = LangGraphAdapter().run_graph("demo", max_steps=3)
         self.assertEqual(state.status, "succeeded")
 
     def test_memory_adapter_shapes(self) -> None:

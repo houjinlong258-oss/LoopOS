@@ -9,10 +9,17 @@ from loopos.kernel.errors import (
     KernelError,
     SupervisorHaltError,
 )
+from loopos.kernel.evaluation_source import EvaluationSource
 from loopos.kernel.invariants import KernelInvariantChecker, KernelInvariantViolation
 from loopos.kernel.lifecycle import KernelLifecycle
 from loopos.kernel.loop_engine import KernelLoopEngine
 from loopos.kernel.models import PendingApproval, RunRecord, RunSpec
+from loopos.kernel.progress_accumulator import (
+    ProgressAccumulatorSnapshot,
+    load_progress_accumulator,
+    save_progress_accumulator,
+    update_progress_accumulator,
+)
 from loopos.kernel.replay import ReplayEngine, ReplayResult
 from loopos.kernel.run_manager import RunManager
 from loopos.kernel.scheduler import LoopScheduler, ScheduleDecision, SchedulerInput
@@ -25,6 +32,7 @@ from loopos.kernel.transition import TransitionEngine
 __all__ = [
     "CheckpointError",
     "CheckpointStore",
+    "EvaluationSource",
     "InvariantViolationError",
     "InvalidTransitionError",
     "KernelBoot",
@@ -42,6 +50,7 @@ __all__ = [
     "KernelStateMachine",
     "LoopScheduler",
     "PendingApproval",
+    "ProgressAccumulatorSnapshot",
     "ReplayEngine",
     "ReplayResult",
     "RunManager",
@@ -56,4 +65,7 @@ __all__ = [
     "TransitionEngine",
     "TraceEvent",
     "TraceStore",
+    "load_progress_accumulator",
+    "save_progress_accumulator",
+    "update_progress_accumulator",
 ]

@@ -1,0 +1,20 @@
+[
+  "transition",
+  "run",
+  "goal",
+  "instruction", "policy", "observation",
+  "instruction", "policy", "observation",
+  "instruction", "policy", "observation",
+  "instruction", "policy", "observation",
+  "instruction", "policy", "policy", "syscall", "observation",
+  "evaluation", "progress", "decision", "decision", "transition",
+  "transition",
+  "instruction", "policy", "policy", "syscall", "observation",
+  "evaluation", "progress", "decision", "decision", "transition",
+  "instruction", "policy", "observation", "evaluation", "progress",
+  "decision", "decision", "transition",
+  "instruction", "policy", "observation", "evaluation", "progress",
+  "decision", "decision", "transition",
+  "instruction", "policy", "observation", "evaluation", "progress",
+  "decision", "decision", "transition", "halt"
+]

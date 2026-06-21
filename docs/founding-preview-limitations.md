@@ -32,6 +32,28 @@ Tests do not call real LLM providers, chat platforms, production databases, or r
 The terminal executor is permission-gated but is not a hardened OS/container sandbox. Database
 support is limited to explicit local SQLite demonstrations and governed plans.
 
+## Convergence Runtime Limitations
+
+LoopOS includes a typed `ConvergenceEngine` and a scheduler bridge, but earlier
+Founding Preview builds had several runtime convergence limitations:
+
+1. Convergence decisions were not evaluated after every meaningful runtime step.
+2. `EvaluationResult` could still be partially plan-hinted through `EVAL.APPLY`
+   instruction arguments.
+3. `ProgressDelta` was not fully backed by a persistent per-run accumulator.
+4. Some syscall failure paths could transition directly to halted states before
+   flowing through evaluation, progress, convergence, and scheduler arbitration.
+
+The Founding Release hardening closes these gaps with an observation-driven
+`EvaluationSource`, a per-run `ProgressAccumulatorSnapshot`, scheduler-mediated
+syscall failure transitions, and structured `convergence_to_scheduler` trace
+events after evaluated runtime steps. Compatibility hints remain accepted, but
+real policy, syscall, and observation evidence takes precedence.
+
+The deterministic Founding Release planner remains intentionally narrow. It can
+repair or replan only within an already compiled bounded plan; general autonomous
+plan synthesis and model-driven recovery are not part of v0.1.0.
+
 ## Current limitations
 
 No Web UI, automatic merge, hosted control plane, distributed scheduler, real vector database,

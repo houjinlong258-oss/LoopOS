@@ -33,6 +33,13 @@ class ConvergenceEngine:
                 reason_code="convergence.regression",
                 evidence=evaluation.evidence,
             )
+        if progress.repeated_failures > 2:
+            return LoopDecision(
+                action="halt_failure",
+                reason_code="convergence.repeated_failure_limit",
+                evidence=progress.evidence,
+                halt=HaltCondition(reached=True, reason_code="repeated_failure_limit"),
+            )
         if evaluation.failed and evaluation.repairable:
             return LoopDecision(action="repair", reason_code="convergence.repairable_failure")
         if evaluation.failed:
@@ -40,13 +47,6 @@ class ConvergenceEngine:
                 action="halt_failure",
                 reason_code="convergence.failure",
                 halt=HaltCondition(reached=True, reason_code="unrecoverable_failure"),
-            )
-        if progress.repeated_failures > 2:
-            return LoopDecision(
-                action="halt_failure",
-                reason_code="convergence.repeated_failure_limit",
-                evidence=progress.evidence,
-                halt=HaltCondition(reached=True, reason_code="repeated_failure_limit"),
             )
         if progress.repeated_actions > 1 or progress.no_progress_count > 1:
             return LoopDecision(

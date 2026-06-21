@@ -35,7 +35,7 @@ class DeterministicIntentCompiler:
                     "medium",
                     True,
                 ),
-                ("EVAL.APPLY", {"goal_satisfied": True}, "evaluate_result", "low", False),
+                ("EVAL.APPLY", {"acceptance_passed": True}, "evaluate_result", "low", False),
                 (
                     "PROGRESS.MEASURE",
                     {"previous_score": 0.75, "current_score": 1.0},
@@ -56,7 +56,7 @@ class DeterministicIntentCompiler:
                     False,
                 ),
                 ("TERM.EXEC", {"cmd": "echo hello", "cwd": "."}, "demo_echo", "medium", True),
-                ("EVAL.APPLY", {"goal_satisfied": True}, "evaluate_result", "low", False),
+                ("EVAL.APPLY", {"acceptance_passed": True}, "evaluate_result", "low", False),
                 (
                     "PROGRESS.MEASURE",
                     {"previous_score": 0.5, "current_score": 1.0},

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Protocol
 
 from loopos.agents.intent_compiler import DeterministicIntentCompiler
 from loopos.agents.skill_extractor import SkillExtractor
@@ -10,8 +10,10 @@ from loopos.ail.models import AILInstruction
 from loopos.context import ContextCompiler
 from loopos.convergence import ConvergenceEngine, EvaluationResult, LoopDecision, ProgressDelta
 from loopos.kernel.boot import KernelRuntime
+from loopos.kernel.evaluation_source import EvaluationSource
 from loopos.kernel.models import KernelPhase, KernelRunStatus, PendingApproval, RunRecord, RunSpec
-from loopos.kernel.scheduler import LoopScheduler, SchedulerInput
+from loopos.kernel.progress_accumulator import update_progress_accumulator
+from loopos.kernel.scheduler import LoopScheduler, ScheduleDecision, SchedulerInput
 from loopos.kernel.state_machine import KernelStateMachine
 from loopos.kernel.trace import TraceKind
 from loopos.kernel.transition import TransitionEngine
@@ -36,12 +38,16 @@ _SYSCALLS = {
 }
 
 
+class IntentCompiler(Protocol):
+    def compile(self, run: RunRecord) -> list[AILInstruction]: ...
+
+
 class KernelLoopEngine:
     def __init__(
         self,
         runtime: KernelRuntime,
         *,
-        intent_compiler: DeterministicIntentCompiler | None = None,
+        intent_compiler: IntentCompiler | None = None,
         scheduler: LoopScheduler | None = None,
         memory_repository: MemoryRepository | None = None,
     ) -> None:
@@ -53,6 +59,7 @@ class KernelLoopEngine:
         self.memory_repository = memory_repository
         self.context_compiler = ContextCompiler(policy_engine=runtime.policy_engine)
         self.convergence = ConvergenceEngine()
+        self.evaluation_source = EvaluationSource()
         if memory_repository is not None:
             self.runtime.trace_store.indexer = memory_repository.index.upsert_trace_event
 
@@ -131,7 +138,21 @@ class KernelLoopEngine:
                 step=instruction.step,
             )
             if not policy.allowed and not policy.requires_approval:
-                self._transition(run, "blocked", "HALTED", reason="instruction policy denied")
+                run.step = instruction.step
+                evaluation = self.evaluation_source.evaluate(
+                    run=run,
+                    instruction=instruction,
+                    policy_decision=policy,
+                    hints=instruction.args,
+                )
+                _, decision, _ = self._run_convergence_scheduler_handoff(
+                    run,
+                    instruction=instruction,
+                    evaluation=evaluation,
+                    current_score=run.progress_score,
+                    source="instruction_policy",
+                )
+                self._apply_scheduler_decision(run, decision)
                 self.runtime.run_manager.save(run)
                 return run
 
@@ -171,12 +192,22 @@ class KernelLoopEngine:
                         risk="high" if result.risk == "high" else "medium",
                     )
                     run.metadata["cursor"] = cursor
-                    self._transition(run, "waiting_approval", "WAITING_APPROVAL")
-                    self.runtime.run_manager.save(run)
-                    return run
-                if not result.success:
-                    status = "blocked" if result.risk == "blocked" else "failed"
-                    self._transition(run, status, "HALTED", reason=result.error or "syscall failed")  # type: ignore[arg-type]
+                    run.step = instruction.step
+                    evaluation = self.evaluation_source.evaluate(
+                        run=run,
+                        instruction=instruction,
+                        syscall_result=result,
+                        hints=instruction.args,
+                    )
+                    _, decision, _ = self._run_convergence_scheduler_handoff(
+                        run,
+                        instruction=instruction,
+                        evaluation=evaluation,
+                        current_score=run.progress_score,
+                        source="approval_required",
+                        approval_required=True,
+                    )
+                    self._apply_scheduler_decision(run, decision)
                     self.runtime.run_manager.save(run)
                     return run
             elif instruction.op == "CTX.COMPILE":
@@ -200,69 +231,123 @@ class KernelLoopEngine:
             run.step = instruction.step
             cursor += 1
             run.metadata["cursor"] = cursor
-            run.progress_score = min(1.0, cursor / len(plan))
+            planned_score = min(1.0, cursor / len(plan))
+            if result is None:
+                run.progress_score = max(run.progress_score, planned_score)
+            elif result.success:
+                evidence_score = result.output.get("progress_score")
+                run.progress_score = (
+                    max(0.0, min(1.0, float(evidence_score)))
+                    if isinstance(evidence_score, int | float) and not isinstance(evidence_score, bool)
+                    else max(run.progress_score, planned_score)
+                )
+
+            if result is not None:
+                evaluation = self.evaluation_source.evaluate(
+                    run=run,
+                    instruction=instruction,
+                    syscall_result=result,
+                    hints=instruction.args,
+                )
+                _, decision, _ = self._run_convergence_scheduler_handoff(
+                    run,
+                    instruction=instruction,
+                    evaluation=evaluation,
+                    current_score=run.progress_score,
+                    source="syscall_result",
+                    failure_fingerprint=result.error,
+                )
+                terminal = self._apply_scheduler_decision(run, decision)
+                if terminal:
+                    self.runtime.run_manager.save(run)
+                    return run
+                self._resume_after_nonterminal_decision(run, decision)
+                self.runtime.run_manager.save(run)
+                continue
+
             if instruction.op == "EVAL.APPLY":
-                self._trace(
-                    "evaluation",
-                    run,
-                    EvaluationResult(
-                        goal_satisfied=bool(instruction.args.get("goal_satisfied", False)),
-                        score=run.progress_score,
-                        reason_codes=["evaluation.goal_checked"],
-                    ).model_dump(mode="json"),
-                    instruction_id=instruction.id,
-                    step=instruction.step,
+                if instruction.args.get("acceptance_passed") is True:
+                    run.metadata["acceptance_passed"] = True
+                evaluation = self.evaluation_source.evaluate(
+                    run=run,
+                    instruction=instruction,
+                    hints=instruction.args,
                 )
+                _, decision, _ = self._run_convergence_scheduler_handoff(
+                    run,
+                    instruction=instruction,
+                    evaluation=evaluation,
+                    current_score=run.progress_score,
+                    source="evaluation_apply",
+                )
+                terminal = self._apply_scheduler_decision(run, decision)
+                if terminal:
+                    self.runtime.run_manager.save(run)
+                    return run
+                self._resume_after_nonterminal_decision(run, decision)
+
             if instruction.op == "PROGRESS.MEASURE":
-                previous = float(instruction.args.get("previous_score", 0.0))
-                current = float(instruction.args.get("current_score", run.progress_score))
-                self._trace(
-                    "progress",
-                    run,
-                    ProgressDelta(
-                        previous_score=previous,
-                        current_score=current,
-                        delta=current - previous,
-                    ).model_dump(mode="json"),
-                    instruction_id=instruction.id,
-                    step=instruction.step,
+                current_hint = instruction.args.get("current_score", run.progress_score)
+                if isinstance(current_hint, int | float) and not isinstance(current_hint, bool):
+                    run.progress_score = max(0.0, min(1.0, float(current_hint)))
+                latest = run.metadata.get("latest_evaluation")
+                evaluation = (
+                    EvaluationResult.model_validate(latest)
+                    if isinstance(latest, dict)
+                    else self.evaluation_source.evaluate(
+                        run=run,
+                        instruction=instruction,
+                        hints=instruction.args,
+                    )
                 )
+                _, decision, _ = self._run_convergence_scheduler_handoff(
+                    run,
+                    instruction=instruction,
+                    evaluation=evaluation,
+                    current_score=run.progress_score,
+                    source="progress_measure",
+                )
+                terminal = self._apply_scheduler_decision(run, decision)
+                if terminal:
+                    self.runtime.run_manager.save(run)
+                    return run
+                self._resume_after_nonterminal_decision(run, decision)
+
             if instruction.op == "LOOP.HALT":
-                convergence = self.convergence.decide(
-                    EvaluationResult(
-                        goal_satisfied=True,
-                        score=run.progress_score,
-                        reason_codes=["evaluation.goal_satisfied"],
-                    ),
-                    ProgressDelta(
-                        previous_score=max(0.0, run.progress_score - 0.1),
-                        current_score=run.progress_score,
-                        delta=0.1,
-                    ),
+                latest_payload = run.metadata.get("latest_evaluation")
+                latest = (
+                    EvaluationResult.model_validate(latest_payload)
+                    if isinstance(latest_payload, dict)
+                    else None
                 )
-                self._trace(
-                    "decision",
+                if latest is not None and (latest.failed or latest.blocked):
+                    evaluation = latest.model_copy(update={"repairable": False})
+                else:
+                    accepted = run.metadata.get("acceptance_passed") is True
+                    evaluation = self.evaluation_source.evaluate(
+                        run=run,
+                        instruction=instruction,
+                        hints={
+                            "goal_satisfied": accepted,
+                            "failed": not accepted,
+                            "score": run.progress_score,
+                        },
+                    )
+                    if not accepted:
+                        evaluation = evaluation.model_copy(
+                            update={
+                                "failure_type": "acceptance_not_met",
+                                "reason_codes": ["acceptance.not_met"],
+                            }
+                        )
+                convergence, decision, _ = self._run_convergence_scheduler_handoff(
                     run,
-                    convergence.model_dump(mode="json"),
-                    instruction_id=instruction.id,
-                    step=instruction.step,
+                    instruction=instruction,
+                    evaluation=evaluation,
+                    current_score=run.progress_score,
+                    source="loop_halt",
                 )
-                scheduler_input = self._scheduler_input_from_convergence(run, convergence)
-                self._trace(
-                    "decision",
-                    run,
-                    {
-                        "source": "convergence_to_scheduler",
-                        "convergence_action": convergence.action,
-                        "convergence_reason_code": convergence.reason_code,
-                        "scheduler_input": scheduler_input.model_dump(mode="json"),
-                    },
-                    instruction_id=instruction.id,
-                    step=instruction.step,
-                )
-                decision = self.scheduler.decide(scheduler_input)
-                self.state_machine.apply_schedule(run, decision)
-                self._trace_transition(run, decision.reason_code)
+                self._apply_scheduler_decision(run, decision)
                 self._trace(
                     "halt",
                     run,
@@ -275,6 +360,94 @@ class KernelLoopEngine:
                 return run
             self.runtime.run_manager.save(run)
         return run
+
+    def _run_convergence_scheduler_handoff(
+        self,
+        run: RunRecord,
+        *,
+        instruction: AILInstruction,
+        evaluation: EvaluationResult,
+        current_score: float,
+        source: str,
+        approval_required: bool = False,
+        failure_fingerprint: str | None = None,
+    ) -> tuple[LoopDecision, ScheduleDecision, ProgressDelta]:
+        _, progress = update_progress_accumulator(
+            run=run,
+            evaluation=evaluation,
+            instruction=instruction,
+            current_score=current_score,
+            failure_fingerprint=failure_fingerprint,
+        )
+        run.metadata["latest_evaluation"] = evaluation.model_dump(mode="json")
+        run.metadata["latest_progress"] = progress.model_dump(mode="json")
+        self._trace(
+            "evaluation",
+            run,
+            evaluation.model_dump(mode="json"),
+            instruction_id=instruction.id,
+            step=instruction.step,
+        )
+        self._trace(
+            "progress",
+            run,
+            progress.model_dump(mode="json"),
+            instruction_id=instruction.id,
+            step=instruction.step,
+        )
+        convergence = self.convergence.decide(
+            evaluation,
+            progress,
+            approval_required=approval_required,
+        )
+        self._trace(
+            "decision",
+            run,
+            convergence.model_dump(mode="json"),
+            instruction_id=instruction.id,
+            step=instruction.step,
+        )
+        scheduler_input = self._scheduler_input_from_convergence(run, convergence)
+        decision = self.scheduler.decide(scheduler_input)
+        self._trace(
+            "decision",
+            run,
+            {
+                "source": "convergence_to_scheduler",
+                "runtime_source": source,
+                "convergence_action": convergence.action,
+                "convergence_reason_code": convergence.reason_code,
+                "scheduler_input": scheduler_input.model_dump(mode="json"),
+                "scheduler_decision": decision.model_dump(mode="json"),
+                "evaluation": evaluation.model_dump(mode="json"),
+                "progress": progress.model_dump(mode="json"),
+            },
+            instruction_id=instruction.id,
+            step=instruction.step,
+        )
+        return convergence, decision, progress
+
+    def _apply_scheduler_decision(
+        self,
+        run: RunRecord,
+        decision: ScheduleDecision,
+    ) -> bool:
+        self.state_machine.apply_schedule(run, decision)
+        self._trace_transition(run, decision.reason_code)
+        return decision.action.startswith("halt_") or decision.action == "wait_approval"
+
+    def _resume_after_nonterminal_decision(
+        self,
+        run: RunRecord,
+        decision: ScheduleDecision,
+    ) -> None:
+        if decision.action in {"repair", "replan"}:
+            self._transition(
+                run,
+                "running",
+                "EXECUTING",
+                reason=f"{decision.reason_code}.resume",
+            )
 
     def _scheduler_input_from_convergence(
         self,
