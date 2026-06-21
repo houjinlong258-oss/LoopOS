@@ -31,6 +31,7 @@ ConditionOperator = Literal[
     "gte",
 ]
 PolicyRiskLevel = Literal["low", "medium", "high", "blocked"]
+SafetyLevel = Literal["L0", "L1", "L2", "L3", "L4", "L5"]
 
 
 def utc_now() -> datetime:
@@ -57,6 +58,9 @@ class PolicyAction(BaseModel):
     memory_filters: dict[str, Any] = Field(default_factory=dict)
     render_hints: dict[str, Any] = Field(default_factory=dict)
     audit_required: bool = False
+    safety_level: SafetyLevel | None = None
+    human_only: bool = False
+    rollback_required: bool = False
 
     @field_validator("reason_code")
     @classmethod
@@ -139,6 +143,9 @@ class PolicyDecision(BaseModel):
     render_hints: dict[str, Any] = Field(default_factory=dict)
     audit_required: bool = False
     matched_rules: list[str] = Field(default_factory=list)
+    safety_level: SafetyLevel = "L0"
+    human_only: bool = False
+    rollback_required: bool = False
 
     @property
     def renderer_hints(self) -> dict[str, Any]:

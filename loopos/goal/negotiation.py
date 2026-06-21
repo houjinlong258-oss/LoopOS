@@ -11,8 +11,11 @@ _VAGUE_PHRASES = (
     "帮我优化",
     "make it better",
     "improve this project",
+    "fix it",
+    "甯垜浼樺寲杩欎釜椤圭洰",
 )
 _CONCRETE_MARKERS = (
+    "demo",
     ".py",
     ".md",
     "pytest",
@@ -24,7 +27,10 @@ _CONCRETE_MARKERS = (
     "创建",
     "删除",
     "重命名",
+    "--dry-run",
 )
+_ACCEPTANCE_MARKERS = ("确认", "通过", "输出", "验收", "测试", "verify", "pass")
+_RISK_MARKERS = ("database", "数据库", "production", "生产", "删除", "支付", "secret")
 
 
 class GoalNegotiator:
@@ -34,77 +40,129 @@ class GoalNegotiator:
             return GoalAnalysis(
                 raw_goal=raw_goal,
                 ambiguous=True,
-                reasons=["goal.empty"],
-                missing_information=["objective", "success_criteria"],
+                level="high",
+                score=1.0,
+                missing_fields=["objective", "scope", "acceptance_criteria"],
+                requires_negotiation=True,
+                reason_codes=["goal.empty"],
             )
         lowered = value.lower()
         vague = any(phrase in lowered for phrase in _VAGUE_PHRASES)
         concrete = any(marker in lowered for marker in _CONCRETE_MARKERS)
-        ambiguous = vague and not concrete
+        has_acceptance = any(marker in lowered for marker in _ACCEPTANCE_MARKERS)
+        risk_factors = [marker for marker in _RISK_MARKERS if marker in lowered]
+        score = 0.0
+        missing: list[str] = []
+        reasons: list[str] = []
+        if vague:
+            score += 0.55
+            reasons.append("goal.vague_scope")
+            missing.append("scope")
+        if not concrete:
+            score += 0.2
+            reasons.append("goal.missing_deliverable")
+            missing.append("deliverables")
+        if not has_acceptance:
+            score += 0.15
+            reasons.append("goal.missing_acceptance_criteria")
+            missing.append("acceptance_criteria")
+        if len(value) < 12:
+            score += 0.1
+            reasons.append("goal.too_short")
+        if risk_factors and not has_acceptance:
+            score += 0.1
+            reasons.append("goal.risk_needs_confirmation")
+        score = min(1.0, score)
+        level = "high" if score >= 0.65 else "medium" if score >= 0.35 else "low"
+        if level == "low":
+            reasons = reasons or ["goal.concrete_enough"]
         return GoalAnalysis(
             raw_goal=value,
-            ambiguous=ambiguous,
-            reasons=["goal.vague_scope"] if ambiguous else ["goal.concrete_enough"],
-            missing_information=["priority", "success_criteria"] if ambiguous else [],
+            ambiguous=level == "high",
+            level=level,
+            score=score,
+            missing_fields=list(dict.fromkeys(missing)),
+            risk_factors=list(dict.fromkeys(risk_factors)),
+            requires_confirmation=level == "medium",
+            requires_negotiation=level == "high",
+            reason_codes=reasons,
         )
 
     def propose(self, raw_goal: str) -> GoalProposal:
         analysis = self.analyze(raw_goal)
         options = [
-            GoalOption(
-                id=1,
-                title="架构审计优先",
-                objective="审计当前架构、依赖和风险，输出按优先级排序的改进清单。",
-                success_criteria=["完成仓库审计", "列出风险", "给出可执行任务"],
-            ),
-            GoalOption(
-                id=2,
-                title="MVP 快速落地",
-                objective="选择最小用户价值路径并完成一个可运行、可测试的 MVP 增量。",
-                success_criteria=["核心流程可运行", "测试通过", "限制已记录"],
-            ),
-            GoalOption(
-                id=3,
-                title="Kernel 架构升级",
-                objective="优先加强 AIL、调度、Policy、Syscall、Trace 和 Replay 内核闭环。",
-                success_criteria=["内核路径结构化", "策略不可绕过", "运行可回放"],
-            ),
-            GoalOption(
-                id=4,
-                title="CLI UI 优先",
-                objective="优先改善终端命令、状态展示、诊断和交互审批体验。",
-                success_criteria=["核心命令完整", "输出一致", "JSON 模式稳定"],
-            ),
-            GoalOption(
-                id=5,
-                title="自定义 / 合并",
-                objective="由用户补充约束，或合并多个方案后形成最终目标。",
-                success_criteria=["约束已确认", "范围已确认", "验收标准已确认"],
-            ),
+            self._option(1, "架构审计优先", "审计当前架构、依赖和风险并给出任务清单", 4),
+            self._option(2, "MVP 快速落地", "完成最小可运行、可测试的用户价值增量", 5, recommended=True),
+            self._option(3, "Kernel 架构升级", "加强 AIL、调度、Policy、Syscall、Trace 和 Replay", 8),
+            self._option(4, "CLI UI 优先", "改进终端命令、诊断、状态展示和审批体验", 5),
+            self._option(5, "自定义或合并", "补充约束或合并多个方案形成最终目标", 3),
         ]
-        return GoalProposal(analysis=analysis, options=options)
+        return GoalProposal(analysis=analysis, options=options, recommended_option_id=2)
 
-    def finalize(self, raw_goal: str, *, option_ids: list[int] | None = None) -> GoalSpec:
+    def finalize(
+        self,
+        raw_goal: str,
+        *,
+        option_ids: list[int] | None = None,
+        confirmed: bool = False,
+        manual_objective: str | None = None,
+    ) -> GoalSpec:
         proposal = self.propose(raw_goal)
         selected = option_ids or []
-        if proposal.analysis.ambiguous and not selected:
+        if proposal.analysis.requires_negotiation and not selected and not manual_objective:
             raise ValueError("ambiguous goal requires a selected option")
+        if proposal.analysis.requires_confirmation and not confirmed and not selected:
+            raise ValueError("medium-ambiguity goal requires confirmation")
         if selected:
             options = [option for option in proposal.options if option.id in selected]
             if len(options) != len(set(selected)):
                 raise ValueError("unknown goal option")
             objective = " ".join(option.objective for option in options)
-            criteria = list(
-                dict.fromkeys(item for option in options for item in option.success_criteria)
-            )
+            criteria = list(dict.fromkeys(item for option in options for item in option.acceptance_criteria))
+            scope = list(dict.fromkeys(item for option in options for item in option.scope))
+            deliverables = list(dict.fromkeys(item for option in options for item in option.deliverables))
+            origin = "merged" if len(options) > 1 else "selected"
+            risk = max((option.risk for option in options), key=("low", "medium", "high", "critical").index)
+            estimated_steps = sum(option.estimated_steps for option in options)
         else:
-            objective = raw_goal.strip()
+            objective = manual_objective or raw_goal.strip()
             criteria = ["requested outcome observed", "policy constraints satisfied"]
+            scope = [objective]
+            deliverables = ["verified goal outcome"]
+            origin = "manual" if manual_objective else "confirmed" if confirmed else "direct"
+            risk = "medium" if proposal.analysis.risk_factors else "low"
+            estimated_steps = 3
         return GoalSpec(
             raw_goal=raw_goal.strip(),
             objective=objective,
+            origin=origin,
             selected_option_ids=selected,
-            success_criteria=criteria,
+            scope=scope,
+            deliverables=deliverables,
+            acceptance_criteria=criteria,
             constraints=["Policy OS enforced", "all external actions use syscalls"],
+            risk=risk,
+            estimated_steps=estimated_steps,
         )
 
+    @staticmethod
+    def _option(
+        option_id: int,
+        title: str,
+        objective: str,
+        estimated_steps: int,
+        *,
+        recommended: bool = False,
+    ) -> GoalOption:
+        return GoalOption(
+            id=option_id,
+            title=title,
+            objective=objective,
+            scope=[objective],
+            non_goals=["unrelated repository rewrites"],
+            deliverables=[objective],
+            acceptance_criteria=["requested outcome observed", "tests pass", "policy constraints satisfied"],
+            risk="medium" if option_id in {3, 5} else "low",
+            estimated_steps=estimated_steps,
+            recommended=recommended,
+        )

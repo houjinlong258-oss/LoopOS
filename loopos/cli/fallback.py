@@ -47,6 +47,7 @@ def fallback_main(argv: list[str] | None = None) -> int:
     run_parser.add_argument("--show-policy", action="store_true")
     run_parser.add_argument("--json", dest="json_output", action="store_true")
     run_parser.add_argument("--goal-option")
+    run_parser.add_argument("--confirm-goal", action="store_true")
     run_parser.add_argument("--memory", choices=["on", "off"], default="on")
     run_parser.add_argument("--propose-memory", action="store_true")
     run_parser.add_argument("--llm-provider", choices=["mock", "openai-compatible"], default="mock")
@@ -96,6 +97,7 @@ def fallback_main(argv: list[str] | None = None) -> int:
     goal_parser.add_argument("action")
     goal_parser.add_argument("raw_goal")
     goal_parser.add_argument("--option")
+    goal_parser.add_argument("--confirm", action="store_true")
     goal_parser.add_argument("--json", dest="json_output", action="store_true")
 
     tasks_parser = sub.add_parser("tasks")
@@ -207,6 +209,7 @@ def fallback_main(argv: list[str] | None = None) -> int:
             show_policy=args.show_policy,
             json_output=args.json_output,
             goal_option=args.goal_option,
+            confirm_goal=args.confirm_goal,
         )
     if args.command == "resume":
         return resume_command(
@@ -252,6 +255,7 @@ def fallback_main(argv: list[str] | None = None) -> int:
             args.action,
             args.raw_goal,
             option=args.option,
+            confirmed=args.confirm,
             json_output=args.json_output,
         )
     if args.command == "tasks":
@@ -339,4 +343,3 @@ def fallback_main(argv: list[str] | None = None) -> int:
         return config_command(data_dir=args.data_dir)
     parser.print_help()
     return 0
-

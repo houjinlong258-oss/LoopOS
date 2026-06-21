@@ -9,6 +9,7 @@ from loopos.policy_os.models import (
     PolicyPack,
     PolicyRequest,
     PolicyRule,
+    SafetyLevel,
 )
 from loopos.policy_os.registry import PolicyRegistry
 
@@ -22,4 +23,5 @@ __all__ = [
     "PolicyRegistry",
     "PolicyRequest",
     "PolicyRule",
+    "SafetyLevel",
 ]

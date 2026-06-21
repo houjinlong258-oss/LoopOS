@@ -51,6 +51,9 @@ def resolve_policy_conflicts(matched_rules: list[PolicyRule]) -> PolicyDecision:
     render_hints: dict[str, object] = {}
     reason_codes: list[str] = []
     audit_required = False
+    safety_levels: list[str] = []
+    human_only = False
+    rollback_required = False
 
     for _, action in actions:
         reason_codes.append(action.reason_code)
@@ -59,6 +62,10 @@ def resolve_policy_conflicts(matched_rules: list[PolicyRule]) -> PolicyDecision:
         memory_filters.update(action.memory_filters)
         render_hints.update(action.render_hints)
         audit_required = audit_required or action.audit_required
+        if action.safety_level:
+            safety_levels.append(action.safety_level)
+        human_only = human_only or action.human_only
+        rollback_required = rollback_required or action.rollback_required
 
     action_type = primary_action.type
     return PolicyDecision(
@@ -74,6 +81,9 @@ def resolve_policy_conflicts(matched_rules: list[PolicyRule]) -> PolicyDecision:
         render_hints=render_hints,
         audit_required=audit_required,
         matched_rules=[rule.id for rule in matched_rules],
+        safety_level=max(safety_levels, key=_safety_rank, default="L0"),  # type: ignore[arg-type]
+        human_only=human_only,
+        rollback_required=rollback_required,
     )
 
 
@@ -99,3 +109,7 @@ def _dedupe(values: list[str]) -> list[str]:
             seen.add(value)
             result.append(value)
     return result
+
+
+def _safety_rank(value: str) -> int:
+    return int(value[1:]) if len(value) == 2 and value.startswith("L") else 0

@@ -8,7 +8,7 @@ from typing import Any
 from loopos.policy_os.conflict_resolver import resolve_policy_conflicts
 from loopos.policy_os.loader import load_policy_packs
 from loopos.policy_os.matcher import matches_rule
-from loopos.policy_os.models import PolicyContext, PolicyDecision, PolicyRequest
+from loopos.policy_os.models import PolicyContext, PolicyDecision, PolicyRequest, SafetyLevel
 from loopos.policy_os.registry import PolicyRegistry
 
 
@@ -51,7 +51,15 @@ class PolicyEngine:
             metadata=metadata or {},
         )
         matched = [rule for rule in self.registry.list_rules(scope=scope) if matches_rule(rule, request)]
-        return resolve_policy_conflicts(matched)
+        decision = resolve_policy_conflicts(matched)
+        inferred = _infer_safety_level(request, decision)
+        return decision.model_copy(
+            update={
+                "safety_level": _max_safety(decision.safety_level, inferred),
+                "human_only": decision.human_only or inferred == "L4",
+                "rollback_required": decision.rollback_required or inferred == "L3",
+            }
+        )
 
     def evaluate_context(
         self,
@@ -76,3 +84,29 @@ def _normalize_risk(value: str) -> str:
     if value in {"low", "medium", "high", "blocked"}:
         return value
     return "low"
+
+
+def _infer_safety_level(request: PolicyRequest, decision: PolicyDecision) -> SafetyLevel:
+    text = str(request.subject).lower()
+    if decision.action == "deny" or request.risk_level == "blocked":
+        return "L5"
+    blocked_markers = ("rm -rf /", "curl", "| bash", "| sh", "mkfs", "dd if=", "exfiltrate")
+    if any(marker in text for marker in blocked_markers) and ("|" in text or "rm -rf /" in text or "mkfs" in text or "dd if=" in text):
+        return "L5"
+    if any(marker in text for marker in ("payment", "credit_card", "raw pii", "customer export")):
+        return "L4"
+    if request.risk_level == "high" or any(
+        marker in text for marker in ("git reset", "git clean", "sudo", "restore", "production")
+    ):
+        return "L3"
+    if decision.requires_approval or request.risk_level == "medium" or any(
+        marker in text for marker in ("file.write", "delete", "chmod", "alter table")
+    ):
+        return "L2"
+    if any(marker in text for marker in ("pytest", "test", "temporary", "local")):
+        return "L1"
+    return "L0"
+
+
+def _max_safety(left: SafetyLevel, right: SafetyLevel) -> SafetyLevel:
+    return left if int(left[1:]) >= int(right[1:]) else right

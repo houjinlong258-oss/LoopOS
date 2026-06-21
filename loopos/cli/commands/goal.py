@@ -25,6 +25,7 @@ def goal_command(
     raw_goal: str,
     *,
     option: str | None = None,
+    confirmed: bool = False,
     json_output: bool = False,
 ) -> int:
     negotiator = GoalNegotiator()
@@ -35,7 +36,11 @@ def goal_command(
         payload = negotiator.propose(raw_goal)
     elif action == "finalize":
         try:
-            payload = negotiator.finalize(raw_goal, option_ids=parse_goal_options(option))
+            payload = negotiator.finalize(
+                raw_goal,
+                option_ids=parse_goal_options(option),
+                confirmed=confirmed,
+            )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 1

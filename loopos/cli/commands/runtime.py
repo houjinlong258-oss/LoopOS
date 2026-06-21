@@ -44,6 +44,7 @@ def run_command(
     show_policy: bool = False,
     json_output: bool = False,
     goal_option: str | None = None,
+    confirm_goal: bool = False,
 ) -> int:
     negotiator = GoalNegotiator()
     analysis = negotiator.analyze(goal)
@@ -62,8 +63,19 @@ def run_command(
             for option in proposal.options:
                 print(f"[{option.id}] {option.title}")
         return 4
+    if analysis.requires_confirmation and not confirm_goal and not option_ids:
+        if json_output:
+            print(analysis.model_dump_json(indent=2))
+        else:
+            print("LoopOS requires confirmation before executing this goal.")
+            print("Review the missing fields, then rerun with --confirm-goal.")
+        return 4
     try:
-        goal_spec = negotiator.finalize(goal, option_ids=option_ids)
+        goal_spec = negotiator.finalize(
+            goal,
+            option_ids=option_ids,
+            confirmed=confirm_goal,
+        )
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1

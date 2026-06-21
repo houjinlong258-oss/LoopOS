@@ -44,16 +44,26 @@ rules:
             value: '\bwget\b.*\|\s*(bash|sh)\b'
           - field: cmd
             operator: regex
-            value: '\bgit\s+reset\s+--hard\b'
-          - field: cmd
-            operator: regex
-            value: '\bgit\s+clean\s+-f'
-          - field: cmd
-            operator: regex
             value: '\bgit\s+config\s+--global\b'
     actions:
       - type: deny
         reason_code: terminal.destructive_pattern
+        safety_level: L5
+        audit_required: true
+  - id: terminal.approval.dangerous_git
+    scope: terminal.execute
+    priority: 970
+    severity: high
+    tags: [terminal, safety, git]
+    conditions:
+      - field: cmd
+        operator: regex
+        value: '\bgit\s+(reset\s+--hard|clean\s+-f)\b'
+    actions:
+      - type: require_approval
+        reason_code: terminal.dangerous_git_requires_approval
+        safety_level: L3
+        rollback_required: true
         audit_required: true
   - id: terminal.require_approval.high_risk
     scope: terminal.execute

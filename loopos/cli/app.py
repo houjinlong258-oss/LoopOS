@@ -77,6 +77,7 @@ if _HAS_TUI:
         show_policy: bool = typer_mod.Option(False, "--show-policy"),
         json_output: bool = typer_mod.Option(False, "--json"),
         goal_option: str | None = typer_mod.Option(None, "--goal-option"),
+        confirm_goal: bool = typer_mod.Option(False, "--confirm-goal"),
         memory: str = typer_mod.Option("on", "--memory"),
         propose_memory: bool = typer_mod.Option(False, "--propose-memory"),
         llm_provider: str = typer_mod.Option("mock", "--llm-provider"),
@@ -98,6 +99,7 @@ if _HAS_TUI:
                 show_policy=show_policy,
                 json_output=json_output,
                 goal_option=goal_option,
+                confirm_goal=confirm_goal,
             )
         )
 
@@ -192,10 +194,17 @@ if _HAS_TUI:
         action: str,
         raw_goal: str,
         option: str | None = typer_mod.Option(None, "--option"),
+        confirmed: bool = typer_mod.Option(False, "--confirm"),
         json_output: bool = typer_mod.Option(False, "--json"),
     ) -> None:
         raise typer_mod.Exit(
-            goal_command(action, raw_goal, option=option, json_output=json_output)
+            goal_command(
+                action,
+                raw_goal,
+                option=option,
+                confirmed=confirmed,
+                json_output=json_output,
+            )
         )
 
     @app.command("tasks")
@@ -396,7 +405,6 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
 
 
 
