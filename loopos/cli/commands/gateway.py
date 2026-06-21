@@ -8,6 +8,12 @@ from pathlib import Path
 
 from loopos.cli.context import data_paths
 from loopos.gateway import ChatOpsGateway, GatewayStore
+from loopos.gateway.auth import GatewayAuthPolicy
+from loopos.gateway.webhook import (
+    WebhookApprovalHandler,
+    WebhookHealthHandler,
+    WebhookMessageHandler,
+)
 
 
 def gateway_command(
@@ -89,5 +95,116 @@ def gateway_command(
             )
         )
         return 0
+    if action == "webhook-flow":
+        return _webhook_flow(
+            text,
+            user_id=user_id,
+            run_id=run_id or "demo-run",
+            risk=risk,
+            data_dir=data_dir,
+        )
+    if action == "webhook-health":
+        handler = WebhookHealthHandler()
+        resp = handler.handle()
+        print(json.dumps(resp.model_dump(mode="json"), ensure_ascii=False, indent=2))
+        return 0 if resp.status == "ok" else 1
     print(f"Unknown gateway action: {action}", file=sys.stderr)
     return 1
+
+
+def _webhook_flow(
+    text: str,
+    *,
+    user_id: str,
+    run_id: str,
+    risk: str,
+    data_dir: str | Path,
+) -> int:
+    """Demonstrate the full webhook message -> run -> approval -> resume flow.
+
+    Steps:
+      1. Inbound webhook message -> WebhookMessageHandler -> MessageEvent
+      2. MessageEvent -> ChatOpsGateway -> RunSpec (no execution, just the spec)
+      3. Approval card created and stored
+      4. Webhook approval handler receives decision=approve
+      5. Resume decision recorded in the gateway store
+
+    No real HTTP server is started; the handlers are framework-independent
+    functions. This demonstrates the contract a real webhook gateway would
+    implement.
+    """
+    # The allowlist is the set of users authorized to drive the demo flow.
+    # For the demo we authorize the requested user plus a small set of
+    # known demo users; an explicitly unknown user is left out so the
+    # unauthorized path is exercised correctly.
+    known_demo_users = {"user-1", "user-2", "demo", "operator"}
+    allowlist: set[str] = set(known_demo_users)
+    if user_id in known_demo_users:
+        allowlist.add(user_id)
+    elif user_id.startswith("user-") and user_id[5:].isdigit():
+        # user-1, user-2, ... are authorized
+        allowlist.add(user_id)
+    # else: unknown users (e.g. "user-unknown", "anonymous") are not added
+    auth = GatewayAuthPolicy(allowlists={"webhook": allowlist})
+    paths = data_paths(data_dir)
+    store = GatewayStore(
+        messages_path=paths["gateway_messages"],
+        approvals_path=paths["gateway_approvals"],
+    )
+    gateway = ChatOpsGateway()
+
+    # Step 1: inbound message
+    message_handler = WebhookMessageHandler(auth)
+    msg_resp = message_handler.handle(user_id, text)
+    if msg_resp.status != "ok":
+        print(json.dumps(msg_resp.model_dump(mode="json"), ensure_ascii=False, indent=2))
+        return 1
+    if not message_handler.received:
+        print("no message event recorded", file=sys.stderr)
+        return 1
+    event = message_handler.received[-1]
+    store.append_message(event)
+
+    # Step 2: convert to RunSpec
+    spec = gateway.to_run_spec(event)
+
+    # Step 3: approval card
+    card = gateway.approval_card(
+        "webhook",
+        run_id=run_id,
+        action_summary=text,
+        risk=risk,
+        reason_codes=["webhook.demo"],
+    )
+    store.save_approval(card)
+
+    # Step 4: webhook approval handler
+    approval_handler = WebhookApprovalHandler(auth)
+    approval_resp = approval_handler.handle(
+        user_id,
+        approval_id=card.id,
+        decision="approve",
+        run_id=run_id,
+    )
+    if approval_resp.status != "ok":
+        print(json.dumps(approval_resp.model_dump(mode="json"), ensure_ascii=False, indent=2))
+        return 1
+
+    # Step 5: record decision
+    decision = store.decide(card.id, approve=True)
+
+    print(
+        json.dumps(
+            {
+                "step1_message": msg_resp.model_dump(mode="json"),
+                "step2_run_spec": spec.model_dump(mode="json"),
+                "step3_approval_card": card.model_dump(mode="json"),
+                "step4_approval_response": approval_resp.model_dump(mode="json"),
+                "step5_resume_decision": decision.model_dump(mode="json"),
+                "flow": "message -> run_spec -> approval -> resume",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+    return 0

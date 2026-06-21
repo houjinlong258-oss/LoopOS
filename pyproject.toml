@@ -34,7 +34,13 @@ include = ["loopos*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+addopts = "-q --basetemp=.pytest-tmp"
+markers = [
+  "unit: fast pure logic tests",
+  "integration: local tempdir, sqlite, CLI, and mock-provider tests",
+  "acceptance: public Founding Release contract tests",
+  "slow: optional longer-running tests excluded from fast checks",
+]
 
 [tool.ruff]
 line-length = 100

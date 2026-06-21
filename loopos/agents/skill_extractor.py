@@ -2,10 +2,19 @@
 
 from __future__ import annotations
 
-from loopos.kernel.models import RunRecord
-from loopos.kernel.trace import TraceEvent
+from typing import TYPE_CHECKING
+
 from loopos.memory.skill_proposals import SkillProposal
 from loopos.memory.skill_store import Skill
+
+if TYPE_CHECKING:  # pragma: no cover - import-only for static type checkers.
+    # These are only used as annotations; ``from __future__ import
+    # annotations`` keeps them as strings at runtime, so deferring them
+    # breaks a circular import via ``loopos.kernel.__init__`` ->
+    # ``loopos.kernel.loop_engine`` -> ``loopos.agents.skill_extractor``
+    # -> ``loopos.kernel.models``.
+    from loopos.kernel.models import RunRecord
+    from loopos.kernel.trace import TraceEvent
 
 ACTION_KINDS = {"syscall", "instruction"}
 

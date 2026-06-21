@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import sys
+import tempfile
 from pathlib import Path
 from uuid import uuid4
 
 from loopos.data_guard import DataGuardService, detect_data_operation
+from loopos.data_guard.sqlite_adapter import SQLiteAdapter
 from loopos.syscalls import SyscallCall, create_default_syscall_router
 
 
@@ -32,6 +35,8 @@ def db_command(
             print("db detect requires --cmd TEXT or an argument", file=sys.stderr)
             return 1
         return _print(detect_data_operation(text).model_dump(mode="json"), json_output)
+    if action == "sqlite-demo":
+        return _sqlite_demo(data_dir=data_dir, json_output=json_output)
     service = DataGuardService(workspace, data_dir)
     if action == "plan-backup":
         value = target or arg
@@ -73,6 +78,81 @@ def db_command(
     )
     _print(result.model_dump(mode="json"), json_output)
     return 0 if result.success else 2
+
+
+def _sqlite_demo(*, data_dir: str | Path, json_output: bool) -> int:
+    """Demonstrate the full SQLite Data Guard flow on a temp database.
+
+    Steps:
+      1. Create a temp SQLite database with sample data.
+      2. Inspect it (read-only).
+      3. Back it up to the Data Guard vault.
+      4. Verify the backup checksum.
+      5. Restore the backup to a shadow copy.
+      6. Validate row counts between original and shadow.
+      7. Print a structured report.
+
+    No production database is touched. The temp database is deleted at the
+    end; the backup and shadow copy remain under the data dir for inspection.
+    """
+    adapter = SQLiteAdapter()
+    backup_root = Path(data_dir) / "backups" / "sqlite-demo"
+    backup_root.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = Path(tmp) / "demo.sqlite"
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)")
+        conn.executemany(
+            "INSERT INTO users (id, name, email) VALUES (?, ?, ?)",
+            [
+                (1, "alice", "alice@example.com"),
+                (2, "bob", "bob@example.com"),
+                (3, "carol", "carol@example.com"),
+            ],
+        )
+        conn.execute("CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER, total REAL)")
+        conn.executemany(
+            "INSERT INTO orders (id, user_id, total) VALUES (?, ?, ?)",
+            [(1, 1, 19.99), (2, 2, 29.99), (3, 3, 39.99)],
+        )
+        conn.commit()
+        conn.close()
+
+        # Step 2: inspect
+        inspection = adapter.inspect(db_path)
+
+        # Step 3: backup
+        manifest = adapter.backup(db_path, backup_root, run_id="sqlite-demo")
+        backup_path = manifest.files[0]
+
+        # Step 4: verify checksum
+        checksum_ok = adapter.verify_checksum(backup_path, manifest.checksums[backup_path])
+
+        # Step 5: restore shadow
+        shadow_path = adapter.restore_shadow(backup_path, shadow_dir=backup_root / "shadow")
+
+        # Step 6: validate
+        validation = adapter.validate(
+            db_path,
+            shadow_path,
+            run_id="sqlite-demo",
+            backup_id=manifest.backup_id,
+        )
+
+    report = {
+        "flow": "inspect -> backup -> verify -> shadow -> validate",
+        "step1_inspection": inspection.model_dump(mode="json"),
+        "step2_backup_manifest": manifest.model_dump(mode="json"),
+        "step3_checksum_verified": checksum_ok,
+        "step4_shadow_path": str(shadow_path),
+        "step5_validation": validation.model_dump(mode="json"),
+        "vault_location": str(backup_root),
+    }
+    _print(report, json_output)
+    if not validation.passed or not checksum_ok:
+        return 2
+    return 0
 
 
 def _syscall_payload(

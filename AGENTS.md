@@ -222,3 +222,37 @@ mypy .
 ```
 
 If local tooling is unavailable, document it in the final response and run the closest available deterministic check.
+
+## Maintainability Rule
+
+LoopOS rejects code that merely runs.
+
+AI-generated code must be:
+- scoped
+- typed
+- tested
+- traceable
+- explainable
+- maintainable
+- reversible
+
+Passing tests is necessary but not sufficient.
+
+Do not:
+- modify unrelated files
+- duplicate existing logic
+- bypass Policy OS
+- bypass Syscall Router
+- bypass Data Guard
+- bypass Memory Governance
+- bypass Trace
+- add hidden global state
+- swallow errors silently
+- add broad compatibility hacks without migration plan
+- add dependencies without justification
+
+Every code change must include:
+1. changed files summary
+2. test coverage
+3. maintainability reasoning
+4. remaining technical debt

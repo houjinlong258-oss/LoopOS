@@ -1,0 +1,56 @@
+id: skill-pytest-repair
+type: skill
+name: Pytest Repair Loop
+description: >
+  A reusable skill that fixes failing pytest tests through an
+  inspect-edit-verify loop: run pytest, read the failing test, read the
+  target source, apply a minimal patch, rerun pytest, and stop when
+  acceptance passes or no progress is made. Successful traces can be
+  compressed into a SkillSpec via Memory Governance.
+version: 0.1.0
+compatibility:
+  loopos: ">=0.1.0"
+required_tools:
+  - terminal.exec
+  - file.read
+  - file.write
+  - git.status
+  - git.diff
+permissions:
+  - workspace:read
+  - workspace:write
+  - terminal:pytest
+risk_level: medium
+maintainers:
+  - loopos-community
+tests:
+  - tests/test_skill_learning.py
+metadata:
+  trigger_tags:
+    - python
+    - pytest
+    - test_failure
+  steps:
+    - op: TERM.EXEC
+      args:
+        cmd: pytest -q
+    - op: FILE.READ
+      args:
+        path: "{failing_test_file}"
+    - op: FILE.READ
+      args:
+        path: "{target_source_file}"
+    - op: FILE.WRITE
+      args:
+        path: "{target_source_file}"
+        mode: patch
+    - op: TERM.EXEC
+      args:
+        cmd: pytest -q
+  acceptance_criteria:
+    - pytest passes
+    - no unrelated files modified
+    - trace records every step
+  success_signal: tests_pass
+  source_run_examples:
+    - run_01HZM9

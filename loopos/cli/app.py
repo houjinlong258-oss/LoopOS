@@ -7,11 +7,15 @@ from typing import Any
 
 from loopos.cli.commands import (
     ail_command as ail_command,
+    code_command as code_command,
     config_command as config_command,
     db_command as db_command,
+    distill_command as distill_command,
     files_command as files_command,
+    fusion_command as fusion_command,
     gateway_command as gateway_command,
     goal_command as goal_command,
+    kernel_command as kernel_command,
     memory_command as memory_command,
     mode_command as mode_command,
     models_command as models_command,
@@ -20,6 +24,7 @@ from loopos.cli.commands import (
     profile_command as profile_command,
     providers_command as providers_command,
     registry_command as registry_command,
+    release_command as release_command,
     review_command as review_command,
     skills_command as skills_command,
     search_command as search_command,
@@ -379,6 +384,9 @@ if _HAS_TUI:
         reviewer: str = typer_mod.Option("reviewer", "--reviewer"),
         actor: str | None = typer_mod.Option(None, "--actor"),
         note: str | None = typer_mod.Option(None, "--note"),
+        run_id: str | None = typer_mod.Option(None, "--run-id"),
+        high_risk: bool = typer_mod.Option(False, "--high-risk"),
+        maintainability_blocked: bool = typer_mod.Option(False, "--maintainability-blocked"),
     ) -> None:
         raise typer_mod.Exit(
             review_command(
@@ -390,6 +398,9 @@ if _HAS_TUI:
                 reviewer=reviewer,
                 actor=actor,
                 note=note,
+                run_id=run_id,
+                high_risk=high_risk,
+                maintainability_blocked=maintainability_blocked,
             )
         )
 
@@ -494,6 +505,91 @@ if _HAS_TUI:
         verbose: bool = typer_mod.Option(False, "--verbose"),
     ) -> None:
         raise typer_mod.Exit(ail_command(action, file, verbose=verbose))
+
+    @app.command("code")
+    def _typer_code(
+        ctx: typer_mod.Context,
+        action: str = typer_mod.Argument("summary"),
+        diff_file: str | None = typer_mod.Option(None, "--diff"),
+        use_json: bool = typer_mod.Option(False, "--json"),
+    ) -> None:
+        args: list[str] = [action]
+        if diff_file is not None:
+            args.extend(["--diff", diff_file])
+        if use_json:
+            args.append("--json")
+        code_command(args)
+        raise typer_mod.Exit(0)
+
+    @app.command("fusion")
+    def _typer_fusion(
+        action: str = typer_mod.Argument("plan"),
+        prompt: str | None = typer_mod.Argument(None),
+        panel: str = typer_mod.Option("balanced", "--panel"),
+        task_type: str = typer_mod.Option("unknown", "--task-type"),
+        risk: str = typer_mod.Option("medium", "--risk"),
+        privacy: str = typer_mod.Option("hybrid", "--privacy"),
+        json_output: bool = typer_mod.Option(False, "--json"),
+    ) -> None:
+        raise typer_mod.Exit(
+            fusion_command(
+                action,
+                prompt,
+                panel=panel,
+                task_type=task_type,
+                risk=risk,
+                privacy=privacy,
+                json_output=json_output,
+            )
+        )
+
+    @app.command("distill")
+    def _typer_distill(
+        action: str = typer_mod.Argument("inspect"),
+        target: str | None = typer_mod.Argument(None),
+        json_output: bool = typer_mod.Option(False, "--json"),
+    ) -> None:
+        raise typer_mod.Exit(
+            distill_command(action, target, json_output=json_output)
+        )
+
+    @app.command("kernel")
+    def _typer_kernel(
+        action: str = typer_mod.Argument("inspect"),
+        run_id: str | None = typer_mod.Argument(None),
+        data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+        json_output: bool = typer_mod.Option(False, "--json"),
+    ) -> None:
+        raise typer_mod.Exit(
+            kernel_command(
+                action,
+                run_id,
+                data_dir=data_dir,
+                json_output=json_output,
+            )
+        )
+
+    @app.command("release")
+    def _typer_release(
+        action: str = typer_mod.Argument("check"),
+        version: str = typer_mod.Option("0.1.0", "--version"),
+        source: str = typer_mod.Option(".", "--source"),
+        output: str = typer_mod.Option("dist", "--output"),
+        no_zip: bool = typer_mod.Option(False, "--no-zip"),
+        strict: bool = typer_mod.Option(False, "--strict"),
+        json_output: bool = typer_mod.Option(False, "--json"),
+    ) -> None:
+        raise typer_mod.Exit(
+            release_command(
+                action,
+                version=version,
+                source=source,
+                output=output,
+                no_zip=no_zip,
+                strict=strict,
+                json_output=json_output,
+            )
+        )
 
 
 def main(argv: list[str] | None = None) -> int:

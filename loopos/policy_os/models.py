@@ -143,6 +143,10 @@ class PolicyDecision(BaseModel):
     render_hints: dict[str, Any] = Field(default_factory=dict)
     audit_required: bool = False
     matched_rules: list[str] = Field(default_factory=list)
+    active_rules: list[str] = Field(default_factory=list)
+    overridden_rules: list[str] = Field(default_factory=list)
+    default_rules: list[str] = Field(default_factory=list)
+    all_reason_codes: list[str] = Field(default_factory=list)
     safety_level: SafetyLevel = "L0"
     human_only: bool = False
     rollback_required: bool = False

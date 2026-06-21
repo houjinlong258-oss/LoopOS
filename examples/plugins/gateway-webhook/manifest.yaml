@@ -1,0 +1,34 @@
+id: gateway-webhook
+type: gateway
+name: Webhook Gateway Adapter
+description: >
+  A sample gateway plugin that exposes local webhook handlers for inbound
+  messages and approvals. Demonstrates how a community gateway adapter
+  declares its platform, auth model, and routing contract. The in-tree
+  reference implementation lives in loopos.gateway.webhook.
+version: 0.1.0
+compatibility:
+  loopos: ">=0.1.0"
+required_tools:
+  - gateway.send
+  - gateway.receive
+permissions:
+  - gateway:auth:token
+  - gateway:allowlist
+risk_level: medium
+maintainers:
+  - loopos-community
+tests:
+  - tests/test_webhook_gateway.py
+metadata:
+  platform: webhook
+  routes:
+    - POST /message
+    - POST /approval
+    - GET /health
+  auth_type: bearer_token
+  allowlist_required: true
+  approval_resume_contract: |
+    An inbound approval with decision=approve must emit a KernelSignal
+    that resumes a waiting_approval run. A decision=deny must halt the
+    run. Both must be logged to the trace store.

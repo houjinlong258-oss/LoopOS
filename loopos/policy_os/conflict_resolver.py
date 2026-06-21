@@ -49,14 +49,14 @@ def resolve_policy_conflicts(matched_rules: list[PolicyRule]) -> PolicyDecision:
     tool_preferences: dict[str, object] = {}
     memory_filters: dict[str, object] = {}
     render_hints: dict[str, object] = {}
-    reason_codes: list[str] = []
+    all_reason_codes: list[str] = []
     audit_required = False
     safety_levels: list[str] = []
     human_only = False
     rollback_required = False
 
     for _, action in actions:
-        reason_codes.append(action.reason_code)
+        all_reason_codes.append(action.reason_code)
         constraints.update(action.constraints)
         tool_preferences.update(action.tool_preferences)
         memory_filters.update(action.memory_filters)
@@ -68,19 +68,38 @@ def resolve_policy_conflicts(matched_rules: list[PolicyRule]) -> PolicyDecision:
         rollback_required = rollback_required or action.rollback_required
 
     action_type = primary_action.type
+    active_rules: list[str] = []
+    overridden_rules: list[str] = []
+    default_rules: list[str] = []
+    active_reason_codes: list[str] = []
+    for rule, action in actions:
+        is_default = "default" in rule.id.lower() or "default" in action.reason_code.lower()
+        if is_default:
+            default_rules.append(rule.id)
+        elif action.type == action_type:
+            active_rules.append(rule.id)
+            active_reason_codes.append(action.reason_code)
+        else:
+            overridden_rules.append(rule.id)
+    if not active_reason_codes:
+        active_reason_codes = [primary_action.reason_code]
     return PolicyDecision(
         allowed=action_type in {"allow", "modify", "prefer_tool"},
         action=action_type,
         risk=_risk_for_action(action_type),
         requires_approval=action_type in {"require_approval", "require_review"},
         severity=max(_max_severity(matched_rules), primary_rule.severity, key=lambda value: SEVERITY_ORDER[value]),
-        reason_codes=_dedupe(reason_codes),
+        reason_codes=_dedupe(active_reason_codes),
         constraints=constraints,
         tool_preferences=tool_preferences,
         memory_filters=memory_filters,
         render_hints=render_hints,
         audit_required=audit_required,
         matched_rules=[rule.id for rule in matched_rules],
+        active_rules=_dedupe(active_rules),
+        overridden_rules=_dedupe(overridden_rules),
+        default_rules=_dedupe(default_rules),
+        all_reason_codes=_dedupe(all_reason_codes),
         safety_level=max(safety_levels, key=_safety_rank, default="L0"),  # type: ignore[arg-type]
         human_only=human_only,
         rollback_required=rollback_required,

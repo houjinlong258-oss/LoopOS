@@ -1,0 +1,42 @@
+id: policy-strict-terminal
+type: policy
+name: Strict Terminal Safety Policy
+description: >
+  A sample policy pack that hardens terminal execution beyond the default
+  L0-L5 baseline: blocks `curl|bash` and `wget|sh`, requires approval for
+  any `git reset`, `git clean`, `sudo`, `chmod -R`, and flags broad
+  `rm -rf` patterns outside the workspace temp directory.
+version: 0.1.0
+compatibility:
+  loopos: ">=0.1.0"
+required_tools:
+  - terminal.exec
+permissions:
+  - policy:enforce:terminal
+risk_level: low
+maintainers:
+  - loopos-community
+tests:
+  - tests/test_policy_os.py
+metadata:
+  pack_id: terminal-safety-strict
+  scope:
+    - terminal.execute
+  rules:
+    - id: terminal.block.curl_pipe_shell
+      severity: critical
+      safety_level: L5
+      reason_code: remote_code_execution_pipe
+    - id: terminal.block.rm_rf_root
+      severity: critical
+      safety_level: L5
+      reason_code: dangerous_recursive_delete_root
+    - id: terminal.require_approval.git_reset
+      severity: high
+      safety_level: L3
+      rollback_required: true
+      reason_code: destructive_git_operation
+    - id: terminal.require_approval.sudo
+      severity: high
+      safety_level: L3
+      reason_code: privilege_escalation

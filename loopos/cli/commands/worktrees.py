@@ -1,4 +1,4 @@
-"""Worktree isolation CLI commands."""
+﻿"""Worktree isolation CLI commands."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import json
 import sys
 from pathlib import Path
 
+from loopos.cli.commands.runtime import WorkspaceError, _check_workspace
 from loopos.cli.context import data_paths
 from loopos.syscalls import create_default_syscall_router
 from loopos.syscalls.types import SyscallCall
@@ -33,6 +34,12 @@ def worktrees_command(
             )
         )
         return 0
+    # All non-list actions need a valid workspace.
+    try:
+        workspace_path = _check_workspace(workspace)
+    except WorkspaceError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     if action == "plan":
         if not task_id:
             print("worktrees plan requires TASK_ID.", file=sys.stderr)
@@ -68,8 +75,8 @@ def worktrees_command(
         try:
             manager = WorktreeManager(store)
             record = store.load(task_id)
-            plan = manager.cleanup_plan(record, workspace=workspace, dry_run=dry_run)
-            router = create_default_syscall_router(workspace, auto_approve_medium=yes)
+            plan = manager.cleanup_plan(record, workspace=workspace_path, dry_run=dry_run)
+            router = create_default_syscall_router(workspace_path, auto_approve_medium=yes)
             results = [
                 router.dispatch(
                     SyscallCall(
@@ -77,7 +84,7 @@ def worktrees_command(
                         instruction_id=f"worktree-cleanup-{record.id}",
                         name="terminal.exec",
                         input={"cmd": command.cmd, "timeout_seconds": 30},
-                        workspace=str(workspace),
+                        workspace=str(workspace_path),
                         mode="dry_run" if dry_run else "guarded",
                         approval_granted=yes,
                     )
@@ -112,8 +119,8 @@ def worktrees_command(
         try:
             manager = WorktreeManager(store)
             record = store.load(task_id)
-            plan = manager.materialization_plan(record, workspace=workspace, dry_run=dry_run)
-            router = create_default_syscall_router(workspace, auto_approve_medium=yes)
+            plan = manager.materialization_plan(record, workspace=workspace_path, dry_run=dry_run)
+            router = create_default_syscall_router(workspace_path, auto_approve_medium=yes)
             results = [
                 router.dispatch(
                     SyscallCall(
@@ -121,7 +128,7 @@ def worktrees_command(
                         instruction_id=f"worktree-materialize-{record.id}",
                         name="terminal.exec",
                         input={"cmd": command.cmd, "timeout_seconds": 30},
-                        workspace=str(workspace),
+                        workspace=str(workspace_path),
                         mode="dry_run" if dry_run else "guarded",
                         approval_granted=yes,
                     )

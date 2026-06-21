@@ -27,6 +27,31 @@ from loopos.memory.repository import MemoryRepository
 from loopos.syscalls import create_default_syscall_router
 
 
+class WorkspaceError(Exception):
+    """Raised when a workspace path does not exist or is not a directory."""
+
+
+def _check_workspace(workspace: str | Path) -> Path:
+    """Validate that the workspace path exists and is a directory.
+
+    Returns the resolved Path. Raises WorkspaceError with a user-friendly
+    message instead of letting downstream code raise a Rich traceback.
+    """
+
+    path = Path(workspace)
+    if not path.exists():
+        raise WorkspaceError(
+            f"workspace does not exist: {path}\n"
+            "Suggestion: create the directory or pass an existing --workspace."
+        )
+    if not path.is_dir():
+        raise WorkspaceError(
+            f"workspace is not a directory: {path}\n"
+            "Suggestion: pass a directory path via --workspace."
+        )
+    return path
+
+
 def run_command(
     goal: str,
     *,
@@ -46,6 +71,11 @@ def run_command(
     goal_option: str | None = None,
     confirm_goal: bool = False,
 ) -> int:
+    try:
+        workspace_path = _check_workspace(workspace)
+    except WorkspaceError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     negotiator = GoalNegotiator()
     analysis = negotiator.analyze(goal)
     try:
@@ -86,7 +116,7 @@ def run_command(
         return 1
     runtime = KernelBoot().start(
         KernelConfig(
-            workspace=str(workspace),
+            workspace=str(workspace_path),
             data_dir=str(paths["base"]),
             auto_approve_medium=yes,
         )
@@ -95,7 +125,7 @@ def run_command(
     run = KernelLoopEngine(runtime, memory_repository=repository).run(
         RunSpec(
             goal=goal,
-            workspace=str(Path(workspace).resolve()),
+            workspace=str(workspace_path.resolve()),
             mode=kernel_mode,  # type: ignore[arg-type]
             max_steps=max_steps,
             non_interactive=not sys.stdin.isatty(),

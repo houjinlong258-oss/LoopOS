@@ -1,0 +1,84 @@
+# Maintainability policy rules for LoopOS.
+# Applied by the Maintainability Kernel to gate code changes.
+
+name: maintainability
+version: "1.0"
+description: >
+  Code quality governance rules.
+  Passing tests is necessary but not sufficient.
+
+rules:
+  - id: maint-001
+    name: large_diff_warning
+    description: Patches with 300+ lines require careful review.
+    threshold: 300
+    severity: warning
+
+  - id: maint-002
+    name: large_diff_error
+    description: Patches with 800+ lines should be split.
+    threshold: 800
+    severity: error
+
+  - id: maint-003
+    name: missing_test
+    description: Source changes without test updates.
+    severity: error
+
+  - id: maint-004
+    name: policy_bypass_blocker
+    description: Direct shell/tool calls bypassing Syscall Router.
+    severity: blocker
+    blocks_merge: true
+
+  - id: maint-005
+    name: data_guard_bypass_blocker
+    description: Database mutations bypassing Data Guard.
+    severity: blocker
+    blocks_merge: true
+
+  - id: maint-006
+    name: memory_bypass_blocker
+    description: Durable memory writes bypassing Memory Governance.
+    severity: blocker
+    blocks_merge: true
+
+  - id: maint-007
+    name: trace_bypass
+    description: External actions not logged to trace store.
+    severity: error
+
+  - id: maint-008
+    name: complexity_warning
+    description: Functions exceeding 100 lines.
+    threshold: 100
+    severity: warning
+
+  - id: maint-009
+    name: complexity_error
+    description: Functions exceeding 200 lines.
+    threshold: 200
+    severity: error
+
+  - id: maint-010
+    name: broad_exception
+    description: Bare except Exception with pass or log-only.
+    severity: warning
+
+  - id: maint-011
+    name: hardcoded_value
+    description: Hardcoded secrets, API keys, or environment-specific paths.
+    severity: error
+
+  - id: maint-012
+    name: dependency_risk
+    description: New dependency added without justification.
+    severity: warning
+
+scoring:
+  base_score: 100
+  approve_threshold: 90
+  approve_with_warnings_threshold: 75
+  request_changes_threshold: 60
+  refactor_threshold: 40
+  block_threshold: 0

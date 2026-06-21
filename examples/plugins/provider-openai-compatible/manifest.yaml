@@ -1,0 +1,40 @@
+id: provider-openai-compatible
+type: provider
+name: OpenAI-Compatible Provider
+description: >
+  Boundary adapter for OpenAI-compatible chat completion endpoints.
+  Demonstrates how a community provider plugin declares capabilities,
+  env vars, and policy constraints. Alpha plugins are metadata-only;
+  LoopOS never imports plugin code during discovery or install.
+version: 0.1.0
+compatibility:
+  loopos: ">=0.1.0"
+required_tools:
+  - provider.chat
+permissions:
+  - env:OPENAI_API_KEY
+  - network:outbound:https
+risk_level: medium
+maintainers:
+  - loopos-community
+tests:
+  - tests/test_openai_provider.py
+metadata:
+  api_mode: openai_compatible
+  base_url: https://api.openai.com/v1
+  default_models:
+    - gpt-4o-mini
+    - gpt-4o
+  capabilities:
+    - text
+    - code
+    - reasoning
+    - json_schema
+  cost_class: medium
+  latency_class: medium
+  reliability_score: 0.9
+  disabled_by_default: true
+  requires_policy_approval: true
+  notes: >
+    Real network transport is disabled by default. Enable only via explicit
+    policy approval and a guarded provider syscall; tests never make real calls.

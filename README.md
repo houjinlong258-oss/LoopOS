@@ -8,7 +8,25 @@ LoopOS is a terminal-native, state-machine-driven runtime for governed and repla
 execution. Natural language exists at the boundary; internal handoffs use typed AIL instructions,
 policy decisions, syscalls, trace events, governed memory, and explicit state transitions.
 
-## Open-Source Alpha
+## Why LoopOS
+
+Most AI coding agents optimize for completion. LoopOS optimizes for **maintainable completion**.
+
+AI-generated code often works once and collapses later — duplicated logic, unclear module boundaries,
+hidden global state, weak tests, unsafe tool calls, no audit trail, no rollback path.
+
+LoopOS governs agent-generated work through:
+- **Policy OS** — structured permission decisions before every action
+- **Syscall Router** — all external actions are policy-gated syscalls
+- **Loop Convergence** — bounded deterministic scheduling with halt/replay
+- **Data Guard** — backup, shadow, and validation for database operations
+- **Maintainability Gate** — code quality governance rejecting unmaintainable patches
+- **Review Artifact** — structured review records for agent-produced changes
+- **Trace Replay** — side-effect-free reconstruction of any run
+
+Traditional operating systems run programs. LoopOS runs agents.
+
+## Founding Release
 
 - Versioned Kernel runs, bounded deterministic scheduling, approval resume, trace, and replay.
 - AIL and AI-ISA schemas with validation and compatibility adapters.
@@ -24,9 +42,15 @@ policy decisions, syscalls, trace events, governed memory, and explicit state tr
 - Persistent tasks, triggers, worktree leases, and Producer/Verifier/Reviewer separation.
 - Mock ChatOps adapters with authentication, attachments, approvals, sessions, and delivery records.
 - Typer/Rich CLI plus a standard-library fallback.
+- **Maintainability Kernel** — code quality governance with scoring, rules, and gate decisions.
+- **System Kernel Hardening** — lifecycle, invariant checker, checkpoint/replay, supervisor, signals.
+- **Review Artifact / Merge Gate** — structured reviewable records with merge eligibility checks.
+- **Fusion Router Skeleton** — multi-model panel selection, judge, and aggregation (mock only).
+- **Prompt / Policy Distillation** — distill behavior/renderer/policy packs from project rules.
+- **Real Boundary Adapters** — OpenAI-compatible provider, webhook gateway, SQLite Data Guard.
 
-Alpha does not connect to real databases or chat platforms, does not make real provider calls during
-tests, does not auto-merge code, and is not an operating-system sandbox.
+The runtime does not connect to real databases or chat platforms, does not make real provider calls
+during tests, does not auto-merge code, and is not an operating-system sandbox.
 
 ## Quickstart
 
@@ -57,6 +81,14 @@ python -m loopos.cli.app tasks next --quick-win
 python -m loopos.cli.app worktrees list
 python -m loopos.cli.app models route --task coding --input image
 python -m loopos.cli.app gateway simulate slack "run tests"
+```
+
+Code quality and review:
+
+```bash
+python -m loopos.cli.app code summary --diff changes.diff
+python -m loopos.cli.app code maintainability --diff changes.diff --json
+python -m loopos.cli.app code gate --diff changes.diff
 ```
 
 ## Runtime Flow
@@ -101,6 +133,11 @@ The test suite is deterministic and offline. See `CONTRIBUTING.md`, `SECURITY.md
 - [Memory Governance](docs/memory-governance.md)
 - [Implementation Map](docs/mvp-implementation-map.md)
 - [Brand and Loopi](docs/brand-loopi.md)
+- [Maintainability Kernel](docs/maintainability.md)
+- [Kernel Hardening](docs/kernel-hardening.md)
+- [Review Artifact](docs/review-artifact.md)
+- [Fusion Router](docs/fusion-router.md)
+- [Prompt Distillation](docs/prompt-distillation.md)
 
 ## License
 
