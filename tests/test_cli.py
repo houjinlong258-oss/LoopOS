@@ -39,6 +39,23 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["risk_level"], "critical")
         self.assertTrue(payload["requires_backup"])
 
+    def test_local_index_and_mode_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "workspace"
+            state = Path(tmp) / "state"
+            workspace.mkdir()
+            (workspace / "notes.md").write_text("LoopOS searchable note", encoding="utf-8")
+            built = self.run_cli(
+                "index", "build", "--workspace", str(workspace), "--data-dir", str(state)
+            )
+            searched = self.run_cli(
+                "search", "searchable", "--workspace", str(workspace), "--data-dir", str(state)
+            )
+            mode = self.run_cli("mode", "set", "privacy-local", "--data-dir", str(state))
+            self.assertEqual(built.returncode, 0)
+            self.assertIn("notes.md", searched.stdout)
+            self.assertIn('"local_only": true', mode.stdout)
+
     def test_status_nonexistent(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             result = self.run_cli("status", "missing", "--data-dir", tmp)

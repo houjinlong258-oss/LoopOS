@@ -1,0 +1,17 @@
+id: index-privacy
+name: Workspace Index Privacy Policy
+version: 0.1.0
+priority: 950
+rules:
+  - id: index.block.private_path
+    scope: index.read
+    priority: 950
+    severity: critical
+    conditions:
+      - field: private_path
+        operator: equals
+        value: true
+    actions:
+      - type: deny
+        reason_code: index.private_path_blocked
+        safety_level: L5

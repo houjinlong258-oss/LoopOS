@@ -1,0 +1,121 @@
+text: &text
+  capabilities: [text]
+  cost_class: unknown
+  latency_class: unknown
+  reliability_score: 0.60
+reasoning: &reasoning
+  capabilities: [text, reasoning, tools]
+  cost_class: medium
+  latency_class: medium
+  reliability_score: 0.75
+coding: &coding
+  capabilities: [text, coding, reasoning, tools]
+  cost_class: medium
+  latency_class: medium
+  reliability_score: 0.80
+vision: &vision
+  capabilities: [text, reasoning, tools, vision]
+  cost_class: high
+  latency_class: medium
+  reliability_score: 0.85
+local: &local
+  capabilities: [text, coding, reasoning, embeddings, local]
+  cost_class: local
+  latency_class: low
+  reliability_score: 0.70
+  local_only: true
+
+providers:
+  - <<: *vision
+    id: openai
+    aliases: [open_ai]
+    default_models: [openai-default]
+    reliability_score: 0.95
+  - <<: *coding
+    id: openai-codex
+    aliases: [openai_codex]
+    default_models: [openai-codex-default]
+    reliability_score: 0.95
+  - <<: *vision
+    id: openrouter
+    aliases: [open_router]
+    default_models: [openrouter-default]
+  - <<: *vision
+    id: anthropic
+    default_models: [anthropic-default]
+    reliability_score: 0.92
+  - <<: *vision
+    id: gemini
+    default_models: [gemini-default]
+    reliability_score: 0.90
+  - <<: *coding
+    id: deepseek
+    default_models: [deepseek-default]
+  - <<: *coding
+    id: kimi-coding
+    aliases: [kimi_coding]
+    default_models: [kimi-coding-default]
+  - <<: *vision
+    id: minimax
+    default_models: [minimax-default]
+  - <<: *vision
+    id: xai
+    default_models: [xai-default]
+  - <<: *coding
+    id: qwen-oauth
+    aliases: [qwen_oauth]
+    default_models: [qwen-oauth-default]
+  - <<: *reasoning
+    id: alibaba
+    default_models: [alibaba-default]
+  - <<: *local
+    id: huggingface
+    default_models: [huggingface-default]
+  - <<: *reasoning
+    id: bedrock
+    default_models: [bedrock-default]
+  - <<: *vision
+    id: azure-foundry
+    aliases: [azure_foundry]
+    default_models: [azure-foundry-default]
+  - <<: *local
+    id: ollama-cloud
+    aliases: [ollama_cloud]
+    default_models: [ollama-cloud-default]
+  - <<: *text
+    id: custom
+    default_models: [custom-default]
+  - <<: *coding
+    id: copilot
+    default_models: [copilot-default]
+  - <<: *coding
+    id: copilot-acp
+    aliases: [copilot_acp]
+    default_models: [copilot-acp-default]
+  - <<: *reasoning
+    id: nous
+    default_models: [nous-default]
+  - <<: *reasoning
+    id: novita
+    default_models: [novita-default]
+  - <<: *reasoning
+    id: nvidia
+    default_models: [nvidia-default]
+  - <<: *text
+    id: xiaomi
+    default_models: [xiaomi-default]
+  - <<: *reasoning
+    id: zai
+    default_models: [zai-default]
+  - <<: *reasoning
+    id: stepfun
+    default_models: [stepfun-default]
+  - <<: *coding
+    id: kilocode
+    default_models: [kilocode-default]
+  - <<: *reasoning
+    id: arcee
+    default_models: [arcee-default]
+  - <<: *reasoning
+    id: gmi
+    default_models: [gmi-default]

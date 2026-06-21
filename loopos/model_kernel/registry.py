@@ -56,7 +56,13 @@ def _capabilities(provider_id: str) -> list[ProviderCapability]:
 
 class ProviderRegistry:
     def __init__(self, profiles: list[ProviderProfile] | None = None) -> None:
-        self._profiles = {profile.id: profile for profile in (profiles or default_profiles())}
+        selected = profiles
+        if selected is None:
+            profile_root = Path(__file__).resolve().parents[2] / "providers"
+            selected = load_provider_profiles([profile_root]) if profile_root.exists() else []
+            if not selected:
+                selected = default_profiles()
+        self._profiles = {profile.id: profile for profile in selected}
 
     def list(self) -> list[ProviderProfile]:
         return list(self._profiles.values())

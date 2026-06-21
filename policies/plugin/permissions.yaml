@@ -1,0 +1,18 @@
+id: plugin-permissions
+name: Plugin Permission Policy
+version: 0.1.0
+priority: 950
+rules:
+  - id: plugin.block.policy_bypass
+    scope: plugin.install
+    priority: 1000
+    severity: critical
+    conditions:
+      - field: permissions
+        operator: contains
+        value: policy.bypass
+    actions:
+      - type: deny
+        reason_code: plugin.policy_bypass_blocked
+        safety_level: L5
+        audit_required: true

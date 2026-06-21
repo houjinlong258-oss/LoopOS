@@ -1,0 +1,34 @@
+id: compute-routing
+name: Compute Routing Policy
+version: 0.1.0
+priority: 900
+rules:
+  - id: compute.block.private_cloud
+    scope: compute.route
+    priority: 950
+    severity: critical
+    conditions:
+      - field: private_data
+        operator: equals
+        value: true
+    actions:
+      - type: modify
+        reason_code: compute.private_data_local_only
+        constraints: {local_only: true, cloud_allowed: false}
+        safety_level: L1
+        audit_required: true
+  - id: compute.require.cloud_consent
+    scope: compute.route
+    priority: 800
+    severity: medium
+    conditions:
+      - field: mode
+        operator: equals
+        value: cloud-power
+      - field: cloud_consent
+        operator: equals
+        value: false
+    actions:
+      - type: require_approval
+        reason_code: compute.cloud_consent_required
+        safety_level: L2

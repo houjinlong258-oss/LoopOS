@@ -9,16 +9,21 @@ from loopos.cli.commands import (
     ail_command as ail_command,
     config_command as config_command,
     db_command as db_command,
+    files_command as files_command,
     gateway_command as gateway_command,
     goal_command as goal_command,
     memory_command as memory_command,
+    mode_command as mode_command,
     models_command as models_command,
     parse_goal_options as _parse_goal_options,  # noqa: F401 - compatibility export
     policy_command as policy_command,
     profile_command as profile_command,
     providers_command as providers_command,
+    registry_command as registry_command,
     review_command as review_command,
     skills_command as skills_command,
+    search_command as search_command,
+    index_command as index_command,
     tasks_command as tasks_command,
     triggers_command as triggers_command,
     worktrees_command as worktrees_command,
@@ -270,6 +275,72 @@ if _HAS_TUI:
             )
         )
 
+    @app.command("index")
+    def _typer_index(
+        action: str = typer_mod.Argument("status"),
+        workspace: str = typer_mod.Option(".", "--workspace"),
+        data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+    ) -> None:
+        raise typer_mod.Exit(index_command(action, workspace=workspace, data_dir=data_dir))
+
+    @app.command("search")
+    def _typer_search(
+        query: str,
+        workspace: str = typer_mod.Option(".", "--workspace"),
+        data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+        limit: int = typer_mod.Option(20, "--limit"),
+    ) -> None:
+        raise typer_mod.Exit(
+            search_command(query, workspace=workspace, data_dir=data_dir, limit=limit)
+        )
+
+    @app.command("files")
+    def _typer_files(
+        action: str,
+        query: str,
+        workspace: str = typer_mod.Option(".", "--workspace"),
+        data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+    ) -> None:
+        raise typer_mod.Exit(
+            files_command(action, query, workspace=workspace, data_dir=data_dir)
+        )
+
+    @app.command("mode")
+    def _typer_mode(
+        action: str = typer_mod.Argument("status"),
+        value: str | None = typer_mod.Argument(None),
+        data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+        private_data: bool = typer_mod.Option(False, "--private-data"),
+        sanitized: bool = typer_mod.Option(False, "--sanitized"),
+        cloud_consent: bool = typer_mod.Option(False, "--cloud-consent"),
+    ) -> None:
+        raise typer_mod.Exit(
+            mode_command(
+                action,
+                value,
+                data_dir=data_dir,
+                private_data=private_data,
+                sanitized=sanitized,
+                cloud_consent=cloud_consent,
+            )
+        )
+
+    @app.command("registry")
+    def _typer_registry(
+        action: str = typer_mod.Argument("list"),
+        value: str | None = typer_mod.Argument(None),
+        plugin_type: str | None = typer_mod.Option(None, "--type"),
+        data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+    ) -> None:
+        raise typer_mod.Exit(
+            registry_command(
+                action,
+                value,
+                plugin_type=plugin_type,
+                data_dir=data_dir,
+            )
+        )
+
     @app.command("triggers")
     def _typer_triggers(
         action: str = typer_mod.Argument("list"),
@@ -436,5 +507,4 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
 

@@ -9,18 +9,23 @@ from loopos.cli.commands import (
     ail_command,
     config_command,
     db_command,
+    files_command,
     gateway_command,
     goal_command,
     history_command,
     memory_command,
+    mode_command,
     models_command,
     policy_command,
     profile_command,
     providers_command,
+    registry_command,
     replay_command,
     resume_command,
     review_command,
     run_command,
+    search_command,
+    index_command,
     skills_command,
     status_command,
     tasks_command,
@@ -127,6 +132,37 @@ def fallback_main(argv: list[str] | None = None) -> int:
     tasks_parser.add_argument("--title")
     tasks_parser.add_argument("--requires-worktree", action="store_true")
     tasks_parser.add_argument("--ready", action="store_true")
+
+    index_parser = sub.add_parser("index")
+    index_parser.add_argument("action", nargs="?", default="status")
+    index_parser.add_argument("--workspace", default=".")
+    index_parser.add_argument("--data-dir", default=".loopos")
+
+    search_parser = sub.add_parser("search")
+    search_parser.add_argument("query")
+    search_parser.add_argument("--workspace", default=".")
+    search_parser.add_argument("--data-dir", default=".loopos")
+    search_parser.add_argument("--limit", type=int, default=20)
+
+    files_parser = sub.add_parser("files")
+    files_parser.add_argument("action")
+    files_parser.add_argument("query")
+    files_parser.add_argument("--workspace", default=".")
+    files_parser.add_argument("--data-dir", default=".loopos")
+
+    mode_parser = sub.add_parser("mode")
+    mode_parser.add_argument("action", nargs="?", default="status")
+    mode_parser.add_argument("value", nargs="?")
+    mode_parser.add_argument("--data-dir", default=".loopos")
+    mode_parser.add_argument("--private-data", action="store_true")
+    mode_parser.add_argument("--sanitized", action="store_true")
+    mode_parser.add_argument("--cloud-consent", action="store_true")
+
+    registry_parser = sub.add_parser("registry")
+    registry_parser.add_argument("action", nargs="?", default="list")
+    registry_parser.add_argument("value", nargs="?")
+    registry_parser.add_argument("--type", dest="plugin_type")
+    registry_parser.add_argument("--data-dir", default=".loopos")
 
     triggers_parser = sub.add_parser("triggers")
     triggers_parser.add_argument("action", nargs="?", default="list")
@@ -300,6 +336,38 @@ def fallback_main(argv: list[str] | None = None) -> int:
             title=args.title,
             requires_worktree=args.requires_worktree,
             ready=args.ready,
+        )
+    if args.command == "index":
+        return index_command(args.action, workspace=args.workspace, data_dir=args.data_dir)
+    if args.command == "search":
+        return search_command(
+            args.query,
+            workspace=args.workspace,
+            data_dir=args.data_dir,
+            limit=args.limit,
+        )
+    if args.command == "files":
+        return files_command(
+            args.action,
+            args.query,
+            workspace=args.workspace,
+            data_dir=args.data_dir,
+        )
+    if args.command == "mode":
+        return mode_command(
+            args.action,
+            args.value,
+            data_dir=args.data_dir,
+            private_data=args.private_data,
+            sanitized=args.sanitized,
+            cloud_consent=args.cloud_consent,
+        )
+    if args.command == "registry":
+        return registry_command(
+            args.action,
+            args.value,
+            plugin_type=args.plugin_type,
+            data_dir=args.data_dir,
         )
     if args.command == "triggers":
         return triggers_command(args.action, args.trigger_id, data_dir=args.data_dir)
