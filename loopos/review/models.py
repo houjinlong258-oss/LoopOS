@@ -17,6 +17,7 @@ def utc_now() -> datetime:
 
 
 class ReviewRecord(BaseModel):
+    schema_version: str = "1.1"
     id: str = Field(default_factory=lambda: str(uuid4()))
     task_id: str
     producer: str
@@ -26,6 +27,8 @@ class ReviewRecord(BaseModel):
     high_risk: bool = False
     findings: list[str] = Field(default_factory=list)
     verification_notes: list[str] = Field(default_factory=list)
+    verified_by: str | None = None
+    approved_by: str | None = None
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -35,4 +38,3 @@ class ReviewRecord(BaseModel):
         if not value.strip():
             raise ValueError("review fields cannot be empty")
         return value
-

@@ -1,11 +1,13 @@
 import tempfile
 import unittest
+from datetime import timedelta
 from pathlib import Path
 
 from loopos.review import ReviewCoordinator, ReviewStore
 from loopos.tasks import TaskArtifactStore, TaskStore
 from loopos.triggers import TriggerKernel
 from loopos.worktree import WorktreeManager, WorktreeStore
+from loopos.worktree.models import utc_now
 
 
 class OuterLoopTests(unittest.TestCase):
@@ -97,6 +99,23 @@ class OuterLoopTests(unittest.TestCase):
             self.assertEqual(plan.commands[0].purpose, "create isolated git worktree")
             self.assertIn("worktree", plan.commands[0].cmd)
             self.assertTrue(plan.commands[0].requires_approval)
+
+    def test_worktree_lease_expiry_and_cleanup_are_auditable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            task = TriggerKernel(TaskStore(Path(tmp) / "tasks.json")).fire("code-improvement")
+            store = WorktreeStore(Path(tmp) / "worktrees.json")
+            manager = WorktreeManager(store)
+            record = manager.plan_for_task(task, owner_id="producer-1", run_id="run-1")
+            self.assertIsNotNone(record.lease_id)
+            self.assertEqual(record.owner_id, "producer-1")
+            record.lease_expires_at = utc_now() - timedelta(seconds=1)
+            store.save(record)
+
+            expired = manager.expire_leases()
+            cleanup = manager.cleanup_plan(expired[0], workspace=tmp)
+            self.assertEqual(expired[0].status, "stale")
+            self.assertIn("worktree", cleanup.commands[0].cmd)
+            self.assertEqual(cleanup.commands[0].risk, "high")
 
 
 if __name__ == "__main__":

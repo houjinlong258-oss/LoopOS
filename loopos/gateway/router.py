@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from loopos.gateway.adapters import MockGatewayAdapter, default_mock_adapters
+from loopos.gateway.auth import GatewayAuthPolicy
 from loopos.gateway.models import (
     ApprovalCard,
     ApprovalResumeDecision,
+    AttachmentMetadata,
+    DeliveryRecord,
     GatewayChannel,
     MessageEvent,
     utc_now,
@@ -14,8 +17,14 @@ from loopos.kernel.models import RunSpec
 
 
 class ChatOpsGateway:
-    def __init__(self, adapters: dict[GatewayChannel, MockGatewayAdapter] | None = None) -> None:
+    def __init__(
+        self,
+        adapters: dict[GatewayChannel, MockGatewayAdapter] | None = None,
+        *,
+        auth_policy: GatewayAuthPolicy | None = None,
+    ) -> None:
         self.adapters = adapters or default_mock_adapters()
+        self.auth_policy = auth_policy or GatewayAuthPolicy()
 
     def receive(
         self,
@@ -24,8 +33,19 @@ class ChatOpsGateway:
         text: str,
         *,
         thread_id: str | None = None,
+        token: str | None = None,
+        attachments: list[AttachmentMetadata] | None = None,
     ) -> MessageEvent:
-        return self.adapters[channel].receive(user_id, text, thread_id=thread_id)
+        auth = self.auth_policy.authorize(channel, user_id, token=token)
+        if not auth.allowed:
+            raise ValueError(auth.reason_code)
+        return self.adapters[channel].receive(
+            user_id,
+            text,
+            thread_id=thread_id,
+            attachments=attachments,
+            authenticated=True,
+        )
 
     def to_run_spec(self, event: MessageEvent, *, workspace: str = ".") -> RunSpec:
         return RunSpec(
@@ -73,4 +93,15 @@ class ChatOpsGateway:
             approve=card.status == "approved",
             deny=card.status == "denied",
             status=card.status,
+            signal="approve" if card.status == "approved" else "deny",
         )
+
+    def deliver(
+        self,
+        channel: GatewayChannel,
+        user_id: str,
+        summary: str,
+        *,
+        message_id: str | None = None,
+    ) -> DeliveryRecord:
+        return self.adapters[channel].deliver(user_id, summary, message_id=message_id)

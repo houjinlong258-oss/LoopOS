@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, field_validator
 
 WorktreeStatus = Literal["planned", "active", "stale", "cleaned", "conflict"]
 WorktreeCommandRisk = Literal["medium", "high"]
+WorktreeLeaseStatus = Literal["active", "expired", "released"]
 
 
 def utc_now() -> datetime:
@@ -18,6 +19,7 @@ def utc_now() -> datetime:
 
 
 class WorktreeRecord(BaseModel):
+    schema_version: str = "1.1"
     id: str = Field(default_factory=lambda: str(uuid4()))
     task_id: str
     branch: str
@@ -25,6 +27,10 @@ class WorktreeRecord(BaseModel):
     status: WorktreeStatus = "planned"
     locked_paths: list[str] = Field(default_factory=list)
     conflict_task_ids: list[str] = Field(default_factory=list)
+    owner_id: str = "outer-loop"
+    run_id: str | None = None
+    lease_id: str | None = None
+    lease_expires_at: datetime | None = None
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -56,3 +62,16 @@ class WorktreeExecutionPlan(BaseModel):
     workspace: str
     dry_run: bool = True
     commands: list[WorktreeCommand] = Field(default_factory=list)
+
+
+class WorktreeLease(BaseModel):
+    schema_version: str = "1.0"
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    worktree_id: str
+    task_id: str
+    owner_id: str
+    run_id: str | None = None
+    status: WorktreeLeaseStatus = "active"
+    acquired_at: datetime = Field(default_factory=utc_now)
+    expires_at: datetime
+    released_at: datetime | None = None

@@ -5,12 +5,14 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+from datetime import timedelta
 from pathlib import Path
 
 from loopos.tasks import TaskRecord
 from loopos.worktree.models import (
     WorktreeCommand,
     WorktreeExecutionPlan,
+    WorktreeLease,
     WorktreeRecord,
     WorktreeStatus,
     utc_now,
@@ -64,17 +66,37 @@ class WorktreeManager:
         self.store = store
         self.base_dir = Path(base_dir)
 
-    def plan_for_task(self, task: TaskRecord, *, locked_paths: list[str] | None = None) -> WorktreeRecord:
+    def plan_for_task(
+        self,
+        task: TaskRecord,
+        *,
+        locked_paths: list[str] | None = None,
+        owner_id: str = "outer-loop",
+        run_id: str | None = None,
+        lease_seconds: int = 3600,
+    ) -> WorktreeRecord:
         if not task.requires_worktree:
             raise ValueError("task does not require a worktree")
         branch = f"codex/{_slug(task.title)}-{task.id[:8]}"
         path = self.base_dir / _slug(f"{task.id}-{task.title}")
+        expires_at = utc_now() + timedelta(seconds=max(60, lease_seconds))
         record = WorktreeRecord(
             task_id=task.id,
             branch=branch,
             path=str(path),
             locked_paths=locked_paths or ["."],
+            owner_id=owner_id,
+            run_id=run_id,
+            lease_expires_at=expires_at,
         )
+        lease = WorktreeLease(
+            worktree_id=record.id,
+            task_id=task.id,
+            owner_id=owner_id,
+            run_id=run_id,
+            expires_at=expires_at,
+        )
+        record.lease_id = lease.id
         conflicts = self.detect_conflicts(record)
         if conflicts:
             record.status = "conflict"
@@ -86,6 +108,8 @@ class WorktreeManager:
         conflicts: list[WorktreeRecord] = []
         for record in self.store.list():
             if record.id == candidate.id or record.status in {"cleaned", "stale"}:
+                continue
+            if self.is_expired(record):
                 continue
             if Path(record.path) == Path(candidate.path):
                 conflicts.append(record)
@@ -101,10 +125,47 @@ class WorktreeManager:
 
     def mark_cleaned(self, worktree_id: str) -> WorktreeRecord:
         record = self.store.load(worktree_id)
-        if record.status != "stale":
-            raise ValueError("only stale worktrees can be marked cleaned")
+        if record.status not in {"stale", "active"}:
+            raise ValueError("only active or stale worktrees can be marked cleaned")
         record.status = "cleaned"
         return self.store.save(record)
+
+    def expire_leases(self) -> list[WorktreeRecord]:
+        expired: list[WorktreeRecord] = []
+        for record in self.store.list():
+            if record.status in {"planned", "active"} and self.is_expired(record):
+                record.status = "stale"
+                expired.append(self.store.save(record))
+        return expired
+
+    @staticmethod
+    def is_expired(record: WorktreeRecord) -> bool:
+        return bool(record.lease_expires_at and record.lease_expires_at <= utc_now())
+
+    def cleanup_plan(
+        self,
+        record: WorktreeRecord,
+        *,
+        workspace: str | Path,
+        dry_run: bool = True,
+    ) -> WorktreeExecutionPlan:
+        if record.status not in {"stale", "active"}:
+            raise ValueError("only active or stale worktrees can be cleaned")
+        command = subprocess.list2cmdline(["git", "worktree", "remove", record.path])
+        return WorktreeExecutionPlan(
+            worktree_id=record.id,
+            task_id=record.task_id,
+            workspace=str(Path(workspace).resolve()),
+            dry_run=dry_run,
+            commands=[
+                WorktreeCommand(
+                    purpose="remove isolated git worktree",
+                    cmd=command,
+                    risk="high",
+                    requires_approval=True,
+                )
+            ],
+        )
 
     def materialization_plan(
         self,

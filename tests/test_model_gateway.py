@@ -2,7 +2,13 @@ import unittest
 import tempfile
 from pathlib import Path
 
-from loopos.gateway import ChatOpsGateway, GatewayStore
+from loopos.gateway import (
+    AttachmentMetadata,
+    ChatOpsGateway,
+    GatewayAuthPolicy,
+    GatewaySession,
+    GatewayStore,
+)
 from loopos.model_kernel import MultiModelScheduler, ProviderRegistry, load_provider_profiles
 
 
@@ -92,8 +98,41 @@ providers:
 
             self.assertEqual(store.list_messages()[0].id, event.id)
             self.assertTrue(decision.approve)
+            self.assertEqual(decision.signal, "approve")
             self.assertEqual(decision.run_id, "run-1")
             self.assertEqual(store.load_approval(card.id).status, "approved")
+
+    def test_gateway_auth_attachment_delivery_and_session_flow(self) -> None:
+        policy = GatewayAuthPolicy(
+            allowlists={"slack": {"u1"}},  # type: ignore[dict-item]
+            tokens={"slack": "token"},  # type: ignore[dict-item]
+        )
+        gateway = ChatOpsGateway(auth_policy=policy)
+        with self.assertRaises(ValueError):
+            gateway.receive("slack", "u2", "run tests", token="token")
+        event = gateway.receive(
+            "slack",
+            "u1",
+            "inspect screenshot",
+            token="token",
+            attachments=[AttachmentMetadata(filename="failure.png", media_type="image/png")],
+        )
+        delivery = gateway.deliver("slack", "u1", "run accepted", message_id=event.id)
+        self.assertTrue(event.authenticated)
+        self.assertEqual(event.attachments[0].filename, "failure.png")
+        self.assertEqual(delivery.status, "delivered")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            store = GatewayStore(
+                messages_path=Path(tmp) / "messages.json",
+                approvals_path=Path(tmp) / "approvals.json",
+            )
+            store.save_delivery(delivery)
+            session = store.save_session(
+                GatewaySession(channel="slack", user_id="u1", run_id="run-1")
+            )
+            self.assertEqual(store.list_deliveries()[0].id, delivery.id)
+            self.assertEqual(store.list_sessions()[0].id, session.id)
 
 
 if __name__ == "__main__":

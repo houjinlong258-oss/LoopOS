@@ -66,11 +66,44 @@ def worktrees_command(
             print("worktrees cleanup requires WORKTREE_ID.", file=sys.stderr)
             return 1
         try:
-            record = WorktreeManager(store).mark_cleaned(task_id)
+            manager = WorktreeManager(store)
+            record = store.load(task_id)
+            plan = manager.cleanup_plan(record, workspace=workspace, dry_run=dry_run)
+            router = create_default_syscall_router(workspace, auto_approve_medium=yes)
+            results = [
+                router.dispatch(
+                    SyscallCall(
+                        run_id=f"worktree-cleanup-{record.id}",
+                        instruction_id=f"worktree-cleanup-{record.id}",
+                        name="terminal.exec",
+                        input={"cmd": command.cmd, "timeout_seconds": 30},
+                        workspace=str(workspace),
+                        mode="dry_run" if dry_run else "guarded",
+                        approval_granted=yes,
+                    )
+                )
+                for command in plan.commands
+            ]
+            if not dry_run and all(result.success for result in results):
+                record = manager.mark_cleaned(task_id)
         except (KeyError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             return 1
-        print(record.model_dump_json(indent=2))
+        print(
+            json.dumps(
+                {
+                    "record": record.model_dump(mode="json"),
+                    "plan": plan.model_dump(mode="json"),
+                    "results": [result.model_dump(mode="json") for result in results],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0 if all(result.success for result in results) else 3
+    if action == "expire":
+        records = WorktreeManager(store).expire_leases()
+        print(json.dumps([item.model_dump(mode="json") for item in records], indent=2))
         return 0
     if action == "materialize":
         if not task_id:

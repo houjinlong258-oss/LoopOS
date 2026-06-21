@@ -1,0 +1,30 @@
+id: gateway-auth
+name: Gateway Authentication Policy
+version: 0.1.0
+priority: 980
+rules:
+  - id: gateway.block.unauthenticated
+    scope: gateway.receive
+    priority: 1000
+    severity: critical
+    conditions:
+      - field: authenticated
+        operator: equals
+        value: false
+    actions:
+      - type: deny
+        reason_code: gateway.authentication_required
+        safety_level: L5
+        audit_required: true
+  - id: gateway.allow.authenticated
+    scope: gateway.receive
+    priority: 100
+    severity: low
+    conditions:
+      - field: authenticated
+        operator: equals
+        value: true
+    actions:
+      - type: allow
+        reason_code: gateway.authenticated
+        safety_level: L1
