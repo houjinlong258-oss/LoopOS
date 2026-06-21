@@ -32,7 +32,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from loopos.release import package_release  # noqa: E402
+from loopos.release import check_release_clean, package_release  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -63,7 +63,31 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Emit the report as JSON instead of human-readable text.",
     )
+    parser.add_argument(
+        "--strict-source",
+        action="store_true",
+        help="Fail if the source tree itself contains release hygiene findings.",
+    )
     args = parser.parse_args(argv)
+
+    if args.strict_source:
+        source_report = check_release_clean(args.source, ignore_local_only=True)
+        if not source_report.ok or source_report.warnings:
+            if args.as_json:
+                payload = source_report.to_dict()
+                payload["strict_source"] = True
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print("strict source preflight failed")
+                print(f"errors: {len(source_report.errors)}")
+                for finding in source_report.errors[:20]:
+                    loc = f" {finding.path}:" if finding.path else ""
+                    print(f"  [error] {finding.code}{loc} {finding.message}")
+                print(f"warnings: {len(source_report.warnings)}")
+                for finding in source_report.warnings[:20]:
+                    loc = f" {finding.path}:" if finding.path else ""
+                    print(f"  [warn] {finding.code}{loc} {finding.message}")
+            return 1
 
     report = package_release(
         version=args.version,

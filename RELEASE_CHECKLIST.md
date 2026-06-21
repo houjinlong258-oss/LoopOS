@@ -19,7 +19,7 @@ before tagging a release.  It mirrors the items enforced by
       zep / projectmem / hermes-agent-*) in the tree
 - [ ] no local planning notes (`task_plan.md` / `findings.md` /
       `progress.md`) in the tree
-- [ ] no absolute dev paths (`D:\\LoopOS` / `/home/.../LoopOS`) in source
+- [ ] no absolute developer workspace paths in source
 
 ## 3. Tests & types
 

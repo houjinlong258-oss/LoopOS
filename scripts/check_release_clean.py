@@ -53,9 +53,14 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Treat warnings (e.g. leaked dev paths) as errors.",
     )
+    parser.add_argument(
+        "--ignore-local-only",
+        action="store_true",
+        help="Ignore gitignored local state such as .loopos, caches, and planning notes.",
+    )
     args = parser.parse_args(argv)
 
-    report = check_release_clean(args.source)
+    report = check_release_clean(args.source, ignore_local_only=args.ignore_local_only)
 
     if args.as_json:
         print(json.dumps(report.to_dict(), indent=2, sort_keys=True))

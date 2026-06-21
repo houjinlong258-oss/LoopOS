@@ -20,7 +20,12 @@ from loopos.release.hygiene import (
     BLOCKED_FILES,
     REQUIRED_TOP_LEVEL_FILES,
 )
-from loopos.release.packaging import _should_skip_dir, _should_skip_file
+from loopos.release.packaging import (
+    ALLOWED_TOP_LEVEL_DIRS,
+    ALLOWED_TOP_LEVEL_FILES,
+    _should_skip_dir,
+    _should_skip_file,
+)
 
 
 _REQUIRED_FILES = list(REQUIRED_TOP_LEVEL_FILES)
@@ -96,6 +101,17 @@ def test_blocked_local_planning_notes_are_blockers(tmp_path: Path) -> None:
     assert not report.ok
     found = {f.path for f in report.errors if f.code == "BLOCKED_FILE"}
     assert set(BLOCKED_FILES).issubset(found)
+
+
+def test_ignore_local_only_skips_planning_and_cache_state(tmp_path: Path) -> None:
+    _scaffold_clean_tree(tmp_path)
+    (tmp_path / "task_plan.md").write_text("local plan\n", encoding="utf-8")
+    (tmp_path / "findings.md").write_text("local findings\n", encoding="utf-8")
+    cache = tmp_path / ".loopos" / "__pycache__"
+    cache.mkdir(parents=True)
+    (cache / "state.pyc").write_bytes(b"cache")
+    report = check_release_clean(tmp_path, ignore_local_only=True)
+    assert report.ok
 
 
 def test_third_party_snapshots_are_blockers(tmp_path: Path) -> None:
@@ -182,6 +198,40 @@ def test_should_skip_file_recognises_blocked_files() -> None:
     assert _should_skip_file("module.pyc")
     assert _should_skip_file("module.pyo")
     assert not _should_skip_file("module.py")
+
+
+@pytest.mark.parametrize(
+    "name",
+    [".env", ".env.production", "state.sqlite3", "run.log", "tls.pem", "id_rsa"],
+)
+def test_sensitive_and_runtime_files_are_blocked(tmp_path: Path, name: str) -> None:
+    _scaffold_clean_tree(tmp_path)
+    (tmp_path / name).write_text("private\n", encoding="utf-8")
+    report = check_release_clean(tmp_path)
+    assert not report.ok
+    assert any(f.code == "BLOCKED_FILE" and f.path == name for f in report.errors)
+
+
+def test_missing_readme_local_link_is_blocker(tmp_path: Path) -> None:
+    _scaffold_clean_tree(tmp_path)
+    (tmp_path / "README.md").write_text(
+        "See [missing guide](docs/missing.md).\n", encoding="utf-8"
+    )
+    report = check_release_clean(tmp_path)
+    assert not report.ok
+    assert any(f.code == "README_LINK_MISSING" for f in report.errors)
+
+
+def test_release_size_limit_is_enforced(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import loopos.release.hygiene as hygiene
+
+    _scaffold_clean_tree(tmp_path)
+    monkeypatch.setattr(hygiene, "MAX_ARTIFACT_SIZE_BYTES", 1)
+    report = check_release_clean(tmp_path)
+    assert not report.ok
+    assert any(f.code == "ARTIFACT_TOO_LARGE" for f in report.errors)
 
 
 # ---------------------------------------------------------------------------
@@ -276,6 +326,29 @@ def test_package_release_prunes_blocked_paths(tmp_path: Path) -> None:
 
     # The hygiene findings are surfaced in the report for the caller.
     assert report.hygiene_errors, "expected hygiene errors to be surfaced"
+
+
+def test_package_release_uses_top_level_allowlist(tmp_path: Path) -> None:
+    src = tmp_path / "src"
+    src.mkdir()
+    _scaffold_clean_tree(src)
+    private = src / "private-notes"
+    private.mkdir()
+    (private / "handoff.md").write_text("not public\n", encoding="utf-8")
+    (src / "private.txt").write_text("not public\n", encoding="utf-8")
+
+    out = tmp_path / "out"
+    report = package_release(
+        version="0.3.0", source=src, output=out, make_zip=False
+    )
+
+    assert not report.errors
+    staging = Path(report.staging_dir)
+    assert not (staging / "private-notes").exists()
+    assert not (staging / "private.txt").exists()
+    assert (staging / "loopos" / "__init__.py").exists()
+    assert "loopos" in ALLOWED_TOP_LEVEL_DIRS
+    assert "README.md" in ALLOWED_TOP_LEVEL_FILES
 
 
 def test_package_release_refuses_to_overwrite_existing_staging(tmp_path: Path) -> None:

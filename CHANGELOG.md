@@ -50,7 +50,7 @@
   `loopos kernel`, plus `loopos review artifact` and `loopos review gate`.
 - Plugin examples under `examples/plugins/`: provider-openai-compatible,
   skill-pytest-repair, policy-strict-terminal, gateway-webhook,
-  benchmark-basic — each with a manifest and README.
+  benchmark-basic - each with a manifest and README.
 - Maintainability Kernel v0.5: `ArchitectureBoundaryRules` (module-boundary
   graph, cross-package import detection, public-API change checks),
   `TestQualityRules` (trivial-assertion, try/except-pass, skip/xfail
@@ -76,6 +76,22 @@
 - SQLite Data Guard demo path: `loopos db sqlite-demo` command
   demonstrating inspect -> backup -> verify -> shadow -> validate on a
   temp database with no production impact.
+- Founding release readiness gate with isolated package hygiene, README link,
+  governance, plugin example, metadata, CLI, policy explanation, and release-note checks.
+- Release packaging top-level allowlist and blocking for runtime databases, logs,
+  environment files, private keys, oversized artifacts, and broken README links.
+- Python AST symbol/import indexing with symbol search and file explanation commands.
+- Productized Kernel inspect and trace-tree output with run, approval, checkpoint,
+  invariant, and no-side-effect replay context.
+- Review Artifact pipeline aggregation for trace, diff, test, policy, Data Guard,
+  and Maintainability Gate evidence.
+- Founding documentation, offline demo inputs, screenshot guidance, limitations,
+  plugin contributor guidance, and release notes.
+- Founding Release final hardening: readiness tier separation, generated CI
+  reports, deep smoke suite, invalid-diff maintainability safety, risk-aware
+  MergeGate, structured review evidence, Fusion trace event IDs, SQLite real
+  file Data Guard flow, Prompt Distillation v0.9 safety fields, registry
+  permission explanations, and local import/diff intelligence.
 
 ### Notes
 

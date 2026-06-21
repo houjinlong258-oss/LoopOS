@@ -64,6 +64,29 @@ BLOCKED_DIRS: tuple[str, ...] = (
     ".codex",
 )
 
+LOCAL_ONLY_DIRS: tuple[str, ...] = (
+    ".git",
+    ".venv",
+    ".loopos",
+    ".pytest_cache",
+    ".pytest-tmp",
+    ".ruff_cache",
+    ".mypy_cache",
+    "__pycache__",
+    ".agents",
+    ".codex",
+    "zep-main",
+)
+
+LOCAL_ONLY_DIR_GLOBS: tuple[str, ...] = (
+    ".loopos-*",
+    "OpenHands-*",
+    "langgraph-*",
+    "letta-*",
+    "projectmem-*",
+    "hermes-agent-*",
+)
+
 BLOCKED_DIR_GLOBS: tuple[str, ...] = (
     ".loopos-*",
     "OpenHands-*",
@@ -80,6 +103,12 @@ BLOCKED_FILES: tuple[str, ...] = (
     "progress.md",
     "id_rsa",
     "id_ed25519",
+)
+
+LOCAL_ONLY_FILES: tuple[str, ...] = (
+    "task_plan.md",
+    "findings.md",
+    "progress.md",
 )
 
 BLOCKED_FILE_GLOBS: tuple[str, ...] = (
@@ -161,7 +190,11 @@ def _matches_any_glob(name: str, patterns: Iterable[str]) -> bool:
     return any(fnmatchcase(lowered, pat.lower()) for pat in patterns)
 
 
-def _iter_source_files(root: Path) -> Iterable[tuple[Path, Path]]:
+def _iter_source_files(
+    root: Path,
+    *,
+    ignore_local_only: bool = False,
+) -> Iterable[tuple[Path, Path]]:
     """Yield ``(relative_path, absolute_path)`` for every file under ``root``.
 
     Pruning happens in this single pass so the caller does not have to
@@ -170,7 +203,17 @@ def _iter_source_files(root: Path) -> Iterable[tuple[Path, Path]]:
     """
 
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(dirnames)
+        if ignore_local_only:
+            dirnames[:] = sorted(
+                name
+                for name in dirnames
+                if not _is_local_only_dir_name(name)
+            )
+            filenames = [
+                name for name in filenames if name not in LOCAL_ONLY_FILES
+            ]
+        else:
+            dirnames[:] = sorted(dirnames)
         rel_dir = Path(dirpath).relative_to(root)
         for fname in sorted(filenames):
             full = Path(dirpath) / fname
@@ -178,7 +221,11 @@ def _iter_source_files(root: Path) -> Iterable[tuple[Path, Path]]:
             yield rel, full
 
 
-def check_release_clean(source: str | os.PathLike[str]) -> ReleaseReport:
+def check_release_clean(
+    source: str | os.PathLike[str],
+    *,
+    ignore_local_only: bool = False,
+) -> ReleaseReport:
     """Run the full hygiene check against ``source`` and return the report.
 
     Never raises on a forbidden-path finding; records the finding and
@@ -211,13 +258,16 @@ def check_release_clean(source: str | os.PathLike[str]) -> ReleaseReport:
                 )
             )
 
-    for rel, full in _iter_source_files(root):
+    for rel, full in _iter_source_files(root, ignore_local_only=ignore_local_only):
         # Directory check FIRST: if a file lives inside a blocked
         # directory, the directory is the primary violation and we do
         # not also want to flood the report with one BLOCKED_DIR per file
         # we happened to encounter inside it.
         blocked_parent = ""
         for parent in rel.parents:
+            if ignore_local_only and _is_local_only_dir_name(parent.name):
+                blocked_parent = ""
+                break
             if parent.name in BLOCKED_DIRS or _matches_any_glob(parent.name, BLOCKED_DIR_GLOBS):
                 blocked_parent = parent.name
                 break
@@ -252,6 +302,8 @@ def check_release_clean(source: str | os.PathLike[str]) -> ReleaseReport:
             continue
 
         if full.name in BLOCKED_FILES:
+            if ignore_local_only and full.name in LOCAL_ONLY_FILES:
+                continue
             report.errors.append(
                 ReleaseFinding(
                     severity="error",
@@ -284,6 +336,8 @@ def check_release_clean(source: str | os.PathLike[str]) -> ReleaseReport:
 
     for child in sorted(root.iterdir()):
         if child.is_dir():
+            if ignore_local_only and _is_local_only_dir_name(child.name):
+                continue
             if child.name in BLOCKED_DIRS or _matches_any_glob(child.name, BLOCKED_DIR_GLOBS):
                 already = any(
                     f.code == "BLOCKED_DIR" and f.path == child.name
@@ -317,6 +371,10 @@ def check_release_clean(source: str | os.PathLike[str]) -> ReleaseReport:
     report.errors.extend(_validate_readme_links(root))
 
     return report
+
+
+def _is_local_only_dir_name(name: str) -> bool:
+    return name in LOCAL_ONLY_DIRS or _matches_any_glob(name, LOCAL_ONLY_DIR_GLOBS)
 
 
 def _validate_readme_links(root: Path) -> list[ReleaseFinding]:

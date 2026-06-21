@@ -38,6 +38,43 @@ from loopos.release.hygiene import (
 __all__ = ["PackageReport", "package_release"]
 
 
+ALLOWED_TOP_LEVEL_DIRS: frozenset[str] = frozenset(
+    {
+        ".github",
+        "benchmarks",
+        "docs",
+        "examples",
+        "loopos",
+        "policies",
+        "providers",
+        "scripts",
+        "tests",
+    }
+)
+
+ALLOWED_TOP_LEVEL_FILES: frozenset[str] = frozenset(
+    {
+        ".gitattributes",
+        ".gitignore",
+        "AGENTS.md",
+        "CHANGELOG.md",
+        "CODE_OF_CONDUCT.md",
+        "CONTRIBUTING.md",
+        "GOVERNANCE.md",
+        "LICENSE",
+        "MAINTAINERS.md",
+        "Makefile",
+        "PLUGIN_SPEC.md",
+        "README.md",
+        "RELEASE_CHECKLIST.md",
+        "RFC_PROCESS.md",
+        "ROADMAP.md",
+        "SECURITY.md",
+        "pyproject.toml",
+    }
+)
+
+
 @dataclass
 class PackageReport:
     """Structured report returned by ``package_release``."""
@@ -74,8 +111,18 @@ def _iter_source_files(root: Path) -> Iterable[Path]:
     """
 
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(d for d in dirnames if not _should_skip_dir(d))
         base = Path(dirpath)
+        if base == root:
+            dirnames[:] = sorted(
+                d
+                for d in dirnames
+                if d in ALLOWED_TOP_LEVEL_DIRS and not _should_skip_dir(d)
+            )
+            filenames = [
+                name for name in filenames if name in ALLOWED_TOP_LEVEL_FILES
+            ]
+        else:
+            dirnames[:] = sorted(d for d in dirnames if not _should_skip_dir(d))
         for fname in sorted(filenames):
             if _should_skip_file(fname):
                 continue
