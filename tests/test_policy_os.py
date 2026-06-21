@@ -215,13 +215,41 @@ rules:
         )
         self.assertEqual(decision.safety_level, "L5")
 
-    def test_rm_rf_tmp_is_not_root_delete(self) -> None:
+    def test_rm_rf_non_root_is_denied_as_high_risk(self) -> None:
         decision = PolicyEngine.load_default().evaluate(
             "terminal.execute",
             subject={"cmd": "rm -rf /tmp/foo"},
         )
-        self.assertNotEqual(decision.safety_level, "L5")
-        self.assertEqual(decision.safety_level, "L3")
+        self.assertEqual(decision.action, "deny")
+        self.assertEqual(decision.safety_level, "L5")
+        self.assertFalse(decision.allowed)
+
+    def test_rm_rf_relative_path_is_denied(self) -> None:
+        decision = PolicyEngine.load_default().evaluate(
+            "terminal.execute",
+            subject={"cmd": "rm -rf tmp"},
+        )
+        self.assertEqual(decision.action, "deny")
+        self.assertEqual(decision.safety_level, "L5")
+        self.assertFalse(decision.allowed)
+
+    def test_rm_rf_dot_is_denied(self) -> None:
+        decision = PolicyEngine.load_default().evaluate(
+            "terminal.execute",
+            subject={"cmd": "rm -rf ."},
+        )
+        self.assertEqual(decision.action, "deny")
+        self.assertEqual(decision.safety_level, "L5")
+        self.assertFalse(decision.allowed)
+
+    def test_rm_rf_root_is_denied(self) -> None:
+        decision = PolicyEngine.load_default().evaluate(
+            "terminal.execute",
+            subject={"cmd": "rm -rf /"},
+        )
+        self.assertEqual(decision.action, "deny")
+        self.assertEqual(decision.safety_level, "L5")
+        self.assertFalse(decision.allowed)
 
     def test_wget_bash_is_blocked(self) -> None:
         decision = PolicyEngine.load_default().evaluate(

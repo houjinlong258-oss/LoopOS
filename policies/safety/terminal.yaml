@@ -29,6 +29,9 @@ rules:
             value: '\brm\s+-rf\s+[/\\](\s|$)'
           - field: cmd
             operator: regex
+            value: '\brm\s+-rf\s+\S'
+          - field: cmd
+            operator: regex
             value: '\bsudo\b'
           - field: cmd
             operator: regex
