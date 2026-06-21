@@ -2,8 +2,8 @@
   "schema_version": "1.1",
   "generated_by": "scripts/ci_report.py",
   "target": "founding-release",
-  "generated_at": "2026-06-21T14:12:18+00:00",
-  "git_commit": "9602d96375ef4fdf62422036677115b8acebca27",
+  "generated_at": "2026-06-21T15:16:35+00:00",
+  "git_commit": "0411bfb1a39a152008ca32706ff07790a0eff4ae",
   "python": "3.13.2",
   "platform": "Windows-11-10.0.26200-SP0",
   "offline": true,
@@ -12,15 +12,15 @@
     "ruff": "python -m ruff check .",
     "mypy": "python -m mypy loopos tests"
   },
-  "tests_passed": 379,
+  "tests_passed": 396,
   "subtests_passed": 19,
   "tests_failed": 0,
   "ruff": "passed",
   "mypy": "passed",
   "pytest_exit_code": 0,
-  "pytest_output_tail": "........................................................................ [ 18%]\n............................................................................................................................. [ 51%]\n........................................................................ [ 70%]\n........................................................................ [ 89%]\n......................................                                   [100%]\n============================== warnings summary ===============================\ntests/test_eval_runner.py::EvalRunnerTests::test_load_and_run_tasks\ntests/test_eval_runner.py::EvalRunnerTests::test_load_and_run_tasks\ntests/test_golden_trace.py::GoldenTraceTests::test_demo_event_type_sequence\ntests/test_loop_engine.py::LoopEngineTests::test_success_path\ntests/test_policy_os.py::PolicyOSTests::test_loop_engine_blocks_policy_denied_terminal_instruction\n  <repo>\\loopos\\core\\loop_engine.py:163: DeprecationWarning: loopos.core.loop_engine.LoopEngine is deprecated; use loopos.kernel.loop_engine.KernelLoopEngine. Will be removed in v0.2.\n    return cls(\n\ntests/test_integrations.py::IntegrationTests::test_langgraph_fallback_runs\n  <repo>\\loopos\\core\\graph_loop.py:60: DeprecationWarning: loopos.core.loop_engine.LoopEngine is deprecated; use loopos.kernel.loop_engine.KernelLoopEngine. Will be removed in v0.2.\n    return LoopEngine().run(goal, max_steps=max_steps)\n\ntests/test_loop_engine.py::LoopEngineTests::test_max_steps_failure\n  <repo>\\tests\\test_loop_engine.py:26: DeprecationWarning: loopos.core.loop_engine.LoopEngine is deprecated; use loopos.kernel.loop_engine.KernelLoopEngine. Will be removed in v0.2.\n    engine = LoopEngine(policy=NeverTerminatePolicy())\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n379 passed, 7 warnings, 19 subtests passed in 98.74s (0:01:38)\n\nException ignored in atexit callback <function cleanup_numbered_dir at 0x000002445DDC02C0>:\nTraceback (most recent call last):\n  File \"C:\\Users\\24749\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\_pytest\\pathlib.py\", line 374, in cleanup_numbered_dir\n    cleanup_dead_symlinks(root)\n  File \"C:\\Users\\24749\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\_pytest\\pathlib.py\", line 359, in cleanup_dead_symlinks\n    if not left_dir.resolve().exists():\n  File \"C:\\Users\\24749\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\pathlib\\_abc.py\", line 450, in exists\n    self.stat(follow_symlinks=follow_symlinks)\n  File \"C:\\Users\\24749\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\pathlib\\_local.py\", line 515, in stat\n    return os.stat(self, follow_symlinks=follow_symlinks)\nPermissionError: [WinError 5] �ܾ����ʡ�: 'C:\\\\Users\\\\24749\\\\AppData\\\\Local\\\\Temp\\\\pytest-of-24749\\\\pytest-current'",
+  "pytest_output_tail": "........................................................................ [ 18%]\n............................................................................................................................. [ 49%]\n........................................................................ [ 67%]\n........................................................................ [ 86%]\n.......................................................                  [100%]\n396 passed, 19 subtests passed in 109.48s (0:01:49)",
   "ruff_exit_code": 0,
   "ruff_output_tail": "All checks passed!",
   "mypy_exit_code": 0,
-  "mypy_output_tail": "Success: no issues found in 252 source files"
+  "mypy_output_tail": "Success: no issues found in 256 source files"
 }
