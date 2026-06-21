@@ -26,3 +26,21 @@ hermes-agent-*.zip
 task_plan.md
 findings.md
 progress.md
+
+# Windows reserved device name strays (NUL/CON/PRN/AUX/COM*/LPT*) that some
+# shells redirecting to "nul" can materialize as 0-byte entries. These cannot
+# be deleted by normal rm/del because Windows resolves them to device handles,
+# so we ignore them to keep the working tree clean and prevent `mypy .` from
+# crashing on path resolution.
+nul
+CON
+PRN
+AUX
+COM1
+COM2
+COM3
+COM4
+LPT1
+LPT2
+LPT3
+LPT4
