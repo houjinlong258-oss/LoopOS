@@ -26,6 +26,10 @@ LoopOS governs agent-generated work through:
 
 Traditional operating systems run programs. LoopOS runs agents.
 
+LoopOS is not a workflow framework. It turns agent actions into governed runtime syscalls, giving
+agents freedom inside capability, policy, trace, review, and outcome boundaries. Let agents think
+freely; let LoopOS govern action safely.
+
 ## Founding Release
 
 - Versioned Kernel runs, bounded deterministic scheduling, approval resume, trace, and replay.
@@ -146,6 +150,14 @@ The test suite is deterministic and offline. See `CONTRIBUTING.md`, `SECURITY.md
 - [Plugin Development](docs/plugin-development.md)
 - [Plugin Permissions](docs/plugin-permissions.md)
 - [Founding Preview Release Notes](docs/release-notes/founding-preview.md)
+- [Release Hygiene and Artifact Verification](docs/release-hygiene.md)
+- [Governed Agent Loop](docs/governed-agent-loop.md)
+- [Agent Freedom Runtime](docs/agent-freedom-runtime.md)
+- [Agent Command Interface](docs/agent-command-interface.md)
+- [Agent Loop Interface](docs/agent-loop-interface.md)
+- [Anti-Bloat Gate](docs/anti-bloat-gate.md)
+- [Go Core Roadmap](docs/go-core-roadmap.md)
+- [Klein Loopi](docs/brand/klein-loopi.md)
 
 ## License
 

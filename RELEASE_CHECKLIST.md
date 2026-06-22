@@ -50,9 +50,16 @@ before tagging a release.  It mirrors the items enforced by
 - [ ] extract the zip into a fresh temp dir
 - [ ] `python scripts/check_release_clean.py --source <extracted>` exits 0
 - [ ] `pytest` passes against the extracted tree
+- [ ] `python scripts/verify_release_artifact.py dist/loopos-<X>.zip --json` passes
+- [ ] Python `zipfile` and system `unzip` extraction pass where `unzip` is available
+- [ ] internal `SHA256SUMS` verifies every packaged source file
+- [ ] archive paths contain no surrogate characters or non-ASCII runtime paths
+- [ ] extracted source can be repackaged
 
 ## 7. Final sign-off
 
 - [ ] SHA256 of the zip recorded in the release notes
+- [ ] artifact ZIP SHA is not confused with internal per-file `SHA256SUMS`
+- [ ] tag readiness was verified in a Git checkout; source packages cannot prove tag identity
 - [ ] tag created: `git tag -s v<X>`
 - [ ] release notes published
