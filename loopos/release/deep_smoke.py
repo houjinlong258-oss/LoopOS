@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import signal
 import sqlite3
 import subprocess
 import sys
@@ -16,6 +18,7 @@ import tempfile
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -31,14 +34,14 @@ class SmokeCheck:
     stdout_tail: str = ""
     stderr_tail: str = ""
     reason: str | None = None
-    timeout_seconds: int | None = None
+    timeout_seconds: float | None = None
 
 
 _ACTIVE_COMMANDS: list[str] = []
 _ACTIVE_STDOUT: list[str] = []
 _ACTIVE_STDERR: list[str] = []
 _ACTIVE_TIMEOUT = False
-_TIMEOUT_PER_CHECK = 60
+_TIMEOUT_PER_CHECK = 60.0
 _CHECK_DEADLINE: float | None = None
 
 
@@ -48,25 +51,38 @@ def run_deep_smoke(
     only: set[str] | None = None,
     skip: set[str] | None = None,
     timeout_per_check: int = 60,
+    global_timeout: int = 300,
+    progress: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     repo = Path(root).resolve()
     checks: list[SmokeCheck] = []
+    suite_started = time.perf_counter()
+    suite_deadline = suite_started + max(1, global_timeout)
+    timed_out_check: str | None = None
     with tempfile.TemporaryDirectory(prefix="loopos-deep-smoke-") as tmp:
-        temp = Path(tmp)
-        workspace = temp / "workspace"
-        data_dir = temp / ".loopos"
-        workspace.mkdir()
-        specs = [
-            ("cli_help", lambda: _cli_help(repo)),
-            ("hello_dry_run", lambda: _hello_dry_run(repo, workspace, data_dir)),
-            ("policy_remote_pipe", lambda: _policy_remote_pipe(repo)),
-            ("invalid_diff_gate", lambda: _invalid_diff_gate(repo, temp)),
-            ("sqlite_file_flow", lambda: _sqlite_file_flow(repo, temp, data_dir)),
-            ("fusion_trace", lambda: _fusion_trace(repo, data_dir)),
-            ("webhook_flow", lambda: _webhook_flow(repo, data_dir)),
-            ("trace_replay", lambda: _trace_replay(repo, workspace, data_dir)),
-            ("review_artifact", lambda: _review_artifact(repo, workspace, data_dir)),
-            ("registry_examples", lambda: _registry_examples(repo, data_dir)),
+        specs: list[tuple[str, Callable[[Path, Path, Path], SmokeCheck]]] = [
+            ("cli_help", lambda temp, workspace, data: _cli_help(repo)),
+            (
+                "hello_dry_run",
+                lambda temp, workspace, data: _hello_dry_run(repo, workspace, data),
+            ),
+            ("policy_remote_pipe", lambda temp, workspace, data: _policy_remote_pipe(repo)),
+            ("invalid_diff_gate", lambda temp, workspace, data: _invalid_diff_gate(repo, temp)),
+            (
+                "sqlite_file_flow",
+                lambda temp, workspace, data: _sqlite_file_flow(repo, temp, data),
+            ),
+            ("fusion_trace", lambda temp, workspace, data: _fusion_trace(repo, data)),
+            ("webhook_flow", lambda temp, workspace, data: _webhook_flow(repo, data)),
+            (
+                "trace_replay",
+                lambda temp, workspace, data: _trace_replay(repo, workspace, data),
+            ),
+            (
+                "review_artifact",
+                lambda temp, workspace, data: _review_artifact(repo, workspace, data),
+            ),
+            ("registry_examples", lambda temp, workspace, data: _registry_examples(repo, data)),
         ]
         known = {name for name, _ in specs}
         requested = only or known
@@ -83,13 +99,57 @@ def run_deep_smoke(
         for name, check in specs:
             if name not in requested or name in (skip or set()):
                 continue
-            checks.append(_timed_check(name, check, max(1, timeout_per_check)))
+            remaining = suite_deadline - time.perf_counter()
+            if remaining <= 0:
+                timed_out_check = name
+                checks.append(
+                    SmokeCheck(
+                        name=name,
+                        status="failed",
+                        message=f"global timeout reached before {name}",
+                        reason="global_timeout",
+                        timeout_seconds=max(1, global_timeout),
+                    )
+                )
+                break
+            check_temp = Path(tmp) / name
+            workspace = check_temp / "workspace"
+            data_dir = check_temp / ".loopos"
+            workspace.mkdir(parents=True)
+            if progress is not None:
+                progress({"event": "check_started", "name": name})
+            effective_timeout = min(float(max(1, timeout_per_check)), remaining)
+            result = _timed_check(
+                name,
+                partial(check, check_temp, workspace, data_dir),
+                effective_timeout,
+            )
+            if result.reason == "timeout" and remaining <= timeout_per_check:
+                result.reason = "global_timeout"
+                result.message = f"global timeout reached while running {name}"
+                timed_out_check = name
+            checks.append(result)
+            if progress is not None:
+                progress(
+                    {
+                        "event": "check_completed",
+                        "name": name,
+                        "status": result.status,
+                        "duration_ms": result.duration_ms,
+                        "reason": result.reason,
+                    }
+                )
+            if result.reason == "global_timeout":
+                break
     passed = all(check.status == "passed" for check in checks)
     return {
         "schema_version": "1.1",
         "name": "founding-release-deep-smoke",
         "passed": passed,
         "timeout_per_check": max(1, timeout_per_check),
+        "global_timeout": max(1, global_timeout),
+        "duration_ms": int((time.perf_counter() - suite_started) * 1000),
+        "currently_running_check": timed_out_check,
         "checks": [asdict(check) for check in checks],
     }
 
@@ -101,12 +161,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--only", action="append", default=[])
     parser.add_argument("--skip", action="append", default=[])
     parser.add_argument("--timeout-per-check", type=int, default=60)
+    parser.add_argument("--global-timeout", type=int, default=300)
+    parser.add_argument("--jsonl-progress", action="store_true")
     args = parser.parse_args(argv)
+    progress = (
+        lambda event: print(json.dumps(event, ensure_ascii=False), file=sys.stderr, flush=True)
+    ) if args.jsonl_progress else None
     report = run_deep_smoke(
         args.root,
         only=set(args.only) or None,
         skip=set(args.skip),
         timeout_per_check=args.timeout_per_check,
+        global_timeout=args.global_timeout,
+        progress=progress,
     )
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
@@ -541,7 +608,7 @@ def _hello_run_json(
 def _timed_check(
     name: str,
     check: Callable[[], SmokeCheck],
-    timeout_seconds: int,
+    timeout_seconds: float,
 ) -> SmokeCheck:
     global _ACTIVE_COMMANDS, _ACTIVE_STDOUT, _ACTIVE_STDERR
     global _ACTIVE_TIMEOUT, _TIMEOUT_PER_CHECK, _CHECK_DEADLINE
@@ -582,28 +649,58 @@ def _run(repo: Path, cmd: list[str]) -> subprocess.CompletedProcess[str]:
         if _CHECK_DEADLINE is None
         else max(0.001, _CHECK_DEADLINE - time.perf_counter())
     )
+    popen_options: dict[str, Any] = {
+        "cwd": repo,
+        "stdout": subprocess.PIPE,
+        "stderr": subprocess.PIPE,
+        "text": True,
+        "encoding": "utf-8",
+        "errors": "replace",
+    }
+    if os.name == "nt":
+        popen_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+    else:
+        popen_options["start_new_session"] = True
+    process = subprocess.Popen(cmd, **popen_options)
     try:
-        result = subprocess.run(
-            cmd,
-            cwd=repo,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=remaining,
-            check=False,
-        )
+        stdout, stderr = process.communicate(timeout=remaining)
+        result = subprocess.CompletedProcess(cmd, process.returncode, stdout, stderr)
     except subprocess.TimeoutExpired as exc:
         _ACTIVE_TIMEOUT = True
+        _terminate_process_tree(process)
+        stdout, stderr = process.communicate()
         result = subprocess.CompletedProcess(
             cmd,
             124,
-            _timeout_text(exc.stdout),
-            _timeout_text(exc.stderr),
+            stdout or _timeout_text(exc.stdout),
+            stderr or _timeout_text(exc.stderr),
         )
     _ACTIVE_STDOUT.append(result.stdout[-1200:])
     _ACTIVE_STDERR.append(result.stderr[-1200:])
     return result
+
+
+def _terminate_process_tree(process: subprocess.Popen[str]) -> None:
+    """Terminate the isolated subprocess group created by ``_run``."""
+
+    if process.poll() is not None:
+        return
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+            capture_output=True,
+            check=False,
+            timeout=5,
+        )
+        return
+    kill_process_group = getattr(os, "killpg")
+    try:
+        kill_process_group(process.pid, signal.SIGTERM)
+        process.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        kill_process_group(process.pid, getattr(signal, "SIGKILL", signal.SIGTERM))
+    except ProcessLookupError:
+        pass
 
 
 def _timeout_text(value: str | bytes | None) -> str:

@@ -74,6 +74,15 @@ ALLOWED_TOP_LEVEL_FILES: frozenset[str] = frozenset(
     }
 )
 
+# Operational attestations are published beside the archive. Embedding either
+# file would make the archive checksum self-referential or immediately stale.
+EXCLUDED_RELEASE_METADATA: frozenset[str] = frozenset(
+    {
+        "docs/release-notes/founding-release.md",
+        "docs/reports/latest-test-report.json",
+    }
+)
+
 
 @dataclass
 class PackageReport:
@@ -126,7 +135,10 @@ def _iter_source_files(root: Path) -> Iterable[Path]:
         for fname in sorted(filenames):
             if _should_skip_file(fname):
                 continue
-            yield base / fname
+            path = base / fname
+            if path.relative_to(root).as_posix() in EXCLUDED_RELEASE_METADATA:
+                continue
+            yield path
 
 
 def _sha256_of(path: Path) -> str:

@@ -31,6 +31,7 @@ def check_release_readiness(
     strict_source: bool = False,
     deep: bool = False,
     timeout_per_check: int = 60,
+    global_timeout: int = 300,
 ) -> ReadinessReport:
     """Build an isolated package and evaluate its public release contracts."""
 
@@ -55,6 +56,16 @@ def check_release_readiness(
         )
 
     source_report = check_release_clean(root, ignore_local_only=False)
+    if strict_source and not (root / ".git").exists():
+        # ``python -m loopos.cli.app`` can create bytecode for the package and
+        # module entry points before application code can disable it. In a
+        # Git-less extracted source tree, artifact verification is authoritative
+        # for pre-existing bytecode; ignore only this interpreter side effect.
+        source_report.errors = [
+            finding
+            for finding in source_report.errors
+            if "__pycache__" not in finding.path and not finding.path.endswith(".pyc")
+        ]
     checks.append(source_tree_check(source_report, strict_source=strict_source))
     with TemporaryDirectory(prefix="loopos-readiness-") as temp:
         package = package_release(
@@ -93,7 +104,12 @@ def check_release_readiness(
             policy_explain_check(),
             release_notes_check(root),
             latest_test_report_check(root, require_generated=target != "founding-preview"),
-            deep_smoke_check(root, enabled=deep, timeout_per_check=timeout_per_check),
+            deep_smoke_check(
+                root,
+                enabled=deep,
+                timeout_per_check=timeout_per_check,
+                global_timeout=global_timeout,
+            ),
         ]
     )
     return ReadinessReport.from_checks(

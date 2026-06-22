@@ -24,6 +24,10 @@ from loopos.release.hygiene import (
     ReleaseReport,
     check_release_clean,
 )
+from loopos.release.artifact_verifier import (
+    ArtifactVerificationReport,
+    verify_release_artifact,
+)
 from loopos.release.packaging import (
     PackageReport,
     package_release,
@@ -37,6 +41,7 @@ __all__ = [
     "BLOCKED_DIRS",
     "BLOCKED_FILE_GLOBS",
     "BLOCKED_FILES",
+    "ArtifactVerificationReport",
     "LEAKED_PATH_RE",
     "REQUIRED_TOP_LEVEL_FILES",
     "ReleaseFinding",
@@ -48,4 +53,5 @@ __all__ = [
     "ReadinessReport",
     "check_release_readiness",
     "render_readiness",
+    "verify_release_artifact",
 ]

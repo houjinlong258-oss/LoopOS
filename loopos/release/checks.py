@@ -16,6 +16,12 @@ from loopos.release.hygiene import ReleaseReport
 from loopos.release.models import ReadinessCheck
 
 REQUIRED_DOCS: tuple[str, ...] = (
+    "docs/governed-agent-loop.md",
+    "docs/agent-freedom-runtime.md",
+    "docs/agent-command-interface.md",
+    "docs/agent-loop-interface.md",
+    "docs/anti-bloat-gate.md",
+    "docs/go-core-roadmap.md",
     "docs/maintainability.md",
     "docs/kernel-hardening.md",
     "docs/review-artifact.md",
@@ -305,6 +311,7 @@ def deep_smoke_check(
     *,
     enabled: bool,
     timeout_per_check: int = 60,
+    global_timeout: int = 300,
 ) -> ReadinessCheck:
     if not enabled:
         return ReadinessCheck(
@@ -322,6 +329,8 @@ def deep_smoke_check(
             "loopos.release.deep_smoke",
             "--timeout-per-check",
             str(timeout_per_check),
+            "--global-timeout",
+            str(global_timeout),
             "--json",
         ],
         cwd=root,
@@ -329,7 +338,7 @@ def deep_smoke_check(
         text=True,
         encoding="utf-8",
         errors="replace",
-        timeout=max(30, timeout_per_check * 10 + 30),
+        timeout=max(30, global_timeout + 30),
         check=False,
     )
     if result.returncode == 0:

@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 from loopos.cli.commands.release_cli import release_command
 from loopos.release.checks import REQUIRED_DOCS, REQUIRED_GOVERNANCE
 from loopos.release.hygiene import REQUIRED_TOP_LEVEL_FILES
+from loopos.release.models import ReadinessCheck, ReadinessReport
+from loopos.release.packaging import package_release
 from loopos.release.readiness import check_release_readiness
 
 
@@ -137,6 +143,90 @@ def test_default_readiness_packages_from_dev_tree_but_strict_source_fails(tmp_pa
     assert not strict.ready
 
 
+def test_founding_release_package_ready_is_not_tag_ready(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _scaffold_release(tmp_path)
+    monkeypatch.setattr(
+        "loopos.release.readiness.latest_test_report_check",
+        lambda *args, **kwargs: ReadinessCheck(  # noqa: ARG005
+            check_id="release.test_report",
+            name="report",
+            status="passed",
+            message="verified",
+        ),
+    )
+    (tmp_path / "task_plan.md").write_text("local planning only\n", encoding="utf-8")
+    report = check_release_readiness(tmp_path, target="founding-release")
+    assert report.overall_status == "READY_TO_PACKAGE"
+    assert report.ready_to_package is True
+    assert report.ready_to_tag is False
+    assert report.ready_to_publish is False
+    assert report.ready is False
+
+
+def test_not_ready_to_tag_never_sets_ready() -> None:
+    checks = [
+        ReadinessCheck(
+            check_id="release.source_tree_clean",
+            name="source",
+            status="passed",
+            message="clean",
+        ),
+        ReadinessCheck(
+            check_id="release.package_hygiene",
+            name="package",
+            status="passed",
+            message="clean",
+        ),
+        ReadinessCheck(
+            check_id="release.test_report",
+            name="report",
+            status="warning",
+            message="commit cannot be verified",
+        ),
+    ]
+    report = ReadinessReport.from_checks(
+        target="founding-release",
+        source=".",
+        checks=checks,
+    )
+    assert report.overall_status == "NOT_READY_TO_TAG"
+    assert report.ready_to_package is True
+    assert report.ready_to_tag is False
+    assert report.ready is False
+
+
+def test_founding_release_cli_exits_nonzero_when_only_package_ready(
+    tmp_path: Path,
+    capsys: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _scaffold_release(tmp_path)
+    monkeypatch.setattr(
+        "loopos.release.readiness.latest_test_report_check",
+        lambda *args, **kwargs: ReadinessCheck(  # noqa: ARG005
+            check_id="release.test_report",
+            name="report",
+            status="passed",
+            message="verified",
+        ),
+    )
+    (tmp_path / "task_plan.md").write_text("local planning only\n", encoding="utf-8")
+    rc = release_command(
+        "readiness",
+        source=str(tmp_path),
+        target="founding-release",
+        json_output=True,
+    )
+    payload = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert rc == 1
+    assert payload["ready_to_package"] is True
+    assert payload["ready_to_tag"] is False
+    assert payload["ready"] is False
+
+
 def test_strict_source_still_fails_on_leaked_dev_path(tmp_path: Path) -> None:
     _scaffold_release(tmp_path)
     leaked_path = "D:" + "\\LoopOS"
@@ -156,3 +246,38 @@ def test_cli_smoke_handles_utf8_output(tmp_path: Path) -> None:
     report = check_release_readiness(tmp_path)
     check = next(item for item in report.checks if item.check_id == "release.cli_smoke")
     assert check.status == "passed"
+
+
+def test_strict_readiness_module_ignores_only_its_own_bytecode(tmp_path: Path) -> None:
+    repo = Path(__file__).resolve().parents[1]
+    package = package_release(
+        version="strict-cli",
+        source=repo,
+        output=tmp_path,
+        make_zip=False,
+    )
+    assert not package.errors
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "loopos.cli.app",
+            "release",
+            "readiness",
+            "--target",
+            "founding-release",
+            "--strict-source",
+            "--json",
+        ],
+        cwd=package.staging_dir,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    payload = json.loads(result.stdout)
+    assert payload["source_tree_clean"] == "passed"
+    assert not any(
+        "__pycache__" in path for path in payload["source_tree_details"]["blocked_paths"]
+    )

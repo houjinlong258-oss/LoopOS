@@ -24,6 +24,7 @@ from loopos.release.hygiene import (
 from loopos.release.packaging import (
     ALLOWED_TOP_LEVEL_DIRS,
     ALLOWED_TOP_LEVEL_FILES,
+    EXCLUDED_RELEASE_METADATA,
     _should_skip_dir,
     _should_skip_file,
 )
@@ -92,6 +93,16 @@ def test_blocked_cache_directory_is_blocker(tmp_path: Path) -> None:
     codes = [f.code for f in report.errors]
     assert "BLOCKED_DIR" in codes
     assert "BLOCKED_FILE" in codes
+
+
+def test_runtime_package_rejects_markdown_and_non_ascii_paths(tmp_path: Path) -> None:
+    _scaffold_clean_tree(tmp_path)
+    (tmp_path / "loopos" / "guide.md").write_text("runtime doc\n", encoding="utf-8")
+    (tmp_path / "loopos" / "模块.py").write_text("VALUE = 1\n", encoding="utf-8")
+    report = check_release_clean(tmp_path)
+    findings = {(finding.code, finding.path) for finding in report.errors}
+    assert ("RUNTIME_DOCUMENT_PATH", str(Path("loopos") / "guide.md")) in findings
+    assert ("NON_ASCII_RUNTIME_PATH", str(Path("loopos") / "模块.py")) in findings
 
 
 def test_blocked_local_planning_notes_are_blockers(tmp_path: Path) -> None:
@@ -423,6 +434,25 @@ def test_package_release_uses_top_level_allowlist(tmp_path: Path) -> None:
     assert (staging / "loopos" / "__init__.py").exists()
     assert "loopos" in ALLOWED_TOP_LEVEL_DIRS
     assert "README.md" in ALLOWED_TOP_LEVEL_FILES
+
+
+def test_package_release_excludes_self_referential_attestations(tmp_path: Path) -> None:
+    src = tmp_path / "src"
+    src.mkdir()
+    _scaffold_clean_tree(src)
+    for relative in EXCLUDED_RELEASE_METADATA:
+        path = src / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("release attestation\n", encoding="utf-8")
+    report = package_release(
+        version="0.1.0",
+        source=src,
+        output=tmp_path / "out",
+        make_zip=False,
+    )
+    assert not report.errors
+    staging = Path(report.staging_dir)
+    assert all(not (staging / relative).exists() for relative in EXCLUDED_RELEASE_METADATA)
 
 
 def test_package_release_refuses_to_overwrite_existing_staging(tmp_path: Path) -> None:

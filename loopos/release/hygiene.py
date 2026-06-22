@@ -256,6 +256,27 @@ def check_release_clean(
             )
 
     for rel, full in _iter_source_files(root, ignore_local_only=ignore_local_only):
+        if rel.parts and rel.parts[0] == "loopos":
+            if any(not part.isascii() for part in rel.parts):
+                report.errors.append(
+                    ReleaseFinding(
+                        severity="error",
+                        code="NON_ASCII_RUNTIME_PATH",
+                        message="runtime package paths must be ASCII-only",
+                        path=str(rel),
+                    )
+                )
+                continue
+            if full.suffix.lower() == ".md":
+                report.errors.append(
+                    ReleaseFinding(
+                        severity="error",
+                        code="RUNTIME_DOCUMENT_PATH",
+                        message="project documentation must not live under loopos/",
+                        path=str(rel),
+                    )
+                )
+                continue
         # Directory check FIRST: if a file lives inside a blocked
         # directory, the directory is the primary violation and we do
         # not also want to flood the report with one BLOCKED_DIR per file

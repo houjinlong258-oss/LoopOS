@@ -58,6 +58,9 @@ class ReadinessReport(BaseModel):
     source: str
     generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     ready: bool
+    ready_to_package: bool = False
+    ready_to_tag: bool = False
+    ready_to_publish: bool = False
     overall_status: ReadinessOverallStatus = "NOT_READY"
     source_tree_clean: ReadinessStatus = "warning"
     packaged_artifact_clean: ReadinessStatus = "failed"
@@ -102,8 +105,25 @@ class ReadinessReport(BaseModel):
             deep_status=deep_status,
             strict_source=strict_source,
             deep=deep,
+            require_deep_for_tag=target != "founding-preview",
             checks=checks,
         )
+        package_blockers = [
+            check
+            for check in checks
+            if check.status == "failed"
+            and check.required_for_release
+            and check.check_id not in {"release.test_report", "release.deep_smoke"}
+        ]
+        ready_to_package = package_status == "passed" and not package_blockers
+        ready_to_tag = (
+            not failed_required
+            and test_status == "passed"
+            and source_status == "passed"
+            and (target == "founding-preview" or deep_status == "passed")
+        )
+        ready_to_publish = ready_to_tag
+        ready = ready_to_tag if target != "founding-preview" else not failed_required
         source_check = next(
             (check for check in checks if check.check_id == "release.source_tree_clean"),
             None,
@@ -111,7 +131,10 @@ class ReadinessReport(BaseModel):
         return cls(
             target=target,
             source=source,
-            ready=not failed_required,
+            ready=ready,
+            ready_to_package=ready_to_package,
+            ready_to_tag=ready_to_tag,
+            ready_to_publish=ready_to_publish,
             overall_status=overall_status,
             source_tree_clean=source_status,
             packaged_artifact_clean=package_status,
@@ -215,6 +238,7 @@ def _overall_status(
     deep_status: ReadinessStatus,
     strict_source: bool,
     deep: bool,
+    require_deep_for_tag: bool,
     checks: list[ReadinessCheck],
 ) -> ReadinessOverallStatus:
     if failed_required:
@@ -225,10 +249,12 @@ def _overall_status(
         return "NOT_READY"
     if test_status != "passed":
         return "NOT_READY_TO_TAG"
-    if deep and deep_status != "passed":
-        return "NOT_READY"
     if source_status != "passed":
         return "READY_TO_PACKAGE"
+    if deep and deep_status != "passed":
+        return "NOT_READY"
+    if require_deep_for_tag and deep_status != "passed":
+        return "NOT_READY_TO_TAG"
     if any(check.status == "warning" for check in checks):
         return "READY_WITH_WARNINGS"
     return "READY"

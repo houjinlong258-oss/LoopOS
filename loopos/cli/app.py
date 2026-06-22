@@ -5,7 +5,10 @@ from __future__ import annotations
 import sys
 from typing import Any
 
-from loopos.cli.commands import (
+# Keep release/source commands from writing bytecode for modules imported below.
+sys.dont_write_bytecode = True
+
+from loopos.cli.commands import (  # noqa: E402
     ail_command as ail_command,
     code_command as code_command,
     config_command as config_command,
@@ -33,9 +36,9 @@ from loopos.cli.commands import (
     triggers_command as triggers_command,
     worktrees_command as worktrees_command,
 )
-from loopos.cli.context import data_paths
-from loopos.cli.fallback import fallback_main
-from loopos.cli.commands.runtime import (
+from loopos.cli.context import data_paths  # noqa: E402
+from loopos.cli.fallback import fallback_main  # noqa: E402
+from loopos.cli.commands.runtime import (  # noqa: E402
     history_command as history_command,
     replay_command as replay_command,
     repl_command as repl_command,
@@ -45,8 +48,8 @@ from loopos.cli.commands.runtime import (
     tools_command as tools_command,
     trace_command as trace_command,
 )
-from loopos.cli.renderers import render_run as _render_run  # noqa: F401
-from loopos.cli.renderers import render_state as _render_state  # noqa: F401
+from loopos.cli.renderers import render_run as _render_run  # noqa: E402, F401
+from loopos.cli.renderers import render_state as _render_state  # noqa: E402, F401
 
 
 typer_mod: Any
@@ -596,6 +599,7 @@ if _HAS_TUI:
         strict_source: bool = typer_mod.Option(False, "--strict-source"),
         deep: bool = typer_mod.Option(False, "--deep"),
         timeout_per_check: int = typer_mod.Option(60, "--timeout-per-check", min=1),
+        global_timeout: int = typer_mod.Option(300, "--global-timeout", min=1),
         json_output: bool = typer_mod.Option(False, "--json"),
         target: str = typer_mod.Option("founding-preview", "--target"),
     ) -> None:
@@ -611,6 +615,7 @@ if _HAS_TUI:
                 strict_source=strict_source,
                 deep=deep,
                 timeout_per_check=timeout_per_check,
+                global_timeout=global_timeout,
                 json_output=json_output,
                 target=target,
             )
