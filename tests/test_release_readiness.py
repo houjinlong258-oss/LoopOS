@@ -159,11 +159,51 @@ def test_founding_release_package_ready_is_not_tag_ready(
     )
     (tmp_path / "task_plan.md").write_text("local planning only\n", encoding="utf-8")
     report = check_release_readiness(tmp_path, target="founding-release")
-    assert report.overall_status == "READY_TO_PACKAGE"
+    assert report.overall_status == "NOT_READY_TO_TAG"
     assert report.ready_to_package is True
     assert report.ready_to_tag is False
     assert report.ready_to_publish is False
     assert report.ready is False
+
+
+def test_founding_release_can_be_tag_ready_from_verified_dev_checkout() -> None:
+    checks = [
+        ReadinessCheck(
+            check_id="release.source_tree_clean",
+            name="source",
+            status="warning",
+            message="development checkout contains local state",
+        ),
+        ReadinessCheck(
+            check_id="release.package_hygiene",
+            name="package",
+            status="passed",
+            message="clean artifact",
+        ),
+        ReadinessCheck(
+            check_id="release.test_report",
+            name="report",
+            status="passed",
+            message="verified commit",
+        ),
+        ReadinessCheck(
+            check_id="release.deep_smoke",
+            name="deep smoke",
+            status="passed",
+            message="passed",
+        ),
+    ]
+    report = ReadinessReport.from_checks(
+        target="founding-release",
+        source=".",
+        checks=checks,
+        deep=True,
+    )
+    assert report.overall_status == "READY_WITH_WARNINGS"
+    assert report.ready_to_package is True
+    assert report.ready_to_tag is True
+    assert report.ready_to_publish is True
+    assert report.ready is True
 
 
 def test_not_ready_to_tag_never_sets_ready() -> None:

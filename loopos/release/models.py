@@ -119,7 +119,7 @@ class ReadinessReport(BaseModel):
         ready_to_tag = (
             not failed_required
             and test_status == "passed"
-            and source_status == "passed"
+            and (not strict_source or source_status == "passed")
             and (target == "founding-preview" or deep_status == "passed")
         )
         ready_to_publish = ready_to_tag
@@ -249,12 +249,12 @@ def _overall_status(
         return "NOT_READY"
     if test_status != "passed":
         return "NOT_READY_TO_TAG"
-    if source_status != "passed":
-        return "READY_TO_PACKAGE"
     if deep and deep_status != "passed":
         return "NOT_READY"
     if require_deep_for_tag and deep_status != "passed":
         return "NOT_READY_TO_TAG"
+    if source_status != "passed":
+        return "READY_WITH_WARNINGS" if require_deep_for_tag else "READY_TO_PACKAGE"
     if any(check.status == "warning" for check in checks):
         return "READY_WITH_WARNINGS"
     return "READY"
