@@ -16,9 +16,11 @@ from loopos.cli.commands import (  # noqa: E402
     distill_command as distill_command,
     files_command as files_command,
     fusion_command as fusion_command,
+    fusion_router_command as fusion_router_command,
     gateway_command as gateway_command,
     goal_command as goal_command,
     kernel_command as kernel_command,
+    mad_dog_command as mad_dog_command,
     memory_command as memory_command,
     mode_command as mode_command,
     models_command as models_command,
@@ -557,6 +559,48 @@ if _HAS_TUI:
                 risk=risk,
                 privacy=privacy,
                 data_dir=data_dir,
+                json_output=json_output,
+            )
+        )
+
+    @app.command("fusion-router")
+    def _typer_fusion_router(
+        action: str = typer_mod.Option("plan", "--action"),
+        task: str | None = typer_mod.Option(None, "--task"),
+        run_id: str | None = typer_mod.Option(None, "--run-id"),
+        reason: str = typer_mod.Option("repeated_failure", "--reason"),
+        fusion_id: str | None = typer_mod.Option(None, "--fusion-id"),
+        dry_run: bool = typer_mod.Option(False, "--dry-run"),
+        json_output: bool = typer_mod.Option(True, "--json/--human"),
+    ) -> None:
+        raise typer_mod.Exit(
+            fusion_router_command(
+                action=action,
+                task_arg=task,
+                run_id=run_id,
+                reason=reason,
+                fusion_id=fusion_id,
+                dry_run=dry_run,
+                json_output=json_output,
+            )
+        )
+
+    @app.command("mad-dog")
+    def _typer_mad_dog(
+        action: str = typer_mod.Option("plan", "--action"),
+        task: str | None = typer_mod.Option(None, "--task"),
+        run_id: str | None = typer_mod.Option(None, "--run-id"),
+        reason: str = typer_mod.Option("explicit_user_request", "--reason"),
+        severity: str = typer_mod.Option("critical", "--severity"),
+        json_output: bool = typer_mod.Option(True, "--json/--human"),
+    ) -> None:
+        raise typer_mod.Exit(
+            mad_dog_command(
+                action=action,
+                task_arg=task,
+                run_id=run_id,
+                reason=reason,
+                severity=severity,
                 json_output=json_output,
             )
         )

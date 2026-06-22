@@ -103,6 +103,25 @@ freely; let LoopOS govern action safely.
   `KernelLoopEngine.submit_agent_command` after `consume_aci_result`;
   the existing `run.metadata["aci_outcomes"]` shape is unchanged.
   See `docs/trace-and-ali.md`.
+- **`loopos.fusion_router` (Phase 6) — Fusion Router / Mad Dog
+  Mode** — the planning-only escalation layer above the default
+  single-model agent loop. Default execution stays single-model;
+  fusion activates only when there is evidence the normal path
+  is insufficient (explicit user request, repeated failure, no
+  progress, large refactor, nasty bug, release blocker, high
+  user dissatisfaction, model mismatch). Five modes (`single`,
+  `pair`, `committee`, `attack`, `mad_dog`) selected by a
+  deterministic integer score + severity multiplier, with
+  explicit user request as the only threshold override. Role
+  assignment reads the metadata-only `loopos.providers`
+  registry and degrades gracefully when the registry cannot
+  honour a role. The router is **aggressive in reasoning** but
+  **conservative in authority**: it recommends ACI commands;
+  only ACI / Kernel / Syscall Router may execute governed
+  commands. CLI: `loopos fusion-router plan/explain/run/escalate/status`
+  + `loopos mad-dog` alias. Live multi-provider fanout, model
+  debate loops, and automatic paid API spending are deferred to
+  v0.3+. See `docs/fusion-router.md` and `docs/mad-dog-mode.md`.
 
 The runtime does not connect to real databases or chat platforms, does not make real provider calls
 during tests, does not auto-merge code, and is not an operating-system sandbox.

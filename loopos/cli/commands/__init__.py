@@ -7,9 +7,11 @@ from loopos.cli.commands.data_guard import db_command
 from loopos.cli.commands.distill import distill_command
 from loopos.cli.commands.ecosystem import mode_command, registry_command
 from loopos.cli.commands.fusion import fusion_command
+from loopos.cli.commands.fusion_router import fusion_router_command
 from loopos.cli.commands.gateway import gateway_command
 from loopos.cli.commands.goal import goal_command, parse_goal_options
 from loopos.cli.commands.kernel_cli import kernel_command
+from loopos.cli.commands.mad_dog import mad_dog_command
 from loopos.cli.commands.memory import memory_command, profile_command, skills_command
 from loopos.cli.commands.local_intel import files_command, index_command, search_command
 from loopos.cli.commands.models import models_command, providers_command
@@ -38,9 +40,11 @@ __all__ = [
     "distill_command",
     "files_command",
     "fusion_command",
+    "fusion_router_command",
     "gateway_command",
     "goal_command",
     "kernel_command",
+    "mad_dog_command",
     "memory_command",
     "mode_command",
     "models_command",
