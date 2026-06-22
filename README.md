@@ -129,6 +129,27 @@ freely; let LoopOS govern action safely.
   `route`). Live multi-provider fanout, model debate loops,
   and automatic paid API spending are deferred to v0.3+. See
   `docs/fusion-router.md` and `docs/mad-dog-mode.md`.
+- **Phase 8 — v0.2 Readiness Proof + Deterministic Deep Smoke**.
+  Closes the v0.2 RC proof loop. Delivers (a) the **ALI Replay
+  Engine** (`loopos/trace/ali_replay.py`) that rebuilds a fresh
+  `AgentLoopSession` from persisted `ali.event` records without
+  re-running ACI / Policy OS / Syscall Router — the deterministic
+  replay proof surface; (b) the v0.2 **deep smoke test**
+  (`tests/test_v0_2_deep_smoke.py`) that exercises the full
+  Provider -> ACI -> ALI -> Kernel -> Trace -> Replay ->
+  Fusion Router -> Persistence -> Runner pipeline end-to-end;
+  (c) the **readiness check script**
+  (`scripts/v0_2_readiness_check.py --json`) that emits a
+  structured 15-check readiness proof (`status=pass` /
+  `hard_fail_count=0`); and (d) `docs/v0-2-readiness.md` with
+  the proof matrix, the deep smoke scenario, the replay proof,
+  the Fusion Router proof, the safety invariants, and the
+  remaining limitations. No `loopos/kernel/*` or
+  `loopos/model_kernel/*` files were modified in Phase 8; no
+  live provider calls are made; no subprocess bypass is
+  introduced. Fusion Verdict Orchestration is deferred to
+  v0.2.1 / v0.3 (`v0.2/phase-8-fusion-verdict-orchestration`
+  remains a candidate branch, not built).
 
 The runtime does not connect to real databases or chat platforms, does not make real provider calls
 during tests, does not auto-merge code, and is not an operating-system sandbox.

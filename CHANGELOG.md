@@ -95,6 +95,35 @@
   + `loopos mad-dog` alias. Live multi-provider fanout, model
   debate loops, and automatic paid API spending are deferred to
   v0.3+. See `docs/fusion-router.md` and `docs/mad-dog-mode.md`.
+- **Phase 8 — v0.2 Readiness Proof + Deterministic Deep Smoke**.
+  Delivers the v0.2 RC proof loop without modifying
+  `loopos/kernel/*` or `loopos/model_kernel/*`. New surface:
+  - `loopos/trace/ali_replay.py` — **ALI Replay Engine**: reads
+    persisted `ali.event` records from the existing
+    `TraceStore`, rebuilds a fresh `AgentLoopSession`, and
+    re-applies events through the existing `AgentLoopFSM`.
+    Does not re-run ACI / Policy OS / Syscall Router. Does
+    not call providers or run subprocesses. Deterministic:
+    same ordered event stream -> same final session state.
+  - `tests/test_ali_replay_engine.py` — 21 replay tests
+    covering single-event, happy-path, blocked, approval,
+    repair, replan, unsupported, trace-store roundtrip,
+    determinism across runs, dropped-event accounting,
+    and source-level safety.
+  - `tests/test_v0_2_deep_smoke.py` — 23 deep-smoke tests
+    that exercise the full Provider -> ACI -> ALI -> Kernel
+    -> Trace -> Replay -> Fusion Router -> Persistence ->
+    Runner pipeline end-to-end.
+  - `scripts/v0_2_readiness_check.py --json` — emits a
+    structured 15-check readiness proof
+    (`schema_version="0.2"`, `status="pass"`,
+    `hard_fail_count=0`).
+  - `tests/test_v0_2_readiness_check.py` — 18 readiness
+    regression tests.
+  - `docs/v0-2-readiness.md` — release-readiness evidence:
+    the proof matrix, the deep smoke scenario, the replay
+    proof, the Fusion Router proof, the safety invariants,
+    and the remaining limitations.
 
 ### Notes
 
