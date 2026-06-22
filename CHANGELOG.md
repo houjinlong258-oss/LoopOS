@@ -52,6 +52,19 @@
   and Trace remain the single source of truth. The existing
   `KernelLoopEngine.run()` / `resume()` paths are untouched. See
   `docs/kernel-aci-ali-integration.md` for the full contract.
+- **`loopos.trace.ali_bridge` (Phase 5)** — thin adapter that
+  persists ALI event records into the existing kernel trace
+  store. Each `AgentLoopEventRecord` becomes a `TraceEvent`
+  with `kind="signal"` and `type="ali.event"`. The audit payload
+  carries `aci_command_id`, `aci_goal_id`, `aci_status`,
+  `aci_success`, `reason_codes`, `messages`, `trace_id`,
+  `syscall_id`, `provider_id`, `provider_source`,
+  `policy_decision`, `convergence_reason_code`, `kernel_run_id`,
+  `kernel_step`, `kernel_status`, `kernel_phase`. The bridge is
+  invoked from `KernelLoopEngine.submit_agent_command` after
+  `consume_aci_result` returns the new event records; the
+  existing `run.metadata["aci_outcomes"]` shape is unchanged.
+  See `docs/trace-and-ali.md`.
 
 ### Notes
 

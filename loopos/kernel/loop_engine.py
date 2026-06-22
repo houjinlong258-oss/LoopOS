@@ -19,7 +19,7 @@ from loopos.agents.intent_compiler import DeterministicIntentCompiler
 from loopos.agents.skill_extractor import SkillExtractor
 from loopos.ail.models import AILInstruction
 from loopos.ali.fsm import AgentLoopFSM
-from loopos.ali.models import AgentLoopSession
+from loopos.ali.models import AgentLoopEventRecord, AgentLoopSession
 from loopos.ali.session import consume_aci_result
 from loopos.context import ContextCompiler
 from loopos.convergence import ConvergenceEngine, EvaluationResult, LoopDecision, ProgressDelta
@@ -452,13 +452,20 @@ class KernelLoopEngine:
 
         runner = aci_runner or self._default_aci_runner()
         result = runner.run(command)
-        consume_aci_result(session, result, fsm=fsm)
+        records = consume_aci_result(session, result, fsm=fsm)
         # Mirror the audit metadata onto the latest run record so the
         # existing kernel decision path can read the ACI verdict
         # without re-running the policy engine. This is the minimum
         # needed to expose trace_id / syscall_id / provider_id to the
         # kernel without replacing any existing convergence behavior.
         self._record_aci_outcome(result)
+        # Persist the ALI events that consume_aci_result just
+        # produced through the trace bridge. The bridge is a thin
+        # adapter over the existing TraceStore; it does not replace
+        # or extend the trace runtime.
+        self._persist_ali_events(
+            session, records=records, result=result,
+        )
         return result
 
     def _default_aci_runner(self) -> CommandRunner:
@@ -541,6 +548,83 @@ class KernelLoopEngine:
             return self.runtime.run_manager.load(run_id)
         except (KeyError, FileNotFoundError, ValueError):
             return None
+
+    def _persist_ali_events(
+        self,
+        session: AgentLoopSession,
+        *,
+        records: list[AgentLoopEventRecord],
+        result: AgentCommandResult,
+    ) -> None:
+        """Persist ALI event records produced by :func:`consume_aci_result`.
+
+        Lazy-imports the trace bridge so the kernel package does
+        not transitively import the trace package at module load
+        time. The bridge is the only place that touches
+        :class:`TraceStore` directly; this method is a thin
+        pass-through that builds the audit payload from the
+        :class:`AgentCommandResult`.
+        """
+
+        try:
+            from loopos.trace.ali_bridge import persist_session_events
+        except ImportError:
+            return
+
+        latest = self._latest_run_record()
+        if latest is None:
+            return
+
+        audit = self._build_audit_payload(result, latest)
+        persist_session_events(
+            session,
+            run_id=latest.run_id,
+            step=latest.step,
+            trace_store=self.runtime.trace_store,
+            audit=audit,
+            records=records,
+        )
+
+    @staticmethod
+    def _build_audit_payload(
+        result: AgentCommandResult,
+        run: RunRecord,
+    ) -> dict[str, Any]:
+        """Build the structured audit payload the bridge merges into each trace event."""
+
+        audit: dict[str, Any] = {
+            "aci_command_id": result.command_id,
+            "aci_goal_id": result.goal_id,
+            "aci_status": result.status,
+            "aci_success": result.success,
+            "reason_codes": list(result.reason_codes),
+            "messages": list(result.messages),
+            "trace_id": result.trace_id,
+            "syscall_id": result.metadata.get("syscall_id"),
+            "convergence_reason_code": (
+                result.convergence.reason_code or None
+            ),
+            "kernel_run_id": run.run_id,
+            "kernel_step": run.step,
+            "kernel_status": run.status,
+            "kernel_phase": run.phase,
+        }
+        if result.resolved_provider is not None:
+            audit["provider_id"] = result.resolved_provider.provider_id
+            audit["provider_source"] = result.resolved_provider.source
+        else:
+            audit["provider_id"] = None
+            audit["provider_source"] = None
+        pds = result.policy_decision_summary
+        if pds is not None:
+            audit["policy_decision"] = {
+                "decision_id": pds.decision_id,
+                "allowed": pds.allowed,
+                "action": pds.action,
+                "safety_level": pds.safety_level,
+                "reason_codes": list(pds.reason_codes),
+            }
+        return audit
 
     def _run_convergence_scheduler_handoff(
         self,

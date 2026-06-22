@@ -96,9 +96,45 @@ def apply_event(
         raise
 
 
+def to_event_stream(session: AgentLoopSession) -> list[dict[str, Any]]:
+    """Return the session's events as a deterministic ordered stream.
+
+    Each entry contains:
+
+    * ``seq`` -- 0-indexed position in the session's event log.
+    * ``event`` -- the :class:`AgentLoopEvent` that fired.
+    * ``reason_code`` -- the FSM transition row's reason code.
+    * ``next_state`` -- the state the FSM transitioned into.
+    * ``payload`` -- a copy of the structured payload attached to
+      the event record.
+    * ``created_at`` -- ISO-8601 timestamp.
+
+    The output is deterministic: same session state -> same stream.
+    The trace bridge consumes this list (or the underlying
+    :attr:`AgentLoopSession.events` list) and persists one trace
+    event per record.
+
+    Phase 5: introduced so the trace bridge can replay the full ALI
+    event sequence without re-running the FSM.
+    """
+
+    return [
+        {
+            "seq": record.seq,
+            "event": record.event,
+            "reason_code": record.reason_code,
+            "next_state": record.next_state,
+            "payload": dict(record.payload),
+            "created_at": record.created_at.isoformat(),
+        }
+        for record in session.events
+    ]
+
+
 __all__ = [
     "SessionConfig",
     "apply_event",
     "consume_aci_result",
     "create_session",
+    "to_event_stream",
 ]

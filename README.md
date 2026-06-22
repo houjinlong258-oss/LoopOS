@@ -91,6 +91,18 @@ freely; let LoopOS govern action safely.
   codes) is mirrored onto `run.metadata["aci_outcomes"]`. Existing
   `KernelLoopEngine.run()` / `resume()` paths are untouched. See
   `docs/kernel-aci-ali-integration.md`.
+- **`loopos.trace.ali_bridge` (Phase 5)** — persists every ALI
+  event record into the existing `loopos.kernel.trace.TraceStore`
+  so the ACI -> Kernel -> ALI loop is replayable and auditable.
+  Each `AgentLoopEventRecord` becomes a `TraceEvent` with
+  `kind="signal"` and `type="ali.event"`, carrying the audit
+  trail (`aci_command_id`, `trace_id`, `syscall_id`,
+  `provider_id`, `reason_codes`, `policy_decision`,
+  `convergence_reason_code`, plus the kernel run id / step /
+  status / phase). The bridge is invoked from
+  `KernelLoopEngine.submit_agent_command` after `consume_aci_result`;
+  the existing `run.metadata["aci_outcomes"]` shape is unchanged.
+  See `docs/trace-and-ali.md`.
 
 The runtime does not connect to real databases or chat platforms, does not make real provider calls
 during tests, does not auto-merge code, and is not an operating-system sandbox.

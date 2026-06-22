@@ -198,6 +198,22 @@ Phase 4 satisfies the kernel-loop safety rules:
 - An `unsupported` kind is handled gracefully: `consume_aci_result`
   emits `convergence_halt_failure` rather than crashing.
 
+## Trace persistence (Phase 5)
+
+The Phase 5 trace bridge persists every ALI event record
+produced by `consume_aci_result` into the existing
+:class:`loopos.kernel.trace.TraceStore`. The bridge is a thin
+adapter; the trace runtime is unchanged. Each ALI event becomes
+a `TraceEvent` with `kind="signal"` and `type="ali.event"`, and
+the payload carries the canonical key order from
+`_PAYLOAD_KEY_ORDER` plus the audit-trail fields
+(`aci_command_id`, `trace_id`, `syscall_id`, `provider_id`,
+`reason_codes`, `policy_decision`, `convergence_reason_code`,
+`kernel_run_id`, `kernel_step`, `kernel_status`, `kernel_phase`).
+
+See `docs/trace-and-ali.md` for the full bridge contract,
+event schema, replay contract, and the Phase 5 test matrix.
+
 ## Tests
 
 `tests/test_kernel_aci_ali_integration.py` (15 tests) covers:

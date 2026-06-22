@@ -36,6 +36,7 @@ from loopos.ali.session import (
     apply_event,
     consume_aci_result,
     create_session,
+    to_event_stream,
 )
 
 __all__ = [
@@ -53,4 +54,5 @@ __all__ = [
     "apply_event",
     "consume_aci_result",
     "create_session",
+    "to_event_stream",
 ]
