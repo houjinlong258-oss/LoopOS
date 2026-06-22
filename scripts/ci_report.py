@@ -14,6 +14,7 @@ import platform
 import re
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -67,7 +68,10 @@ def main(argv: list[str] | None = None) -> int:
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "git_commit": _git_head(),
         "python": sys.version.split()[0],
+        "python_version": sys.version.split()[0],
         "platform": platform.platform(),
+        "os": platform.system(),
+        "arch": platform.machine(),
         "offline": True,
         "commands": {
             "pytest": args.pytest_command,
@@ -83,6 +87,7 @@ def main(argv: list[str] | None = None) -> int:
 
     exit_code = 0
     if args.run:
+        run_started = time.perf_counter()
         pytest_result = _run_command(args.pytest_command, timeout=240)
         payload["pytest_exit_code"] = pytest_result["exit_code"]
         payload["pytest_output_tail"] = _sanitize_local_paths(pytest_result["tail"])
@@ -104,6 +109,12 @@ def main(argv: list[str] | None = None) -> int:
         payload["mypy"] = "passed" if mypy_result["exit_code"] == 0 else "failed"
         if mypy_result["exit_code"] != 0:
             exit_code = 1
+        payload["durations_ms"] = {
+            "pytest": pytest_result["duration_ms"],
+            "ruff": ruff_result["duration_ms"],
+            "mypy": mypy_result["duration_ms"],
+            "total": int((time.perf_counter() - run_started) * 1000),
+        }
 
     output = (Path.cwd() / args.output).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -113,6 +124,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _run_command(command: str, *, timeout: int) -> dict[str, Any]:
+    started = time.perf_counter()
     result = subprocess.run(
         command,
         cwd=_REPO_ROOT,
@@ -130,6 +142,7 @@ def _run_command(command: str, *, timeout: int) -> dict[str, Any]:
         "stdout": result.stdout,
         "stderr": result.stderr,
         "tail": combined[-4000:],
+        "duration_ms": int((time.perf_counter() - started) * 1000),
     }
 
 
