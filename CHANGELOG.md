@@ -25,6 +25,19 @@
   successful command when the provider context is un-honorable.
   Wire-format helpers in `loopos/aci/serialization.py`. See
   `docs/agent-command-interface.md`.
+- **`loopos.ali` -> ACI consumption (Phase 3)** —
+  `consume_aci_result(session, result)` drives the existing
+  `AgentLoopFSM` from a real `AgentCommandResult`. The consumer
+  attaches an audit reference, computes a state-aware event
+  sequence (`progress_updated` + `syscall_completed` for completed,
+  `policy_denied` for policy blocks, `syscall_failed` /
+  `convergence_replan` / `convergence_halt_failure` for failed,
+  `convergence_halt_failure` for unsupported, `approval_required`
+  for approval, `convergence_halt_blocked` for structural blocks),
+  and applies each event through the existing transition table.
+  Reason codes, trace ids, syscall ids, and resolved provider ids
+  are propagated into every event payload. See
+  `docs/agent-loop-interface.md`.
 - **Provider consistency guard** —
   `tests/test_provider_model_kernel_consistency.py` asserts the
   boundary between `loopos.providers` (metadata substrate) and

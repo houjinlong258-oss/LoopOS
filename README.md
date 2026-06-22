@@ -74,6 +74,13 @@ freely; let LoopOS govern action safely.
   provider binding via `loopos.providers`. See
   `docs/agent-command-interface.md` for the contract, the kind /
   status / reason-code tables, and the v0.2-vs-deferred surface map.
+- **`loopos.ali` -> ACI consumption** — `consume_aci_result(session, result)`
+  maps a real `AgentCommandResult` to a state-aware sequence of
+  `AgentLoopEvent` values and drives the existing transition table
+  (`RUNNING -> REPAIRING / REPLANNING / HALTED_*`). Reason codes,
+  trace ids, syscall ids, and resolved provider ids are propagated
+  through every event payload. See `docs/agent-loop-interface.md`
+  for the full mapping table and transition examples.
 
 The runtime does not connect to real databases or chat platforms, does not make real provider calls
 during tests, does not auto-merge code, and is not an operating-system sandbox.

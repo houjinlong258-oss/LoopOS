@@ -13,7 +13,8 @@ This package is intentionally small:
 * :mod:`loopos.ali.fsm` - :class:`AgentLoopFSM` driven by a transition
   table.
 * :mod:`loopos.ali.session` - :class:`AgentLoopSession` that owns the
-  FSM, accumulates events, and references ACI results.
+  FSM, accumulates events, references ACI results, and (Phase 3)
+  drives the FSM from a real :class:`AgentCommandResult`.
 * :mod:`loopos.ali.errors` - typed errors raised by the ALI layer.
 """
 
@@ -30,7 +31,12 @@ from loopos.ali.models import (
     AgentLoopState,
     ConvergenceSignal,
 )
-from loopos.ali.session import SessionConfig, apply_event, create_session
+from loopos.ali.session import (
+    SessionConfig,
+    apply_event,
+    consume_aci_result,
+    create_session,
+)
 
 __all__ = [
     "AgentLoopEvent",
@@ -45,5 +51,6 @@ __all__ = [
     "TransitionRow",
     "UnknownEventError",
     "apply_event",
+    "consume_aci_result",
     "create_session",
 ]
