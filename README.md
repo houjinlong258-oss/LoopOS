@@ -59,6 +59,15 @@ freely; let LoopOS govern action safely.
 - **Prompt / Policy Distillation** - distill behavior/renderer/policy packs from project rules.
 - **Boundary Adapters** - OpenAI-compatible provider, webhook gateway, SQLite Data Guard.
 
+## v0.2 Substrates (in progress)
+
+- **`loopos.providers`** — metadata-only Provider Runtime Registry
+  (Pydantic v2 typed contracts, deterministic ordering, no network I/O).
+  Source-audit map: `docs/source-transplant/`. Coexists with the v0.1
+  scheduler-aware `loopos.model_kernel`. See
+  `docs/source-transplant/provider-runtime-map.md` for the field-level
+  mapping.
+
 The runtime does not connect to real databases or chat platforms, does not make real provider calls
 during tests, does not auto-merge code, and is not an operating-system sandbox.
 

@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`loopos.providers`** — metadata-only Provider Runtime Registry.
+  Pydantic v2 typed contracts (`ModelProviderProfile`,
+  `ProviderCapabilityHints`, `ProviderRegistry`) with deterministic
+  insertion-order semantics, strict duplicate rejection, and explicit
+  capability / kind / feature lookups. Built-in profile catalog loaded
+  from `providers/defaults.yaml` (27 entries). No network I/O. See
+  `docs/source-transplant/provider-runtime-map.md` for the Hermes Agent
+  source-transplant map and `docs/source-transplant/loopos-transplant-plan.md`
+  for the unified Claude Code Main + Hermes Agent audit plan.
+
+### Notes
+
+- The new substrate is metadata-only; transport hooks (`fetch_models`,
+  `prepare_messages`, `build_extra_body`, ...) and plugin auto-discovery
+  are deferred to v0.3+ per `loopos-transplant-plan.md`.
+- The new substrate coexists with `loopos.model_kernel` (the v0.1.0
+  scheduler-aware registry); the two modules do not import from each
+  other.
+
 ## 0.1.0 - 2026-06-21
 
 Founding Release. See docs/release-notes/founding-preview.md for details.
