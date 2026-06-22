@@ -21,6 +21,13 @@ zep-main/
 projectmem-0.1.5/
 hermes-agent-*/
 hermes-agent-*.zip
+claude-code-main*/
+claude-code-main*.zip
+
+# Local audit working tree for source-transplant phases; holds the
+# unpacked reference trees above plus any audit notes. Not part of
+# the LoopOS repo.
+移植参考的源码/
 
 # Local execution-planning notes.
 task_plan.md
