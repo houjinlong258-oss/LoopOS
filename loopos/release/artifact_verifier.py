@@ -21,6 +21,7 @@ class ArtifactVerificationReport:
     artifact_sha256_file: str = "failed"
     python_zipfile_extract: str = "failed"
     system_unzip_extract: str = "skipped"
+    system_extractor: str = "unavailable"
     internal_sha256sums: str = "failed"
     no_surrogate_paths: str = "failed"
     no_non_ascii_paths: str = "failed"
@@ -162,11 +163,20 @@ def _verify_with_system_unzip(
     report: ArtifactVerificationReport,
 ) -> str:
     executable = shutil.which("unzip")
-    if executable is None:
-        return "skipped"
+    command: list[str]
+    if executable is not None:
+        report.system_extractor = "unzip"
+        command = [executable, "-qq", str(artifact), "-d"]
+    else:
+        executable = shutil.which("tar")
+        if executable is not None:
+            report.system_extractor = "tar"
+            command = [executable, "-xf", str(artifact), "-C"]
+        else:
+            return "skipped"
     with tempfile.TemporaryDirectory(prefix="loopos-verify-unzip-") as temp:
         result = subprocess.run(
-            [executable, "-qq", str(artifact), "-d", temp],
+            [*command, temp],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -176,5 +186,7 @@ def _verify_with_system_unzip(
         )
         if result.returncode == 0:
             return "passed"
-        report.errors.append(f"system unzip failed: {(result.stderr or result.stdout)[-500:]}")
+        report.errors.append(
+            f"system archive extraction failed: {(result.stderr or result.stdout)[-500:]}"
+        )
         return "failed"

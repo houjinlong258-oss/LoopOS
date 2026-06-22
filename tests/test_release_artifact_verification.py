@@ -53,6 +53,7 @@ def test_valid_artifact_passes_all_available_verifiers(tmp_path: Path) -> None:
     assert report.artifact_sha256_file == "passed"
     assert report.python_zipfile_extract == "passed"
     assert report.system_unzip_extract in {"passed", "skipped"}
+    assert report.system_extractor in {"unzip", "tar", "unavailable"}
     assert report.internal_sha256sums == "passed"
     assert report.no_surrogate_paths == "passed"
     assert report.no_non_ascii_paths == "passed"
