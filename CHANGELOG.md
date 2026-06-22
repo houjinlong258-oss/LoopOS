@@ -42,6 +42,16 @@
   `tests/test_provider_model_kernel_consistency.py` asserts the
   boundary between `loopos.providers` (metadata substrate) and
   `loopos.model_kernel` (scheduler / client layer).
+- **`KernelLoopEngine.submit_agent_command` (Phase 4)** — a thin
+  opt-in integration point that runs an `AgentCommand` through
+  `CommandRunner`, drives an `AgentLoopSession` via
+  `consume_aci_result`, and mirrors the audit metadata
+  (`trace_id`, `syscall_id`, `provider_id`, reason codes) onto
+  `run.metadata["aci_outcomes"]`. Uses the kernel runtime's
+  policy engine and syscall router, so Policy OS, Syscall Router,
+  and Trace remain the single source of truth. The existing
+  `KernelLoopEngine.run()` / `resume()` paths are untouched. See
+  `docs/kernel-aci-ali-integration.md` for the full contract.
 
 ### Notes
 

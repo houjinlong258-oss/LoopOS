@@ -81,6 +81,16 @@ freely; let LoopOS govern action safely.
   trace ids, syscall ids, and resolved provider ids are propagated
   through every event payload. See `docs/agent-loop-interface.md`
   for the full mapping table and transition examples.
+- **`KernelLoopEngine.submit_agent_command` (Phase 4)** — closes
+  the runtime loop by running an `AgentCommand` through
+  `CommandRunner` and driving an `AgentLoopSession` from the
+  resulting `AgentCommandResult`. The integration uses the kernel
+  runtime's policy engine and syscall router, so Policy OS, the
+  Syscall Router, and Trace stay the single source of truth. The
+  audit metadata (`trace_id`, `syscall_id`, `provider_id`, reason
+  codes) is mirrored onto `run.metadata["aci_outcomes"]`. Existing
+  `KernelLoopEngine.run()` / `resume()` paths are untouched. See
+  `docs/kernel-aci-ali-integration.md`.
 
 The runtime does not connect to real databases or chat platforms, does not make real provider calls
 during tests, does not auto-merge code, and is not an operating-system sandbox.

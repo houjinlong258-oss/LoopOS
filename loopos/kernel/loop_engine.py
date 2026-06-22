@@ -1,12 +1,26 @@
-"""Traceable and resumable LoopOS Kernel engine."""
+"""Traceable and resumable LoopOS Kernel engine.
+
+Phase 4 (v0.2): a thin ``submit_agent_command`` integration point
+closes the runtime loop by wiring :class:`loopos.aci.CommandRunner`
+to :func:`loopos.ali.session.consume_aci_result`. Existing
+``run`` / ``resume`` / convergence-handoff paths are untouched.
+The integration is opt-in: callers can keep using the existing
+AIL-instruction loop or call :meth:`KernelLoopEngine.submit_agent_command`
+to drive an ALI session from a real :class:`AgentCommandResult`.
+"""
 
 from __future__ import annotations
 
 from typing import Any, Protocol
 
+from loopos.aci.models import AgentCommand, AgentCommandResult
+from loopos.aci.runner import CommandRunner
 from loopos.agents.intent_compiler import DeterministicIntentCompiler
 from loopos.agents.skill_extractor import SkillExtractor
 from loopos.ail.models import AILInstruction
+from loopos.ali.fsm import AgentLoopFSM
+from loopos.ali.models import AgentLoopSession
+from loopos.ali.session import consume_aci_result
 from loopos.context import ContextCompiler
 from loopos.convergence import ConvergenceEngine, EvaluationResult, LoopDecision, ProgressDelta
 from loopos.kernel.boot import KernelRuntime
@@ -360,6 +374,173 @@ class KernelLoopEngine:
                 return run
             self.runtime.run_manager.save(run)
         return run
+
+    # ----- Phase 4: ACI / ALI integration (optional path) -----------------
+
+    def submit_agent_command(
+        self,
+        command: AgentCommand,
+        session: AgentLoopSession,
+        *,
+        aci_runner: CommandRunner | None = None,
+        fsm: AgentLoopFSM | None = None,
+    ) -> AgentCommandResult:
+        """Submit an :class:`AgentCommand` through the ACI runner and drive the ALI session.
+
+        Phase 4 minimal integration. The existing
+        :meth:`run` / :meth:`resume` / convergence-handoff paths are
+        untouched; this method is an optional entry point for
+        callers that want to drive an :class:`AgentLoopSession`
+        from a real :class:`AgentCommandResult`.
+
+        Sequence:
+
+        1. Run ``command`` through :class:`CommandRunner`, using the
+           kernel runtime's policy engine so Policy OS stays the
+           single source of truth (no bypass).
+        2. Call :func:`consume_aci_result` to attach the result as
+           an audit reference on the session and drive the FSM
+           through the state-aware sequence (RUNNING / REPAIRING /
+           REPLANNING / WAITING_APPROVAL / HALTED_*).
+        3. Mirror the audit metadata (``trace_id``, ``syscall_id``,
+           ``provider_id``, ``status``, ``success``, ``reason_codes``)
+           onto the kernel ``run`` metadata so the existing kernel
+           decision path can read the ACI verdict without
+           re-running the policy engine.
+
+        The runner never spawns a subprocess directly: it routes
+        through ``runtime.syscall_router`` (when supplied via the
+        runner config) or returns a structured policy-only verdict.
+        ``dry_run`` ACI results do not produce side effects.
+
+        Parameters
+        ----------
+        command:
+            The :class:`AgentCommand` to submit. ``goal_id`` is used
+            to attach the audit reference to ``session``.
+        session:
+            The :class:`AgentLoopSession` to drive. The caller is
+            responsible for advancing the session through
+            ``goal_submitted`` / ``command_submitted`` before invoking
+            this method, matching the pre-condition that
+            :func:`consume_aci_result` documents.
+        aci_runner:
+            Optional pre-built :class:`CommandRunner`. When ``None``,
+            the kernel builds a default runner that uses
+            ``runtime.policy_engine`` (and ``runtime.syscall_router``
+            so dispatched commands route through the existing
+            Syscall Router).
+        fsm:
+            Optional :class:`AgentLoopFSM` override. Defaults to the
+            package-level :data:`DEFAULT_FSM`.
+
+        Returns
+        -------
+        :class:`AgentCommandResult`
+            The structured result that the runner produced. The same
+            object is also attached to the session via the audit
+            reference (consume_aci_result handles the attachment).
+
+        Raises
+        ------
+        :class:`loopos.ali.errors.SessionClosedError`
+            If the session is in a terminal state.
+        :class:`loopos.ali.errors.InvalidTransitionError`
+            If no event in the desired sequence is valid from the
+            session's current state.
+        """
+
+        runner = aci_runner or self._default_aci_runner()
+        result = runner.run(command)
+        consume_aci_result(session, result, fsm=fsm)
+        # Mirror the audit metadata onto the latest run record so the
+        # existing kernel decision path can read the ACI verdict
+        # without re-running the policy engine. This is the minimum
+        # needed to expose trace_id / syscall_id / provider_id to the
+        # kernel without replacing any existing convergence behavior.
+        self._record_aci_outcome(result)
+        return result
+
+    def _default_aci_runner(self) -> CommandRunner:
+        """Build a :class:`CommandRunner` pre-wired with the kernel runtime.
+
+        Uses ``runtime.policy_engine`` so Policy OS stays the single
+        source of truth, and ``runtime.syscall_router`` so dispatched
+        commands route through the existing Syscall Router (no
+        subprocess bypass).
+        """
+
+        return CommandRunner(
+            policy_engine=self.runtime.policy_engine,
+            syscall_router=self.runtime.syscall_router,
+        )
+
+    def _record_aci_outcome(self, result: AgentCommandResult) -> None:
+        """Append a compact ACI verdict to the most recent run's metadata.
+
+        The kernel keeps a single ``aci_outcomes`` list under
+        ``run.metadata`` so the existing convergence / decision path
+        can read trace_id / syscall_id / provider_id / status /
+        reason_codes without changing the convergence contract.
+        """
+
+        latest = self._latest_run_record()
+        if latest is None:
+            return
+        outcomes = latest.metadata.setdefault("aci_outcomes", [])
+        outcomes.append(
+            {
+                "command_id": result.command_id,
+                "goal_id": result.goal_id,
+                "status": result.status,
+                "success": result.success,
+                "reason_codes": list(result.reason_codes),
+                "trace_id": result.trace_id,
+                "syscall_id": result.metadata.get("syscall_id"),
+                "provider_id": (
+                    result.resolved_provider.provider_id
+                    if result.resolved_provider is not None
+                    else None
+                ),
+                "blocked_reason": result.blocked_reason,
+                "requires_approval": result.requires_approval,
+                "dry_run": result.dry_run,
+            }
+        )
+        # Persist so a subsequent load() can read the appended outcome.
+        # The kernel never overwrites existing metadata keys, so this
+        # is additive only.
+        try:
+            self.runtime.run_manager.save(latest)
+        except (AttributeError, OSError, ValueError):
+            # Best-effort persistence: if the manager does not support
+            # save (e.g. in dry-run boot paths) the in-memory outcome
+            # is still observable via ``latest.metadata`` until the
+            # caller re-loads.
+            pass
+
+    def _latest_run_record(self) -> RunRecord | None:
+        """Return the most recently loaded run record, if any.
+
+        ``KernelLoopEngine`` does not own a ``current_run`` pointer;
+        the integration uses the trace store as the source of truth
+        and reads back the latest run for which a ``run`` event was
+        emitted. Returns ``None`` when no run has been started yet
+        (e.g. when :meth:`submit_agent_command` is exercised in
+        isolation, before :meth:`run`).
+        """
+
+        run_events = [
+            event for event in self.runtime.trace_store.list()
+            if event.kind == "run"
+        ]
+        if not run_events:
+            return None
+        run_id = run_events[-1].run_id
+        try:
+            return self.runtime.run_manager.load(run_id)
+        except (KeyError, FileNotFoundError, ValueError):
+            return None
 
     def _run_convergence_scheduler_handoff(
         self,

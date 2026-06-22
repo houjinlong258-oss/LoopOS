@@ -24,11 +24,20 @@ machine that drives an agent run inside LoopOS. ALI owns:
 * the bounded event log (replayable),
 * the audit references to ACI results that drove each transition.
 
-ALI does not import ``loopos.kernel.*`` or touch ``KernelLoopEngine``.
-Kernel integration is a Phase 4+ follow-up. The Phase 3 consumer in
-:func:`loopos.ali.session.consume_aci_result` is the only ALI entry
-point that depends on ``loopos.aci`` (one-way: ALI depends on ACI,
-not the reverse).
+ALI does not import ``loopos.kernel.*`` or touch ``KernelLoopEngine``
+directly. The Phase 4 integration goes the other way:
+``KernelLoopEngine.submit_agent_command(...)`` calls
+:func:`loopos.ali.session.consume_aci_result` to drive an
+:class:`AgentLoopSession` from a real :class:`AgentCommandResult`.
+The one-way dependency is preserved (kernel -> ALI -> ACI), and the
+existing ``run`` / ``resume`` / convergence paths are untouched.
+See ``docs/kernel-aci-ali-integration.md`` for the integration
+contract.
+
+The Phase 3 consumer in
+:func:`loopos.ali.session.consume_aci_result` remains the only ALI
+entry point that depends on ``loopos.aci`` (one-way: ALI depends on
+ACI, not the reverse).
 
 ### Loop actions
 
@@ -307,8 +316,6 @@ transition in a future phase) still leaves the audit trail intact.
 
 ### Deferred
 
-* Kernel loop engine integration (Phase 4+). The consumer is designed
-  to be drop-in for a future kernel-driven version.
 * Real evaluation / progress (the placeholders
   :attr:`EvaluationSummary.repairable` and
   :attr:`ProgressSummary.no_progress` are read but the kernel that
@@ -318,6 +325,24 @@ transition in a future phase) still leaves the audit trail intact.
 * Persisting :class:`AgentLoopSession` to ``loopos/trace`` -- the
   session model is already JSON-serializable, but the integration
   with the trace subsystem is a separate task.
+
+### Implemented in Phase 4
+
+* Kernel-side integration via
+  :meth:`KernelLoopEngine.submit_agent_command` -- a thin opt-in
+  entry point that runs an :class:`AgentCommand` through the
+  existing :class:`CommandRunner`, drives the ALI session via
+  :func:`consume_aci_result`, and mirrors the audit metadata
+  (``trace_id``, ``syscall_id``, ``provider_id``, reason codes) to
+  ``run.metadata['aci_outcomes']``.
+* The integration uses the kernel runtime's policy engine and
+  syscall router, so Policy OS, Syscall Router, and Trace remain
+  the single source of truth. Existing ``KernelLoopEngine.run()`` /
+  ``resume()`` paths are untouched.
+* 15 tests in :mod:`tests.test_kernel_aci_ali_integration` cover the
+  full ACI -> ALI mapping plus regression of the existing kernel
+  convergence flow. See ``docs/kernel-aci-ali-integration.md`` for
+  the full contract.
 
 ---
 
