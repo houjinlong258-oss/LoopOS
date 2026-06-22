@@ -31,11 +31,27 @@ Safety:
   structured :class:`AgentCommandResult` with ``status='blocked'``
   or ``status='approval_required'`` rather than raised as raw
   exceptions, so the runtime can audit and replay them.
+
+Maintainability note (Phase 3.x):
+
+Two helper groups have been split into focused internal modules so
+the runner stays focused on dispatch:
+
+* :mod:`loopos.aci.provider_binding` owns the metadata-only
+  :class:`ProviderHint` resolution. The runner imports
+  ``_resolve_provider_hint`` from there.
+* :mod:`loopos.aci.result_builders` owns the small pure helpers
+  that extract structured data from a :class:`PolicyDecision`.
+  The runner imports ``_format_decision_reason`` and
+  ``_policy_reason_code`` from there.
+
+The public surface of this module (``CommandRunner``,
+``RunnerConfig``, ``KIND_TO_POLICY_SCOPE``, ``KIND_TO_SYSCALL``,
+``build_default_runner``) is unchanged.
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -45,25 +61,26 @@ from loopos.aci.errors import (
 from loopos.aci.models import (
     AgentCommand,
     AgentCommandResult,
-    ConvergenceSummary,
     EvaluationSummary,
     ObservationKind,
     ObservationSummary,
     ProgressSummary,
     ProviderHint,
-    ProviderResolutionSource,
     REASON_DRY_RUN_NO_SIDE_EFFECT,
     REASON_INVALID_COMMAND,
     REASON_NO_KERNEL_RUNTIME,
     REASON_POLICY_DENIED,
     REASON_POLICY_REQUIRES_APPROVAL,
-    REASON_PROVIDER_CAPABILITY_UNAVAILABLE,
-    REASON_PROVIDER_LOCAL_ONLY_REQUIRED,
     REASON_PROVIDER_NOT_FOUND,
     REASON_SYSCALL_FAILED,
     REASON_UNSUPPORTED_COMMAND_KIND,
     ResolvedProvider,
     SyscallSummary,
+)
+from loopos.aci.provider_binding import _resolve_provider_hint
+from loopos.aci.result_builders import _format_decision_reason, _policy_reason_code
+from loopos.aci.result_models import (
+    ConvergenceSummary,
 )
 from loopos.policy_os.engine import PolicyEngine
 from loopos.policy_os.models import PolicyDecision
@@ -110,127 +127,6 @@ KIND_TO_POLICY_SCOPE: dict[str, str] = {
 # Tags that the runtime uses to attach authority metadata. ACI passes
 # them through so the policy audit trail stays consistent.
 _BASE_TAGS: tuple[str, ...] = ("aci", "v0_2")
-
-
-def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-# ---------------------------------------------------------------------------
-# Provider resolution (metadata-only, no I/O)
-# ---------------------------------------------------------------------------
-
-
-def _resolve_provider_hint(
-    hint: ProviderHint,
-    registry: "Any | None",  # ProviderRegistry or None
-) -> tuple[ResolvedProvider | None, str | None, str | None]:
-    """Resolve a :class:`ProviderHint` against a registry.
-
-    Returns a ``(resolved, reason_code, message)`` triple.
-
-    * ``resolved`` is non-None only on success.
-    * ``reason_code`` is one of the stable provider reason codes on
-      failure (e.g. ``provider_not_found``).
-    * ``message`` is a human-readable diagnostic. ``reason_code`` is
-      what callers should assert against.
-
-    The function never raises on resolution failure; it returns a
-    ``(None, reason_code, message)`` tuple. The runner turns the
-    tuple into a structured :class:`AgentCommandResult`. Strict
-    callers can re-raise via :class:`ProviderResolutionError`.
-    """
-    if registry is None:
-        return None, REASON_PROVIDER_NOT_FOUND, (
-            "provider_hint supplied but no provider registry was wired into the runner"
-        )
-
-    def _to_resolved(profile: Any, source: ProviderResolutionSource) -> ResolvedProvider:
-        caps = list(profile.capability_hints.capabilities)
-        return ResolvedProvider(
-            provider_id=profile.provider_id,
-            display_name=profile.name,
-            kind=str(profile.kind),
-            capabilities=caps,
-            source=source,
-            reason_code="",
-        )
-
-    try:
-        # 1. Exact match.
-        if hint.provider_id:
-            exact = registry.try_get(hint.provider_id)
-            if exact is None:
-                return (
-                    None,
-                    REASON_PROVIDER_NOT_FOUND,
-                    f"provider_id {hint.provider_id!r} not in registry",
-                )
-            return _to_resolved(exact, "exact"), None, None
-
-        # 2. Local-only filter.
-        if hint.local_only is True:
-            local_matches = list(registry.find_local())
-            if not local_matches:
-                return (
-                    None,
-                    REASON_PROVIDER_LOCAL_ONLY_REQUIRED,
-                    "no local-only provider available",
-                )
-            chosen = local_matches[0]
-            return _to_resolved(chosen, "local"), None, None
-
-        # 3. Capability filter (and optional kind narrowing).
-        if hint.required_capabilities:
-            candidates = []
-            for cap in hint.required_capabilities:
-                candidates.extend(registry.find_by_capability(cap))
-            # Deduplicate by provider_id while preserving order.
-            seen: set[str] = set()
-            deduped: list[Any] = []
-            for p in candidates:
-                if p.provider_id in seen:
-                    continue
-                seen.add(p.provider_id)
-                deduped.append(p)
-            if hint.preferred_kind is not None:
-                deduped = [p for p in deduped if str(p.kind) == hint.preferred_kind]
-            if not deduped:
-                return (
-                    None,
-                    REASON_PROVIDER_CAPABILITY_UNAVAILABLE,
-                    f"no provider matches required_capabilities={hint.required_capabilities!r}",
-                )
-            # Deterministic: pick the alphabetically smallest provider_id.
-            # ``allow_fallback`` does not block capability-based resolution:
-            # there is no "original" provider to fall back from; we are
-            # already choosing among equivalent candidates.
-            deduped.sort(key=lambda p: p.provider_id)
-            return _to_resolved(deduped[0], "capability"), None, None
-
-        # 4. Kind-only filter.
-        if hint.preferred_kind is not None:
-            kind_matches = [
-                p for p in registry.list()
-                if str(p.kind) == hint.preferred_kind
-            ]
-            if not kind_matches:
-                return (
-                    None,
-                    REASON_PROVIDER_NOT_FOUND,
-                    f"no provider with preferred_kind={hint.preferred_kind!r}",
-                )
-            return _to_resolved(kind_matches[0], "kind"), None, None
-
-        # 5. No criterion: provider_id is required when nothing else is set.
-        return (
-            None,
-            REASON_PROVIDER_NOT_FOUND,
-            "provider_hint has no provider_id, no required_capabilities, "
-            "no local_only, and no preferred_kind; nothing to resolve",
-        )
-    except Exception as exc:  # noqa: BLE001 - defensive boundary
-        return None, REASON_PROVIDER_NOT_FOUND, f"provider resolution raised: {exc}"
 
 
 # ---------------------------------------------------------------------------
@@ -790,27 +686,6 @@ class CommandRunner:
             duration_ms=syscall_result.duration_ms,
             data=dict(syscall_result.output),
         )
-
-
-def _format_decision_reason(decision: PolicyDecision) -> str:
-    codes = list(decision.reason_codes) or list(decision.all_reason_codes)
-    if not codes:
-        return f"policy {decision.action}"
-    return f"policy {decision.action}: {', '.join(codes)}"
-
-
-def _policy_reason_code(decision: PolicyDecision, fallback: str) -> str:
-    """Return the first stable reason code from a PolicyDecision.
-
-    Falls back to ``fallback`` when the decision carries no codes.
-    """
-    for code in decision.reason_codes:
-        if code:
-            return code
-    for code in decision.all_reason_codes:
-        if code:
-            return code
-    return fallback
 
 
 def build_default_runner(

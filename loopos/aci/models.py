@@ -10,16 +10,30 @@ Phase 2 extensions (v0.2):
   result so future migrations can be routed.
 * :class:`ProviderHint` and :class:`ResolvedProvider` add the
   metadata-only provider binding introduced by the Phase S
-  Provider Runtime Registry.
+  Provider Runtime Registry. (Defined in :mod:`loopos.aci.provider_models`.)
 * :class:`RiskHint`, :class:`PolicyDecisionSummary`,
   :class:`SyscallSummary`, :class:`EvaluationSummary`,
   :class:`ProgressSummary`, and :class:`ConvergenceSummary` give the
   agent + the runtime + the ALI FSM consumer a structured view of the
   decision surface, even when the actual evaluation is still
-  placeholder.
+  placeholder. (Defined in :mod:`loopos.aci.result_models`.)
 * ``AgentCommandKind`` adds ``provider_select``, ``explain_only``,
   ``file_patch``, and ``git_commit`` so the schema covers the
   full ACI surface; ``AgentCommandStatus`` adds ``unsupported``.
+
+Maintainability note (Phase 3.x):
+
+The provider-binding sub-models (``ProviderHint``, ``ResolvedProvider``,
+``CommandCapability``, ``RiskHint``, ``RiskHintLevel``,
+``ProviderResolutionSource``) live in :mod:`loopos.aci.provider_models`
+and are re-exported here for backward compatibility. The result
+sub-models (``PolicyDecisionSummary``, ``SyscallSummary``,
+``ObservationSummary``, ``ObservationKind``, ``EvaluationSummary``,
+``ProgressSummary``, ``ConvergenceSummary``, ``ConvergenceHint``) live
+in :mod:`loopos.aci.result_models` and are re-exported here for
+backward compatibility. Existing imports of the form
+``from loopos.aci.models import ProviderHint`` keep working
+unchanged.
 """
 
 from __future__ import annotations
@@ -32,6 +46,34 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from loopos.policy_os.models import PolicyDecision
+
+# Re-export the provider binding sub-models so existing
+# ``from loopos.aci.models import ProviderHint`` style imports keep
+# working unchanged.
+from loopos.aci.provider_models import (
+    CommandCapability,
+    ProviderHint,
+    ProviderResolutionSource,
+    ResolvedProvider,
+    RiskHint,
+    RiskHintLevel,
+)
+
+# Re-export the result sub-models so existing
+# ``from loopos.aci.models import SyscallSummary`` style imports keep
+# working unchanged. ``REASON_NO_KERNEL_RUNTIME`` is also re-exported
+# so external callers can read the same constant.
+from loopos.aci.result_models import (
+    ConvergenceHint,
+    ConvergenceSummary,
+    EvaluationSummary,
+    ObservationKind,
+    ObservationSummary,
+    PolicyDecisionSummary,
+    ProgressSummary,
+    REASON_NO_KERNEL_RUNTIME,
+    SyscallSummary,
+)
 
 # ---------------------------------------------------------------------------
 # Schema version
@@ -68,31 +110,6 @@ AgentCommandStatus = Literal[
     "unsupported",
 ]
 
-ObservationKind = Literal["command_result", "file_content", "git_state", "database_result", "noop"]
-
-ConvergenceHint = Literal[
-    "continue",
-    "repair",
-    "replan",
-    "ask_user",
-    "wait_approval",
-    "halt_success",
-    "halt_failure",
-    "halt_blocked",
-    "not_evaluated",
-]
-
-ProviderResolutionSource = Literal[
-    "exact",
-    "capability",
-    "local",
-    "kind",
-    "default",
-    "none",
-]
-
-RiskHintLevel = Literal["low", "medium", "high", "blocked", "unknown"]
-
 
 # ----- Stable reason codes -----------------------------------------------
 
@@ -115,225 +132,10 @@ REASON_REMOTE_SCRIPT_PIPE_DENIED = "remote_script_pipe_denied"
 REASON_GIT_TAG_DENIED = "git_tag_denied"
 REASON_RELEASE_EVIDENCE_MUTATION_DENIED = "release_evidence_mutation_denied"
 REASON_NETWORK_ACCESS_DENIED = "network_access_denied"
-REASON_NO_KERNEL_RUNTIME = "aci.no_kernel_runtime"
 
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
-
-
-# ----- Sub-models ---------------------------------------------------------
-
-
-class CommandCapability(BaseModel):
-    """Capability hints declared by the agent for a command.
-
-    The runner cross-checks these against the runtime capability
-    boundary. A mismatch produces a structured denial, never a
-    silent override.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    filesystem_read: bool = False
-    filesystem_write: bool = False
-    network: bool = False
-    database: bool = False
-    tags: list[str] = Field(default_factory=list)
-
-
-class ProviderHint(BaseModel):
-    """Hint that the agent expresses about which provider to use.
-
-    The hint is consumed by the runner via
-    :class:`loopos.providers.ProviderRegistry` and resolved into a
-    :class:`ResolvedProvider`. The hint is **declarative**: it
-    never triggers a live API call.
-
-    Resolution semantics:
-
-    * ``provider_id`` is set -> exact resolution.
-    * ``required_capabilities`` is non-empty -> capability lookup;
-      deterministic ordering by provider_id.
-    * ``local_only`` is True -> only local profiles considered.
-    * ``preferred_kind`` -> filter by transport family after the
-      primary lookup.
-    * ``allow_fallback`` is False -> silent fallback to a different
-      provider is rejected.
-    * No match -> reason_code ``provider_not_found`` or
-      ``provider_capability_unavailable``.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    provider_id: str | None = None
-    required_capabilities: list[str] = Field(default_factory=list)
-    preferred_kind: str | None = None
-    preferred_cost_class: str | None = None
-    local_only: bool | None = None
-    allow_fallback: bool = False
-    notes: str = ""
-
-    @field_validator("provider_id")
-    @classmethod
-    def _strip_provider_id(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        cleaned = value.strip().lower()
-        return cleaned or None
-
-
-class ResolvedProvider(BaseModel):
-    """Outcome of resolving a :class:`ProviderHint`.
-
-    The runner fills this in :class:`AgentCommandResult.resolved_provider`
-    when a hint was supplied or when ``kind == "provider_select"``.
-
-    The ``source`` field tells the agent (and any human reviewer) how
-    the resolution was made:
-
-    * ``exact`` -- matched by ``provider_id``.
-    * ``capability`` -- matched via :meth:`ProviderRegistry.find_by_capability`.
-    * ``local`` -- matched via :meth:`ProviderRegistry.find_local`.
-    * ``kind`` -- matched via :meth:`ProviderRegistry.find_by_kind`.
-    * ``default`` -- no hint, fell back to a registry default.
-    * ``none`` -- no hint supplied.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    provider_id: str
-    display_name: str | None = None
-    kind: str | None = None
-    capabilities: list[str] = Field(default_factory=list)
-    source: ProviderResolutionSource = "none"
-    reason_code: str = ""
-
-
-class RiskHint(BaseModel):
-    """Risk signal declared by the agent for a command.
-
-    The runner forwards this to Policy OS as part of the policy
-    request subject; Policy OS remains the source of truth for the
-    final risk level. The hint is never authoritative.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    level: RiskHintLevel = "unknown"
-    reason: str = ""
-    tags: list[str] = Field(default_factory=list)
-
-
-class PolicyDecisionSummary(BaseModel):
-    """Structured summary of a Policy OS decision for the result wire.
-
-    The runner keeps the full :class:`PolicyDecision` on the result
-    for audit. This summary is the structured, agent-facing view used
-    by downstream consumers such as the ALI FSM.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    decision_id: str
-    allowed: bool
-    action: str
-    severity: str = "info"
-    risk: str = "low"
-    safety_level: str = "L0"
-    requires_approval: bool = False
-    reason_codes: list[str] = Field(default_factory=list)
-
-
-class SyscallSummary(BaseModel):
-    """Summary of the syscall that the runner dispatched (if any).
-
-    The runner fills this when ``kind`` resolves to a known syscall
-    (e.g. ``terminal.exec`` -> ``terminal.exec``). Pure-metadata
-    kinds (``provider_select``, ``explain_only``) leave it empty.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    name: str
-    syscall_id: str | None = None
-    risk: str = "low"
-    requires_approval: bool = False
-    side_effecting: bool = False
-    success: bool | None = None
-    dry_run: bool = False
-    duration_ms: int = 0
-
-
-class ObservationSummary(BaseModel):
-    """Structured observation attached to a command result."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    kind: ObservationKind = "command_result"
-    success: bool = False
-    summary: str = ""
-    return_code: int | None = None
-    duration_ms: int = 0
-    stdout: str = ""
-    stderr: str = ""
-    data: dict[str, Any] = Field(default_factory=dict)
-
-
-class ProgressSummary(BaseModel):
-    """Lightweight progress hint.
-
-    The runner fills this from runtime evidence when available. When
-    the kernel runtime is not yet bound (Phase 1+) the runner emits
-    a deterministic placeholder with ``status == "unknown"`` and
-    ``reason`` explaining why.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    previous_score: float = Field(default=0.0, ge=0.0, le=1.0)
-    current_score: float = Field(default=0.0, ge=0.0, le=1.0)
-    no_progress: bool = False
-    status: str = "unknown"
-    reason: str = "kernel integration deferred"
-    placeholder: bool = True
-
-
-class EvaluationSummary(BaseModel):
-    """Lightweight evaluation hint.
-
-    The runner never pretends ``goal_satisfied == True`` when no real
-    evaluation has run. When the kernel runtime is not bound the
-    runner emits ``status == "not_evaluated"`` and reason_code
-    ``aci.no_kernel_runtime``.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    goal_satisfied: bool = False
-    failed: bool = False
-    repairable: bool = False
-    missing_information: bool = False
-    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
-    reason_codes: list[str] = Field(default_factory=list)
-    status: str = "not_evaluated"
-    reason: str = "kernel integration deferred"
-    placeholder: bool = True
-
-
-class ConvergenceSummary(BaseModel):
-    """Convergence hint attached to a command result.
-
-    The runner fills this with a real decision when the kernel
-    runtime is bound. Until then it emits ``action ==
-    "not_evaluated"`` with the kernel-deferred reason code.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    action: ConvergenceHint = "not_evaluated"
-    reason_code: str = REASON_NO_KERNEL_RUNTIME
-    placeholder: bool = True
 
 
 # ----- Top-level models ---------------------------------------------------
@@ -544,3 +346,59 @@ EvaluationHint = EvaluationSummary
 
 ConvergenceSnapshot = ConvergenceSummary
 """Backward-compat alias kept for the v0.1 test suite."""
+
+
+__all__ = [
+    # Schema version
+    "ACISchemaVersion",
+    # Command taxonomy
+    "AgentCommandKind",
+    "AgentCommandMode",
+    "AgentCommandStatus",
+    # Provider binding
+    "CommandCapability",
+    "ProviderHint",
+    "ProviderResolutionSource",
+    "ResolvedProvider",
+    "RiskHint",
+    "RiskHintLevel",
+    # Result sub-models
+    "ConvergenceHint",
+    "ConvergenceSummary",
+    "EvaluationSummary",
+    "ObservationKind",
+    "ObservationSummary",
+    "PolicyDecisionSummary",
+    "ProgressSummary",
+    "SyscallSummary",
+    # Stable reason codes
+    "REASON_CAPABILITY_BOUNDARY_DENIED",
+    "REASON_DRY_RUN_NO_SIDE_EFFECT",
+    "REASON_FREEDOM_BUDGET_DENIED",
+    "REASON_GIT_TAG_DENIED",
+    "REASON_INVALID_COMMAND",
+    "REASON_NETWORK_ACCESS_DENIED",
+    "REASON_NO_KERNEL_RUNTIME",
+    "REASON_OBSERVATION_MISSING",
+    "REASON_POLICY_DENIED",
+    "REASON_POLICY_REQUIRES_APPROVAL",
+    "REASON_PROVIDER_CAPABILITY_UNAVAILABLE",
+    "REASON_PROVIDER_FALLBACK_NOT_ALLOWED",
+    "REASON_PROVIDER_LOCAL_ONLY_REQUIRED",
+    "REASON_PROVIDER_NOT_FOUND",
+    "REASON_RELEASE_EVIDENCE_MUTATION_DENIED",
+    "REASON_REMOTE_SCRIPT_PIPE_DENIED",
+    "REASON_SYSCALL_FAILED",
+    "REASON_TERMINAL_RM_RF_DENIED",
+    "REASON_TRACE_REQUIRED",
+    "REASON_UNSUPPORTED_COMMAND_KIND",
+    # Backward-compat aliases
+    "ConvergenceSnapshot",
+    "EvaluationHint",
+    "ProgressSnapshot",
+    # Top-level contracts
+    "AgentCommand",
+    "AgentCommandResult",
+    "parse_command",
+    "serialize_command",
+]
