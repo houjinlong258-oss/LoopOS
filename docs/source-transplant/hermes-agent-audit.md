@@ -4,7 +4,7 @@
 / interface design surfaces and classify each one's transplant
 disposition for LoopOS v0.2.
 
-**Source:** `D:\LoopOS\移植参考的源码\hermes-agent-2026.6.19 (1)\hermes-agent-2026.6.19\` (MIT, © 2025 Nous Research).
+**Source:** `移植参考的源码/hermes-agent-2026.6.19/hermes-agent-2026.6.19/` (MIT, © 2025 Nous Research).
 
 **License:** see `license-and-provenance-audit.md` — Hermes is
 classified `restricted_reuse_with_attribution`. Concepts,

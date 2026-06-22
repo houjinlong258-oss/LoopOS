@@ -3,7 +3,7 @@
 **Purpose:** catalogue Claude Code Main's coding-agent
 execution design surfaces and classify each for LoopOS v0.2.
 
-**Source:** `D:\LoopOS\移植参考的源码\claude-code-main\claude-code-main\` (Anthropic PBC, commercial terms, core agent closed-source).
+**Source:** `移植参考的源码/claude-code-main/claude-code-main/` (Anthropic PBC, commercial terms, core agent closed-source).
 
 **License:** see `license-and-provenance-audit.md` —
 Claude Code Main is classified

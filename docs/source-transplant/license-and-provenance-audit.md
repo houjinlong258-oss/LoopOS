@@ -33,7 +33,7 @@ quoted and adapted per MIT; Claude Code Main may only inform design.
 
 | field | value |
 |---|---|
-| root | `D:\LoopOS\移植参考的源码\claude-code-main\claude-code-main\` |
+| root | `移植参考的源码/claude-code-main/claude-code-main/` |
 | LICENSE file | `LICENSE.md` (1 line, 150 bytes) |
 | LICENSE text | `© Anthropic PBC. All rights reserved. Use is subject to Anthropic's Commercial Terms of Service (https://www.anthropic.com/legal/commercial-terms).` |
 | metadata files | `package.json` (npm package, closed agent binary), `README.md`, `SECURITY.md`, `.github/ISSUE_TEMPLATE/*.yml`, `examples/mdm/managed-settings.json`, `examples/settings/*.json` |
@@ -53,7 +53,7 @@ quoted and adapted per MIT; Claude Code Main may only inform design.
 
 | field | value |
 |---|---|
-| root | `D:\LoopOS\移植参考的源码\hermes-agent-2026.6.19 (1)\hermes-agent-2026.6.19\` |
+| root | `移植参考的源码/hermes-agent-2026.6.19/hermes-agent-2026.6.19/` |
 | LICENSE file | `LICENSE` (21 lines, MIT) |
 | LICENSE text | `MIT License — Copyright (c) 2025 Nous Research` |
 | metadata files | `pyproject.toml`, `MANIFEST.in`, `package.json`, `setup.py`, `README.md`, `README.ur-pk.md`, `README.zh-CN.md`, `AGENTS.md`, `SECURITY.md`, `CONTRIBUTING.md`, `flake.nix`, `flake.lock`, `Dockerfile`, `docker-compose.yml`, `pyproject.toml` |
