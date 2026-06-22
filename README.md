@@ -1,5 +1,11 @@
 # LoopOS
 
+> **v0.2 in progress — boundary banner.** v0.1.0 release evidence is
+> **FROZEN**; see [`docs/v0.1.0-FREEZE.md`](docs/v0.1.0-FREEZE.md). Do
+> **not** modify the v0.1.0 tag, dist artifact, release notes, CI
+> report, or any file in `scripts/baselines/v0_1_0_loopos.txt`. All
+> changes must pass `python scripts/anti_bloat_check.py` before commit.
+
 ![LoopOS - the kernel for running agents](docs/assets/brand/loopos-hero.png)
 
 **Not another agent. The kernel for running agents.**

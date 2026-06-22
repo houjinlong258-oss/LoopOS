@@ -1,0 +1,19 @@
+{
+  "schema_version": "0.2",
+  "phase": "phase-0",
+  "generated_at": "2026-06-22T00:00:00Z",
+  "fsm_coverage": false,
+  "policy_gates_active": false,
+  "budget_enforced": false,
+  "memory_governed": false,
+  "replay_deterministic": false,
+  "go_core_untouched": true,
+  "aci_runtime_bound": false,
+  "ali_fsm_bound": false,
+  "anti_bloat_checked": true,
+  "evidence": {
+    "anti_bloat_report": "scripts/anti_bloat_check.py --json",
+    "baseline": "scripts/baselines/v0_1_0_loopos.txt",
+    "freeze_doc": "docs/v0.1.0-FREEZE.md"
+  }
+}

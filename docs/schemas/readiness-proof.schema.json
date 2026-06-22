@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://loopos.dev/schemas/readiness-proof.schema.json",
+  "title": "LoopOS Readiness Proof",
+  "description": "Proof-carrying readiness record for LoopOS releases. Phase 0 emits the schema and an example; runtime producer arrives in Phase 1.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "phase",
+    "generated_at",
+    "fsm_coverage",
+    "policy_gates_active",
+    "budget_enforced",
+    "memory_governed",
+    "replay_deterministic",
+    "go_core_untouched",
+    "aci_runtime_bound",
+    "ali_fsm_bound",
+    "anti_bloat_checked"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$"
+    },
+    "phase": {
+      "type": "string",
+      "enum": ["phase-0", "phase-1", "phase-2", "release-candidate", "release"]
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "fsm_coverage": {
+      "type": "boolean",
+      "description": "True when every FSM state and transition is covered by at least one test."
+    },
+    "policy_gates_active": {
+      "type": "boolean",
+      "description": "True when all Policy OS gates are active and exercised."
+    },
+    "budget_enforced": {
+      "type": "boolean",
+      "description": "True when FreedomBudget (token / step / wall-time) is enforced."
+    },
+    "memory_governed": {
+      "type": "boolean",
+      "description": "True when every STORE_MEMORY op goes through Memory Governance."
+    },
+    "replay_deterministic": {
+      "type": "boolean",
+      "description": "True when the same input replays to the same normalized state hash."
+    },
+    "go_core_untouched": {
+      "type": "boolean",
+      "description": "True when v0.1.0 loopos/ baseline files are unchanged."
+    },
+    "aci_runtime_bound": {
+      "type": "boolean",
+      "description": "True when ACI commands route through Policy OS and Syscall Router."
+    },
+    "ali_fsm_bound": {
+      "type": "boolean",
+      "description": "True when ALI sessions are driven by the loop-level FSM."
+    },
+    "anti_bloat_checked": {
+      "type": "boolean",
+      "description": "True when anti_bloat_check.py ran and no hard-fail was emitted."
+    },
+    "evidence": {
+      "type": "object",
+      "description": "Optional evidence references; structure defined in Phase 1.",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}
