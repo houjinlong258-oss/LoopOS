@@ -2,25 +2,34 @@
   "schema_version": "1.1",
   "generated_by": "scripts/ci_report.py",
   "target": "founding-release",
-  "generated_at": "2026-06-21T15:22:23+00:00",
-  "git_commit": "9c7f148d8c5f9156e80195398170333edcec3f91",
+  "generated_at": "2026-06-22T06:55:58+00:00",
+  "git_commit": "5296bcf44fbd865982cd90231676b50fd535fb4c",
   "python": "3.13.2",
+  "python_version": "3.13.2",
   "platform": "Windows-11-10.0.26200-SP0",
+  "os": "Windows",
+  "arch": "AMD64",
   "offline": true,
   "commands": {
     "pytest": "python -m pytest",
     "ruff": "python -m ruff check .",
     "mypy": "python -m mypy loopos tests"
   },
-  "tests_passed": 397,
+  "tests_passed": 409,
   "subtests_passed": 19,
   "tests_failed": 0,
   "ruff": "passed",
   "mypy": "passed",
   "pytest_exit_code": 0,
-  "pytest_output_tail": "........................................................................ [ 18%]\n............................................................................................................................. [ 49%]\n........................................................................ [ 67%]\n........................................................................ [ 85%]\n........................................................                 [100%]\n397 passed, 19 subtests passed in 113.18s (0:01:53)",
+  "pytest_output_tail": "........................................................................ [ 17%]\n............................................................................................................................. [ 48%]\n........................................................................ [ 65%]\n........................................................................ [ 83%]\n....................................................................     [100%]\n409 passed, 19 subtests passed in 104.97s (0:01:44)",
   "ruff_exit_code": 0,
   "ruff_output_tail": "All checks passed!",
   "mypy_exit_code": 0,
-  "mypy_output_tail": "Success: no issues found in 256 source files"
+  "mypy_output_tail": "Success: no issues found in 258 source files",
+  "durations_ms": {
+    "pytest": 106417,
+    "ruff": 145,
+    "mypy": 805,
+    "total": 107369
+  }
 }
