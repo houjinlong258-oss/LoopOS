@@ -149,6 +149,7 @@ class AgentLoopFSMTests(unittest.TestCase):
         # Lookup works through the index.
         row = custom.lookup("RUNNING", "policy_denied")
         self.assertIsNotNone(row)
+        assert row is not None  # mypy
         self.assertEqual(row.next_state, "HALTED_BLOCKED")
 
 

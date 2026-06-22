@@ -9,7 +9,6 @@ from pathlib import Path
 from scripts.validate_readiness_schema import (
     PHASE_VALUES,
     REQUIRED_FIELDS,
-    ReadinessSchemaError,
     compare_schema_and_example,
     load_and_validate,
     validate_readiness_proof,

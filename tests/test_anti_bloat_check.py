@@ -21,7 +21,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = REPO_ROOT / "scripts" / "anti_bloat_check.py"
 
 
-def run_gate(*extra_args: str, env: dict | None = None) -> subprocess.CompletedProcess:
+def run_gate(
+    *extra_args: str, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     """Run the anti-bloat gate and return the result."""
     return subprocess.run(
         [sys.executable, str(SCRIPT), *extra_args],
@@ -104,7 +106,7 @@ def test_v010_runtime_modified_hard_fail() -> None:
     """
     # Indirect test: the check function returns None when baseline is intact
     sys.path.insert(0, str(REPO_ROOT / "scripts"))
-    from anti_bloat_check import check_v010_runtime_modified, load_baseline
+    from anti_bloat_check import check_v010_runtime_modified, load_baseline  # type: ignore[import-not-found]
 
     baseline = load_baseline()
     assert len(baseline) > 100

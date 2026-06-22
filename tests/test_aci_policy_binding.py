@@ -19,7 +19,6 @@ from unittest import mock
 from loopos.aci import (
     AgentCommand,
     AgentCommandResult,
-    AgentCommandStatus,
     CommandRunner,
     RunnerConfig,
 )

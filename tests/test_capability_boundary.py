@@ -6,7 +6,6 @@ import unittest
 
 from loopos.freedom import (
     CapabilityBoundary,
-    FreedomLevel,
     FreedomPolicy,
     check_authority,
 )

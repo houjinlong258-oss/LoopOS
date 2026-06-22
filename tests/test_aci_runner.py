@@ -14,7 +14,6 @@ These tests assert the contract ACI promises to the runtime:
 
 from __future__ import annotations
 
-import inspect
 import re
 import tempfile
 import unittest
@@ -24,13 +23,12 @@ from unittest import mock
 from loopos.aci import (
     AgentCommand,
     AgentCommandKind,
-    AgentCommandResult,
     CommandRunner,
     RunnerConfig,
 )
 from loopos.aci.runner import KIND_TO_POLICY_SCOPE, KIND_TO_SYSCALL, build_default_runner
 from loopos.policy_os.engine import PolicyEngine
-from loopos.syscalls.router import create_default_syscall_router
+from loopos.syscalls.router import SyscallRouter, create_default_syscall_router
 
 
 def _low_risk_cmd(tmp: str, *, kind: AgentCommandKind = "terminal.exec") -> AgentCommand:
@@ -61,7 +59,7 @@ def _remote_pipe_cmd() -> AgentCommand:
     )
 
 
-def _stub_router(tmp: str):
+def _stub_router(tmp: str) -> SyscallRouter:
     return create_default_syscall_router(tmp, auto_approve_medium=True)
 
 
@@ -198,7 +196,6 @@ class CommandRunnerExecutionTests(unittest.TestCase):
             # ``explain`` on a runner after monkey-patching the
             # command fields, because pydantic refuses to build an
             # ``AgentCommand`` with an empty goal_id.
-            from loopos.aci import models as aci_models
 
             cmd = AgentCommand(
                 goal_id="g",

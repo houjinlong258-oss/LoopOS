@@ -349,3 +349,6 @@ class AgentLoopFSM:
 
 # Re-export a single immutable default engine for read-only callers.
 DEFAULT_FSM = AgentLoopFSM()
+
+
+__all__ = ["AgentLoopFSM", "TransitionRow", "DEFAULT_FSM"]

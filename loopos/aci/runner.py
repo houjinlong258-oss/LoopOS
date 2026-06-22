@@ -30,11 +30,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from loopos.aci.errors import CommandBlockedError, CommandValidationError
 from loopos.aci.models import (
     AgentCommand,
     AgentCommandResult,
-    AgentCommandStatus,
     ConvergenceSnapshot,
     EvaluationHint,
     ObservationKind,
@@ -42,7 +40,7 @@ from loopos.aci.models import (
     ProgressSnapshot,
 )
 from loopos.policy_os.engine import PolicyEngine
-from loopos.policy_os.models import PolicyActionType, PolicyDecision, PolicyRequest
+from loopos.policy_os.models import PolicyDecision
 from loopos.syscalls.router import SyscallRouter
 from loopos.syscalls.types import SyscallCall, SyscallMode, SyscallResult
 

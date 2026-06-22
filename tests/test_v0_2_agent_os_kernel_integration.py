@@ -29,14 +29,12 @@ from loopos.aci import (
     parse_command,
 )
 from loopos.ali import (
-    AgentLoopFSM,
     apply_event,
     create_session,
 )
 from loopos.ali.models import AgentLoopSession
 from loopos.freedom import (
     CapabilityBoundary,
-    FreedomLevel,
     FreedomPolicy,
     OutcomeContract,
     check_authority,

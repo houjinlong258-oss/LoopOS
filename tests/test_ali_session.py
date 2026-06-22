@@ -19,7 +19,6 @@ from loopos.ali.errors import (
     SessionClosedError,
     UnknownEventError,
 )
-from loopos.ali.fsm import DEFAULT_FSM
 from loopos.ali.models import AgentLoopSession
 
 
@@ -95,6 +94,7 @@ class SessionLifecycleTests(unittest.TestCase):
         )
         latest = s.latest_aci_ref()
         self.assertIsNotNone(latest)
+        assert latest is not None  # mypy
         self.assertEqual(latest.aci_result_id, "cmd-7")
         self.assertEqual(latest.status, "completed")
         # Source code must not import loopos.kernel.*
