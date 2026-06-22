@@ -36,3 +36,28 @@ class CommandBlockedError(ACIError):
     Examples include unknown syscall names, missing adapters, or a
     non-allowlisted path that the boundary check refuses.
     """
+
+
+class ProviderResolutionError(ACIError):
+    """Raised when the runner cannot resolve a :class:`ProviderHint`.
+
+    The runner still returns a structured :class:`AgentCommandResult`
+    with ``status='failed'`` (or ``status='blocked'`` when the policy
+    layer intervenes) and a stable ``reason_code`` such as
+    ``provider_not_found`` or ``provider_capability_unavailable``.
+    This exception is the strict-mode escape hatch for callers that
+    prefer exceptions over results.
+    """
+
+    def __init__(self, reason_code: str, message: str = "") -> None:
+        super().__init__(message or reason_code)
+        self.reason_code = reason_code
+
+
+class UnsupportedCommandKindError(ACIError):
+    """Raised when the runner encounters an unknown ``AgentCommandKind``.
+
+    The runner prefers returning a structured result with
+    ``status='unsupported'``; this exception is the strict-mode
+    escape hatch.
+    """

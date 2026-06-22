@@ -153,7 +153,14 @@ class ACIStatusCoverageTests(unittest.TestCase):
         statuses = set(AgentCommandStatus.__args__)  # type: ignore[attr-defined]
         self.assertEqual(
             statuses,
-            {"completed", "blocked", "failed", "approval_required", "dry_run"},
+            {
+                "completed",
+                "blocked",
+                "failed",
+                "approval_required",
+                "dry_run",
+                "unsupported",
+            },
         )
 
 

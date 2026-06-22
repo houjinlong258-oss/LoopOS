@@ -13,6 +13,22 @@
   `docs/source-transplant/provider-runtime-map.md` for the Hermes Agent
   source-transplant map and `docs/source-transplant/loopos-transplant-plan.md`
   for the unified Claude Code Main + Hermes Agent audit plan.
+- **`loopos.aci`** — Agent Command Interface (Phase 2). Stable Pydantic v2
+  contracts (`AgentCommand`, `AgentCommandResult`) with
+  `schema_version="0.2"`. Adds `ProviderHint`, `ResolvedProvider`,
+  `RiskHint`, `PolicyDecisionSummary`, `SyscallSummary`,
+  `EvaluationSummary`, `ProgressSummary`, and `ConvergenceSummary`.
+  Extended `AgentCommandKind` (`provider_select`, `explain_only`,
+  `file.patch`, `git.commit`) and `AgentCommandStatus`
+  (`unsupported`). `CommandRunner` resolves `ProviderHint` against
+  `loopos.providers` BEFORE syscall dispatch and never fakes a
+  successful command when the provider context is un-honorable.
+  Wire-format helpers in `loopos/aci/serialization.py`. See
+  `docs/agent-command-interface.md`.
+- **Provider consistency guard** —
+  `tests/test_provider_model_kernel_consistency.py` asserts the
+  boundary between `loopos.providers` (metadata substrate) and
+  `loopos.model_kernel` (scheduler / client layer).
 
 ### Notes
 
@@ -22,6 +38,11 @@
 - The new substrate coexists with `loopos.model_kernel` (the v0.1.0
   scheduler-aware registry); the two modules do not import from each
   other.
+- ACI does not import `loopos.kernel.*` or touch `KernelLoopEngine`.
+  Kernel integration is deferred to Phase 3+.
+- ACI does not modify `loopos.model_kernel.*`, `loopos.kernel.*`, the
+  v0.1.0 tag, the dist artifact, `docs/release-notes/`, or
+  `docs/reports/`.
 
 ## 0.1.0 - 2026-06-21
 

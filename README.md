@@ -67,6 +67,13 @@ freely; let LoopOS govern action safely.
   scheduler-aware `loopos.model_kernel`. See
   `docs/source-transplant/provider-runtime-map.md` for the field-level
   mapping.
+- **`loopos.aci`** — Agent Command Interface. Governed command
+  contract (`AgentCommand` / `AgentCommandResult`, Pydantic v2
+  `schema_version="0.2"`) backed by `CommandRunner` which routes
+  through the existing Policy OS / Syscall Router with metadata-only
+  provider binding via `loopos.providers`. See
+  `docs/agent-command-interface.md` for the contract, the kind /
+  status / reason-code tables, and the v0.2-vs-deferred surface map.
 
 The runtime does not connect to real databases or chat platforms, does not make real provider calls
 during tests, does not auto-merge code, and is not an operating-system sandbox.
