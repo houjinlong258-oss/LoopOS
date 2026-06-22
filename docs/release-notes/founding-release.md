@@ -1,8 +1,9 @@
 # LoopOS 0.1.0 - Founding Release
 
 **Release Date:** 2026-06-22
-**Artifact SHA256:** `24ba6bced9d8b43748fdfd2b76dd3a4619f5355278081129852bc34473374fa5`
-**Artifact Source Commit:** `df4a5dbea79d0cb3a002dc33f5e50609899b7e3c`
+**Artifact SHA256:** `a0aeb20cdff8d4ce21a764f34a47bd3abe8059ee255f6cefbb8088a2f47a96eb`
+**Artifact Size:** `7,759,907 bytes`
+**Artifact Source Commit:** `98f235737d0354875969131fe2237077948c8e06`
 
 The artifact SHA is the digest of the entire ZIP. The internal `SHA256SUMS` file contains one
 digest per packaged source file; it is not the ZIP digest. Verify both with:
