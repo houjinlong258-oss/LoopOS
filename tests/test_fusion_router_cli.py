@@ -125,16 +125,21 @@ class FusionRouterCLITests(unittest.TestCase):
         self.assertEqual(payload["trigger"]["source"], "kernel")
         self.assertEqual(payload["trigger"]["reason"], "repeated_failure")
 
-    def test_status_returns_unsupported_payload(self) -> None:
+    def test_status_returns_not_found_payload(self) -> None:
+        # Phase 7: ``fusion-router status`` reads from the local
+        # JSON persistence layer. When the plan / verdict is not
+        # found, the CLI returns ``not_found`` (not the v0.2
+        # ``unsupported`` placeholder). The placeholder is gone.
         code, output = _capture(
             fusion_router_command,
             action="status",
-            fusion_id="fusion-1",
+            fusion_id="fusion-not-persisted",
             json_output=True,
         )
         self.assertEqual(code, 0)
         payload = json.loads(output)
-        self.assertEqual(payload["status"], "unsupported")
+        self.assertEqual(payload["status"], "not_found")
+        self.assertEqual(payload["fusion_id"], "fusion-not-persisted")
 
     def test_plan_reads_task_json_file(self) -> None:
         with tempfile.NamedTemporaryFile(

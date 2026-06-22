@@ -55,6 +55,16 @@ loopos mad-dog explain task.json --json
 
 # Escalate an existing run based on failure evidence.
 loopos mad-dog escalate --run-id RUN_ID --reason release_blocker --json
+
+# Inspect a persisted mad-dog plan / verdict.
+loopos mad-dog status FUSION_ID --json
+
+# List all persisted mad-dog plans / verdicts.
+loopos mad-dog list --json
+
+# Route a persisted mad-dog plan through the kernel integration
+# (planning-only when no kernel engine is supplied).
+loopos mad-dog route --fusion-id FUSION_ID --json
 ```
 
 `mad-dog` maps directly to:
@@ -126,6 +136,16 @@ Mad Dog Mode must still obey:
 * `mad-dog explain` returns the activation rationale under the
   mad-dog trigger shape.
 * `mad-dog escalate` builds a plan with `source = "kernel"`.
+* `mad-dog status` reads from the local JSON persistence layer
+  (Phase 7).
+* `mad-dog list` enumerates persisted plan / verdict ids.
+* `mad-dog route` returns a structured `planning_only` result when
+  no kernel engine is supplied (Phase 7).
+
+`tests/test_fusion_router_persistence.py` and
+`tests/test_fusion_router_kernel_wiring.py` cover the Phase 7
+persistence + runner adapter (shared between `fusion-router` and
+`mad-dog`).
 
 ## File Layout
 

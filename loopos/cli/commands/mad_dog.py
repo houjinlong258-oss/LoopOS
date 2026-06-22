@@ -14,6 +14,9 @@ Subcommands (registered as ``loopos mad-dog ...``):
 * ``loopos mad-dog task.json [--severity LEVEL] [--json]``
 * ``loopos mad-dog explain task.json [--json]``
 * ``loopos mad-dog escalate --run-id RUN_ID --reason REASON [--json]``
+* ``loopos mad-dog status FUSION_ID [--json]``
+* ``loopos mad-dog list [--json]``
+* ``loopos mad-dog route --fusion-id FUSION_ID [--json]``
 
 Mad Dog Mode must still obey:
 
@@ -34,8 +37,15 @@ from __future__ import annotations
 import sys
 from typing import Any
 
-from loopos.cli.commands.fusion_router import build_default_router
+from loopos.cli.commands.fusion_router import (
+    build_default_router,
+    build_default_store,
+    cli_list as _shared_cli_list,
+    cli_status as _shared_cli_status,
+)
 from loopos.fusion_router.models import FusionTrigger
+from loopos.fusion_router.persistence import FusionPlanStore
+from loopos.fusion_router.runner import FusionRunner
 
 
 def mad_dog_command(
@@ -45,25 +55,25 @@ def mad_dog_command(
     run_id: str | None = None,
     reason: str = "explicit_user_request",
     severity: str = "critical",
+    fusion_id: str | None = None,
     json_output: bool = True,
     router: Any = None,
+    store: FusionPlanStore | None = None,
+    kernel_engine: Any = None,
 ) -> int:
     """Entry point for ``loopos mad-dog <action>``."""
 
     router = router or build_default_router()
+    store = store or build_default_store()
 
     if action == "plan":
         if not task_arg:
             print("mad-dog plan requires TASK (path or JSON).", file=sys.stderr)
             return 1
-        # Build the trigger with the explicit-user-request shape
-        # so the router selects ``mad_dog`` regardless of score.
-        # The CLI delegates to the standard plan helper but
-        # passes an overridden trigger via the JSON payload
-        # (``reason`` + ``severity`` + ``source``).
-        _cli_plan_with_mad_dog_trigger(
+        plan = _cli_plan_with_mad_dog_trigger(
             task_arg, severity=severity, router=router, json_output=json_output,
         )
+        store.save_plan(plan)
         return 0
     if action == "explain":
         if not task_arg:
@@ -86,6 +96,44 @@ def mad_dog_command(
         cli_escalate(
             run_id=run_id, reason=reason, router=router, json_output=json_output,
         )
+        return 0
+    if action == "status":
+        if not fusion_id:
+            print("mad-dog status requires FUSION_ID.", file=sys.stderr)
+            return 1
+        _shared_cli_status(fusion_id, store=store, json_output=json_output)
+        return 0
+    if action == "list":
+        _shared_cli_list(store=store, json_output=json_output)
+        return 0
+    if action == "route":
+        if not fusion_id:
+            print("mad-dog route requires --fusion-id.", file=sys.stderr)
+            return 1
+        plan = store.load_plan(fusion_id)
+        if plan is None:
+            print(
+                f"mad-dog route: no persisted plan for {fusion_id!r}; "
+                "run `mad-dog plan <task>` first.",
+                file=sys.stderr,
+            )
+            return 1
+        runner = FusionRunner(kernel_engine=kernel_engine, store=store)
+        result = runner.run(
+            plan, execution_enabled=kernel_engine is not None,
+        )
+        if json_output:
+            from loopos.fusion_router.cli import emit_json
+            emit_json(result.to_dict())
+        else:
+            sys.stdout.write(
+                f"fusion_id: {result.fusion_id}\n"
+                f"mode:      {result.mode}\n"
+                f"status:    {result.status}\n"
+                f"records:   {len(result.records)}\n"
+                f"results:   {len(result.results)}\n"
+                f"fallback:  {result.fallback_reason or '(none)'}\n"
+            )
         return 0
     print(f"Unknown mad-dog action: {action}", file=sys.stderr)
     return 1
@@ -190,6 +238,7 @@ def _attach_typer(app: Any) -> None:
         run_id: str | None = typer_mod.Option(None, "--run-id"),  # type: ignore[attr-defined]
         reason: str = typer_mod.Option("explicit_user_request", "--reason"),  # type: ignore[attr-defined]
         severity: str = typer_mod.Option("critical", "--severity"),  # type: ignore[attr-defined]
+        fusion_id: str | None = typer_mod.Option(None, "--fusion-id"),  # type: ignore[attr-defined]
         json_output: bool = typer_mod.Option(True, "--json/--human"),  # type: ignore[attr-defined]
     ) -> None:
         raise typer_mod.Exit(  # type: ignore[attr-defined]
@@ -199,6 +248,7 @@ def _attach_typer(app: Any) -> None:
                 run_id=run_id,
                 reason=reason,
                 severity=severity,
+                fusion_id=fusion_id,
                 json_output=json_output,
             )
         )

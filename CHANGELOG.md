@@ -65,7 +65,7 @@
   `consume_aci_result` returns the new event records; the
   existing `run.metadata["aci_outcomes"]` shape is unchanged.
   See `docs/trace-and-ali.md`.
-- **`loopos.fusion_router` (Phase 6) — Fusion Router / Mad Dog
+- **`loopos.fusion_router` (Phase 6 / 7) — Fusion Router / Mad Dog
   Mode** — the planning-only escalation layer above the default
   single-model agent loop. Default execution stays single-model;
   fusion activates only when there is evidence the normal path
@@ -80,6 +80,17 @@
   honour a role. The router is aggressive in reasoning but
   conservative in authority: it recommends ACI commands; only
   ACI / Kernel / Syscall Router may execute governed commands.
+  **Phase 7** adds `loopos.fusion_router.persistence`
+  (`FusionPlanStore`, atomic JSON write, deterministic key
+  order, list/load helpers) and `loopos.fusion_router.runner`
+  (`FusionRunner`, `FusionRunResult`, `describe_plan_mode`).
+  `fusion-router status`, `mad-dog status`, `fusion-router list`,
+  `mad-dog list`, `fusion-router route`, and `mad-dog route`
+  consume the persistence layer so callers can inspect a
+  previously-built plan and (with a kernel engine) opt into
+  routing the recommended commands through
+  `KernelLoopEngine.submit_agent_command`. CLI commands live
+  under `loopos fusion-router ...` and `loopos mad-dog ...`.
   CLI: `loopos fusion-router plan/explain/run/escalate/status`
   + `loopos mad-dog` alias. Live multi-provider fanout, model
   debate loops, and automatic paid API spending are deferred to

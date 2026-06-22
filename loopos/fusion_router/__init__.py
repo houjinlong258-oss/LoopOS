@@ -54,7 +54,19 @@ from loopos.fusion_router.models import (
     FusionVerdict,
     ModelCapabilityProfile,
 )
+from loopos.fusion_router.persistence import (
+    FusionPlanStore,
+    list_plans,
+    list_verdicts,
+    load_plan,
+    load_verdict,
+)
 from loopos.fusion_router.router import FusionRouter
+from loopos.fusion_router.runner import (
+    FusionRunResult,
+    FusionRunner,
+    describe_plan_mode,
+)
 
 __all__ = [
     "FUSION_MODES",
@@ -63,13 +75,21 @@ __all__ = [
     "FUSION_TRIGGER_SOURCES",
     "FusionMode",
     "FusionPlan",
+    "FusionPlanStore",
     "FusionRole",
     "FusionRoleAssignment",
+    "FusionRunResult",
     "FusionRouter",
+    "FusionRunner",
     "FusionTaskProfile",
     "FusionTrigger",
     "FusionTriggerReason",
     "FusionTriggerSource",
     "FusionVerdict",
     "ModelCapabilityProfile",
+    "describe_plan_mode",
+    "list_plans",
+    "list_verdicts",
+    "load_plan",
+    "load_verdict",
 ]
