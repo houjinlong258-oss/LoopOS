@@ -657,8 +657,11 @@ def _run(repo: Path, cmd: list[str]) -> subprocess.CompletedProcess[str]:
         "encoding": "utf-8",
         "errors": "replace",
     }
+    creationflags = 0
+    if sys.platform == "win32":
+        creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     if os.name == "nt":
-        popen_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+        popen_options["creationflags"] = creationflags
     else:
         popen_options["start_new_session"] = True
     process = subprocess.Popen(cmd, **popen_options)
