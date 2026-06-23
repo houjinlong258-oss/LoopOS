@@ -209,13 +209,12 @@ class ReadinessCheckArchiveModeTests(unittest.TestCase):
 
     def test_archive_mode_payload_reports_archive(self) -> None:
         payload = self.module.run_checks(archive_mode=True)
+        failing = [n for n, c in payload["checks"].items() if not c["status"]]
         self.assertEqual(payload["mode"], "archive")
         self.assertEqual(payload["status"], "pass",
                          f"archive-mode must pass on a clean repo; "
                          f"hard_fail_count={payload['hard_fail_count']}, "
-                         f"failing="
-                         f"{[n for n, c in payload['checks'].items()
-                            if not c['status']]}")
+                         f"failing={failing}")
 
     def test_archive_mode_skips_git_required_checks(self) -> None:
         payload = self.module.run_checks(archive_mode=True)
