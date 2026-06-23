@@ -1,5 +1,87 @@
 # Changelog
 
+## v0.3 (Universal Agent Runtime)
+
+### Added
+
+* **`loopos.product` (Workbench)** — the v0.3 product surface.
+  `Workbench.build_context()` produces a `WorkbenchContext` snapshot;
+  `build_panels_from_context()` turns it into a `PanelLayout` with
+  the eight required panels (Goal / Agent / Policy / ACI / ALI /
+  Trace-Replay / Fusion / Readiness); `render_plain` and `render_json`
+  emit human and machine output. The Workbench is the only
+  user-facing surface for v0.3 and never owns authority. See
+  `docs/v0-3-readme.md`.
+* **`loopos.adapters` (Agent Kernel Adapter Layer)** — universal
+  contract (`AgentKernelAdapter` Protocol + manifest + capabilities).
+  Default registry: `MockAdapter`, `HermesAdapter` (clean-room proof),
+  `ScreamCodeAdapter` (spec + mock), `CleanroomAdapter`
+  (clean-room Codex/Claude Code spec). No adapter can claim
+  `direct_shell=True` or `direct_file_write=True`; the manifest
+  validator refuses.
+* **`loopos.agent_bus` (Agent Bus)** — translates
+  `AgentKernelEvent` into governed `AgentCommand`s. Translation
+  table mirrors the v0.3 spec:
+  `file_patch_proposed → file.patch`,
+  `syscall_requested → terminal.exec`,
+  `test_requested → terminal.exec (action=test.run)`,
+  `model_call_requested → provider_select (action=provider.call)`.
+  The bus has **no** direct shell / file-write / execute method.
+* **`loopos.providers_runtime` (Real LLM Provider Runtime)** — new
+  governed transport layer on top of the v0.2 metadata-only
+  `loopos.providers`. Includes `MockProviderRuntime`,
+  `OpenAICompatibleProviderRuntime` (default-deny; live calls require
+  explicit approval + budget + secret), `OllamaProviderRuntime`,
+  `ProviderRuntimeRegistry`, `ProviderBudget`, secret redaction
+  primitive. Live calls disabled by default. Budget guard blocks
+  overspend. See `docs/provider-runtime.md`.
+* **`loopos.opengod` (OpenGod Planning Layer)** — strategic
+  meta-agent that emits **decisions only** — never executes.
+  Decision kinds: `single_agent`, `adapter_agent`, `fusion_pair`,
+  `fusion_committee`, `mad_dog`, `ask_user`, `halt`, `needs_repair`,
+  `needs_replan`. `OpenGodBudgetGuard` refuses decisions that would
+  push live spend past the configured ceiling. See
+  `docs/v0-3-readme.md`.
+* **Fusion Verdict Orchestration** — `loopos.fusion_router.orchestrator`.
+  Caller-driven mapping of `FusionVerdict.status` to ALI state
+  transitions: `needs_repair → REPAIRING (repair.plan)`,
+  `needs_replan → REPLANNING (goal.replan)`, `rejected → HALTED_FAILURE`,
+  `ask_user → WAITING_APPROVAL`.
+* **v0.3 CLI surface** — 7 new commands: `loopos workbench`,
+  `loopos adapters list|inspect|test`, `loopos providers runtime list|test`,
+  `loopos model call`, `loopos opengod decide`, `loopos session list|status|events`,
+  `loopos readiness check`. All commands support `--json` /
+  `--plain` / structured error output / standard exit-code table.
+* **`scripts/v0_3_readiness_check.py`** — 21-check v0.3 readiness
+  proof covering Product Layer, Adapter Layer, Agent Bus, Provider
+  Runtime, Fusion Orchestration, OpenGod, and a v0.2 regression
+  guard. Exits 0 on `status == "pass"`, 1 otherwise.
+* **Documentation** — `docs/v0-3-governance-boundary.md`,
+  `docs/v0-3-anti-bloat.md`, `docs/v0-3-readme.md`,
+  `docs/v0-3-readiness.md`, `docs/reports/v0-3-rc-audit.md`.
+
+### Changed
+
+* `loopos/cli/app.py` — registered 7 new top-level Typer commands.
+* `loopos/cli/commands/__init__.py` — added new command exports.
+* `loopos/cli/fallback.py` — added argparse subparsers for the
+  new commands (so the v0.3 surface works without Typer too).
+* `loopos/fusion_router/__init__.py` — re-exports
+  `FusionVerdictOrchestrator` and `OrchestrationResult`.
+
+### Testing
+
+* 90 new v0.3 tests across 9 test files
+  (`test_providers_runtime`, `test_agent_bus`, `test_opengod`,
+  `test_product`, `test_v0_3_cli`, `test_adapters_v0_3`,
+  `test_fusion_orchestrator`, `test_v0_3_readiness_check`,
+  `test_v0_3_deep_smoke`).
+* 932 not-slow tests pass (842 v0.2 + 90 v0.3).
+* v0.3 readiness: 21/21 checks pass.
+* v0.2 readiness: pass (regression guard).
+* Anti-bloat hard-fail count: 0.
+* Ruff: All checks passed.
+
 ## Unreleased
 
 ### Added
