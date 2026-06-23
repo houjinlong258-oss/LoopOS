@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "loopos"
-version = "0.1.0"
+version = "0.2.0"
 description = "The open operating runtime for AI agents with policy-governed syscalls, trace replay, memory governance, data guard, maintainability gates, and plugin standards."
 readme = "README.md"
 license = {file = "LICENSE"}

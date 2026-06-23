@@ -375,3 +375,99 @@ hotfix closure is documented in the "RC Hotfix Closure — `mad-dog
 --fusion-id` Typer Fix" section of that document.
 
 The detailed audit evidence lives in `docs/v0-2-rc-audit.md`.
+
+## Release Packaging Polish (post-hotfix)
+
+After the RC hotfix landed on `main`, a final **metadata-only**
+polish pass was applied on branch
+`v0.2/rc-release-package-polish` so the v0.2.0 source archive is
+professionally consistent for external consumers. This pass is
+audit-only with respect to runtime: no kernel change, no model
+kernel change, no ACI / ALI / Fusion behaviour change, no
+dependency added.
+
+### Version metadata (consumer-visible)
+
+| file | before | after |
+|---|---|---|
+| `VERSION` | `0.1.0` | `0.2.0` |
+| `pyproject.toml` `[project].version` | `"0.1.0"` | `"0.2.0"` |
+
+`VERSION` and `pyproject.toml` were both still pinned at `0.1.0`
+even though every readiness gate and audit doc already referenced
+v0.2. They now agree at `0.2.0`.
+
+### README banner
+
+| field | before | after |
+|---|---|---|
+| line 3 banner | "v0.2 in progress — boundary banner" | "v0.2.0 released — True Agent OS Kernel" |
+| section header | "## v0.2 Substrates (in progress)" | "## v0.2 Substrates (released)" |
+
+The banner now points consumers at `dist/LoopOS-v0.2.0-source.zip`
+and the annotated tag `v0.2.0` instead of implying v0.2 is still
+in flight. The freeze caveat on `v0.1.0` evidence is preserved.
+
+### Archive-mode readiness (no `.git` in extracted zip)
+
+`scripts/v0_2_readiness_check.py` now accepts a `--archive-mode`
+flag (and auto-detects when `.git` is missing). In archive-mode,
+git-required checks (`no_kernel_mutation_in_phase`,
+`no_model_kernel_mutation`, `anti_bloat_checked`,
+`release_evidence_untouched`) are reported as `severity="warning"`
+findings with `status=True` and `detail="skipped: archive-mode (no
+.git); requires git checkout"`. Code-only checks still run with
+their normal `severity="hard"` semantics. The payload gains a
+top-level `mode` field (`"archive"` or `"git-checkout"`).
+
+This lets downstream consumers validate an extracted v0.2.0 source
+archive without cloning the repo, while still requiring a git
+checkout for full release validation. New tests in
+`tests/test_v0_2_readiness_check.py::ReadinessCheckArchiveModeTests`
+lock this behaviour in.
+
+### Unicode / encoding hygiene
+
+A repo-wide scan for `#Uxxxx` escape sequences returned **zero
+hits**. The only non-ASCII bytes in `README.md`,
+`docs/v0-2-release-candidate.md`, and `docs/v0-2-rc-audit.md` are
+em dashes (`U+2014`, encoded `e2 80 94`), which are valid UTF-8 and
+intentional. Any `�?` or `#Uxxxx` rendering seen in tooling output
+is a PowerShell console encoding artifact (Windows PowerShell 5.1
+default code page cannot display U+2014); the bytes on disk are
+clean and the rendered output is correct when UTF-8 output
+encoding is requested (e.g. `PYTHONIOENCODING=utf-8`).
+
+### Files touched in the polish pass
+
+| file | scope | runtime impact |
+|---|---|---|
+| `VERSION` | value only | none |
+| `pyproject.toml` | `[project].version` only | none |
+| `README.md` | banner + section header only | none |
+| `docs/v0-2-release-candidate.md` | appended this section | none |
+| `docs/v0-2-rc-audit.md` | appended polish-pass note (see below) | none |
+| `scripts/v0_2_readiness_check.py` | `--archive-mode` flag + skipped-finding helper + `mode` field | none on git-checkout behaviour; archive-mode is purely additive |
+| `tests/test_v0_2_readiness_check.py` | added `ReadinessCheckArchiveModeTests` | none |
+
+`loopos/kernel/`, `loopos/model_kernel/`, `dist/`,
+`docs/release-notes/`, and `docs/reports/` all remain
+**diff-empty** against the hotfix HEAD and against `v0.1.0`.
+
+### Final packaging procedure (post-polish)
+
+1. Run the full validation suite (`python rc_audit_cli_smoke.py`,
+   `python scripts/v0_2_readiness_check.py --json`,
+   `python scripts/anti_bloat_check.py --json`,
+   `python -m pytest -q -m "not slow"`, `python -m ruff check .`,
+   `python -m mypy loopos tests`).
+2. Re-cut the annotated tag `v0.2.0` to the polish-branch HEAD.
+3. Regenerate `dist/LoopOS-v0.2.0-source.zip` from the tag with
+   `git archive --format=zip --prefix=LoopOS-v0.2.0/ ...`.
+4. Write the SHA256 sidecar
+   `dist/LoopOS-v0.2.0-source.zip.sha256`.
+5. Verify the zip contains `README.md` and `CHANGELOG.md` at its
+   root, then archive-mode-validate the extracted copy with
+   `python scripts/v0_2_readiness_check.py --json --archive-mode`.
+
+No push, no remote, no paid API call.

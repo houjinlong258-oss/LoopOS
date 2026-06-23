@@ -652,41 +652,110 @@ def check_anti_bloat() -> Finding:
 # ---------------------------------------------------------------------------
 
 
-def run_checks() -> dict[str, Any]:
-    """Run every readiness check and return the structured payload."""
+def _is_git_repo() -> bool:
+    """Return True iff ``REPO_ROOT/.git`` is present.
 
-    checks: list[Finding] = [
-        check_provider_registry_bound(),
-        check_aci_runtime_bound(),
-        check_ali_fsm_bound(),
-        check_kernel_loop_integrated(),
-        check_trace_bridge_active(),
-        check_ali_replay_deterministic(),
-        check_fusion_router_available(),
-        check_mad_dog_cli_available(),
-        check_fusion_plan_persistence_available(),
-        check_policy_gates_active(),
-        check_dry_run_no_side_effects(),
-        check_no_live_provider_calls(),
-        check_no_kernel_mutation_in_phase(),
-        check_no_model_kernel_mutation(),
-        check_anti_bloat(),
-    ]
+    When this returns ``False`` we are operating from an extracted
+    source archive and cannot run any check that depends on git
+    history (kernel-diff, model-kernel-diff, anti-bloat baseline).
+    """
+
+    return (REPO_ROOT / ".git").exists()
+
+
+def _skipped(name: str, detail: str) -> Finding:
+    """Build a "skipped" :class:`Finding` (status=True, severity=warning).
+
+    Skipped findings never contribute to ``hard_fail_count``; they are
+    surfaced via the :class:`Finding.severity == "warning"` channel so
+    downstream consumers can distinguish "ran and passed" from "did not
+    run" without parsing prose detail strings.
+    """
+
+    return Finding(name=name, status=True, detail=detail, severity="warning")
+
+
+def run_checks(archive_mode: bool = False) -> dict[str, Any]:
+    """Run readiness checks and return the structured payload.
+
+    Parameters
+    ----------
+    archive_mode:
+        When ``True``, every check that requires ``git`` history is
+        replaced by a "skipped: archive-mode (no .git)" warning
+        finding. Use this mode when running from an extracted source
+        archive (``dist/LoopOS-v0.2.0-source.zip``) where ``.git`` is
+        not present. The default is ``False`` for full git-checkout
+        validation.
+    """
+
+    if archive_mode:
+        checks: list[Finding] = [
+            check_provider_registry_bound(),
+            check_aci_runtime_bound(),
+            check_ali_fsm_bound(),
+            check_kernel_loop_integrated(),
+            check_trace_bridge_active(),
+            check_ali_replay_deterministic(),
+            check_fusion_router_available(),
+            check_mad_dog_cli_available(),
+            check_fusion_plan_persistence_available(),
+            check_policy_gates_active(),
+            check_dry_run_no_side_effects(),
+            check_no_live_provider_calls(),
+            _skipped(
+                "no_kernel_mutation_in_phase",
+                "skipped: archive-mode (no .git); requires git checkout",
+            ),
+            _skipped(
+                "no_model_kernel_mutation",
+                "skipped: archive-mode (no .git); requires git checkout",
+            ),
+            _skipped(
+                "anti_bloat_checked",
+                "skipped: archive-mode (no .git baseline); "
+                "requires git checkout",
+            ),
+            _skipped(
+                "release_evidence_untouched",
+                "skipped: archive-mode (no .git); requires git checkout",
+            ),
+        ]
+    else:
+        checks = [
+            check_provider_registry_bound(),
+            check_aci_runtime_bound(),
+            check_ali_fsm_bound(),
+            check_kernel_loop_integrated(),
+            check_trace_bridge_active(),
+            check_ali_replay_deterministic(),
+            check_fusion_router_available(),
+            check_mad_dog_cli_available(),
+            check_fusion_plan_persistence_available(),
+            check_policy_gates_active(),
+            check_dry_run_no_side_effects(),
+            check_no_live_provider_calls(),
+            check_no_kernel_mutation_in_phase(),
+            check_no_model_kernel_mutation(),
+            check_anti_bloat(),
+        ]
 
     hard_fails = [c for c in checks if c.severity == "hard" and not c.status]
     warnings: list[dict[str, Any]] = []
 
-    # The release-evidence check is structural; report it as part of
-    # the checks dict but also surface it as a warning when v0.2
-    # legitimately must not touch release artifacts.
-    release_evidence = check_release_evidence_untouched()
-    if not release_evidence.status:
-        warnings.append(
-            {
-                "name": release_evidence.name,
-                "detail": release_evidence.detail,
-            }
-        )
+    # The release-evidence check is structural; in full mode it
+    # surfaces as a warning when v0.2 legitimately must not touch
+    # release artifacts. In archive-mode it is already a "skipped"
+    # finding in ``checks`` so we skip re-running it here.
+    if not archive_mode:
+        release_evidence = check_release_evidence_untouched()
+        if not release_evidence.status:
+            warnings.append(
+                {
+                    "name": release_evidence.name,
+                    "detail": release_evidence.detail,
+                }
+            )
 
     overall_status = "pass" if not hard_fails else "fail"
 
@@ -694,6 +763,7 @@ def run_checks() -> dict[str, Any]:
         "schema_version": "0.2",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "status": overall_status,
+        "mode": "archive" if archive_mode else "git-checkout",
         "checks": {
             check.name: {
                 "status": check.status,
@@ -721,9 +791,32 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="run the readiness check and exit 0 even on hard-fail",
     )
+    parser.add_argument(
+        "--archive-mode",
+        action="store_true",
+        help=(
+            "skip git-required checks; use when running from an "
+            "extracted source archive without a .git directory"
+        ),
+    )
+    parser.add_argument(
+        "--no-archive-mode",
+        action="store_true",
+        help=(
+            "force full git-checkout validation even if .git is "
+            "missing (the git-required checks will then fail)"
+        ),
+    )
     args = parser.parse_args(argv)
 
-    payload = run_checks()
+    if args.archive_mode:
+        archive_mode = True
+    elif args.no_archive_mode:
+        archive_mode = False
+    else:
+        archive_mode = not _is_git_repo()
+
+    payload = run_checks(archive_mode=archive_mode)
     if args.json or not args.self_check:
         json.dump(payload, sys.stdout, indent=2, ensure_ascii=False)
         sys.stdout.write("\n")

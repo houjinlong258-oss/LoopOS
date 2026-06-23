@@ -201,5 +201,100 @@ class ReadinessCheckLiveProbeTests(unittest.TestCase):
         self.assertTrue(finding.status, finding.detail)
 
 
+class ReadinessCheckArchiveModeTests(unittest.TestCase):
+    """Behaviour when running from an extracted source archive."""
+
+    def setUp(self) -> None:
+        self.module = _load_module()
+
+    def test_archive_mode_payload_reports_archive(self) -> None:
+        payload = self.module.run_checks(archive_mode=True)
+        self.assertEqual(payload["mode"], "archive")
+        self.assertEqual(payload["status"], "pass",
+                         f"archive-mode must pass on a clean repo; "
+                         f"hard_fail_count={payload['hard_fail_count']}, "
+                         f"failing="
+                         f"{[n for n, c in payload['checks'].items()
+                            if not c['status']]}")
+
+    def test_archive_mode_skips_git_required_checks(self) -> None:
+        payload = self.module.run_checks(archive_mode=True)
+        checks = payload["checks"]
+        for git_only in (
+            "no_kernel_mutation_in_phase",
+            "no_model_kernel_mutation",
+            "anti_bloat_checked",
+            "release_evidence_untouched",
+        ):
+            self.assertIn(git_only, checks, f"{git_only} missing from payload")
+            self.assertTrue(checks[git_only]["status"],
+                            f"{git_only} must be skipped (status=True) "
+                            f"in archive-mode")
+            self.assertEqual(
+                checks[git_only]["severity"], "warning",
+                f"{git_only} must be severity=warning in archive-mode",
+            )
+            self.assertIn(
+                "archive-mode", checks[git_only]["detail"],
+                f"{git_only} detail must mention 'archive-mode'",
+            )
+
+    def test_archive_mode_still_runs_code_checks(self) -> None:
+        payload = self.module.run_checks(archive_mode=True)
+        checks = payload["checks"]
+        for code_check in (
+            "provider_registry_bound",
+            "aci_runtime_bound",
+            "ali_fsm_bound",
+            "kernel_loop_integrated",
+            "trace_bridge_active",
+            "ali_replay_deterministic",
+            "fusion_router_available",
+            "mad_dog_cli_available",
+            "fusion_plan_persistence_available",
+            "policy_gates_active",
+            "dry_run_no_side_effects",
+            "no_live_provider_calls",
+        ):
+            self.assertIn(code_check, checks)
+            self.assertEqual(
+                checks[code_check]["severity"], "hard",
+                f"{code_check} must remain hard in archive-mode",
+            )
+            self.assertTrue(
+                checks[code_check]["status"],
+                f"{code_check} must pass in archive-mode: "
+                f"{checks[code_check]['detail']}",
+            )
+
+    def test_git_checkout_mode_payload_reports_git_checkout(self) -> None:
+        payload = self.module.run_checks(archive_mode=False)
+        self.assertEqual(payload["mode"], "git-checkout")
+
+    def test_is_git_repo_matches_filesystem(self) -> None:
+        self.assertTrue(
+            self.module._is_git_repo(),
+            "_is_git_repo must return True in this test env (we run "
+            "from a git checkout)",
+        )
+
+    def test_archive_mode_flag_propagates_through_cli(self) -> None:
+        completed = subprocess.run(
+            [sys.executable, str(SCRIPT_PATH), "--json", "--archive-mode"],
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(
+            completed.returncode, 0,
+            f"--archive-mode must exit 0; got {completed.returncode}: "
+            f"stderr={completed.stderr}",
+        )
+        payload = json.loads(completed.stdout)
+        self.assertEqual(payload["mode"], "archive")
+        self.assertEqual(payload["status"], "pass")
+
+
 if __name__ == "__main__":
     unittest.main()

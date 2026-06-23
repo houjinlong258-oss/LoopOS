@@ -1,10 +1,12 @@
 # LoopOS
 
-> **v0.2 in progress — boundary banner.** v0.1.0 release evidence is
-> **FROZEN**; see [`docs/v0.1.0-FREEZE.md`](docs/v0.1.0-FREEZE.md). Do
-> **not** modify the v0.1.0 tag, dist artifact, release notes, CI
-> report, or any file in `scripts/baselines/v0_1_0_loopos.txt`. All
-> changes must pass `python scripts/anti_bloat_check.py` before commit.
+> **v0.2.0 released — True Agent OS Kernel.** v0.1.0 release evidence is
+> **FROZEN**; see [`docs/v0.1.0-FREEZE.md`](docs/v0.1.0-FREEZE.md). The
+> v0.2.0 source archive (`dist/LoopOS-v0.2.0-source.zip`) is cut from
+> the annotated tag `v0.2.0` on `main`. Do **not** modify the v0.1.0
+> tag, v0.1.0 dist artifact, release notes, CI report, or any file in
+> `scripts/baselines/v0_1_0_loopos.txt`. All changes must pass
+> `python scripts/anti_bloat_check.py` before commit.
 
 ![LoopOS - the kernel for running agents](docs/assets/brand/loopos-hero.png)
 
@@ -59,7 +61,7 @@ freely; let LoopOS govern action safely.
 - **Prompt / Policy Distillation** - distill behavior/renderer/policy packs from project rules.
 - **Boundary Adapters** - OpenAI-compatible provider, webhook gateway, SQLite Data Guard.
 
-## v0.2 Substrates (in progress)
+## v0.2 Substrates (released)
 
 - **`loopos.providers`** — metadata-only Provider Runtime Registry
   (Pydantic v2 typed contracts, deterministic ordering, no network I/O).

@@ -436,3 +436,24 @@ Test count delta vs the original audit (823 → 830): **+7**, exactly the 7 new 
 **Tag `v0.2.0` from the post-hotfix HEAD on `main`.**
 
 The single RC blocker documented in the original audit (`mad-dog status` / `mad-dog route` rejecting `--fusion-id` on the Typer surface) is closed. The hotfix is the minimal, scoped change described above; no runtime, kernel, model_kernel, ACI, ALI, or Fusion logic was modified. All readiness, anti-bloat, ruff, mypy, and test gates pass. All safety invariants hold. The `v0.1.0` tag and all release evidence remain untouched.
+
+### Polish-Pass Addendum (post-audit metadata fix)
+
+A subsequent **metadata-only** polish pass on branch
+`v0.2/rc-release-package-polish` addressed release-packaging
+consistency for downstream consumers without touching runtime.
+Scope: `VERSION`, `pyproject.toml` `[project].version`, the
+`README.md` banner ("v0.2 in progress" → "v0.2.0 released —
+True Agent OS Kernel"), an `--archive-mode` flag on
+`scripts/v0_2_readiness_check.py` (so the extracted source
+archive can be validated without `.git`), the corresponding
+archive-mode test class in
+`tests/test_v0_2_readiness_check.py`, and an appended
+"Release Packaging Polish" section in
+`docs/v0-2-release-candidate.md` (this audit note plus the
+archive-mode / Unicode-hygiene findings). `loopos/kernel/`,
+`loopos/model_kernel/`, `dist/`, `docs/release-notes/`, and
+`docs/reports/` remain diff-empty. `v0.1.0` is untouched.
+The detailed polish procedure lives in the "Release Packaging
+Polish (post-hotfix)" section of
+`docs/v0-2-release-candidate.md`.
