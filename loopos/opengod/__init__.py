@@ -1,9 +1,24 @@
 """LoopOS v0.3 OpenGod — strategic planning layer.
 
-OpenGod is a **read-only** strategic meta-agent. It observes the
-current state of the runtime (goal, trace, fusion plan, adapter
-state, readiness proof) and emits a strategic decision. It never
-executes, never opens a network connection, never writes a file.
+OpenGod is a **planning-only** strategic meta-agent. It observes
+the current state of the runtime (goal, trace, fusion plan,
+adapter state, readiness proof) and emits a strategic decision.
+It never executes, never opens a network connection, never writes
+a file.
+
+.. important::
+
+    **OpenGod is NOT wired into the AIL execution authority on
+    v0.3.** The KernelLoopEngine's
+    ``compile_next_ail()`` step does not consult
+    ``OpenGodDecision``. OpenGod is a parallel decision system
+    that can be invoked from the CLI (``loopos opengod ...``) or
+    surfaced through the Workbench; its verdicts are observed,
+    not enforced, by the runtime loop.
+
+    Bridging OpenGod -> AIL is a documented v0.4 item (see
+    ``docs/v0-3-opengod-boundary.md``). Until then, OpenGod
+    *plans*, the kernel *decides*.
 
 The package split mirrors the documented v0.3 plan:
 

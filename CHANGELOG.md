@@ -82,6 +82,66 @@
 * Anti-bloat hard-fail count: 0.
 * Ruff: All checks passed.
 
+### v0.3-alpha hardening (P0)
+
+The `v0.3-alpha-hardening` branch delivers the four P0 hardening
+objectives. This sub-section records them under the v0.3 umbrella
+so the RC audit can cite one changelog entry per P0 item.
+
+* **P0-1: Cross-path BudgetLedger.** Added `BudgetLedger` to
+  `loopos.providers_runtime`. Keys are normalised
+  `(provider_id, model_id, session_id)` tuples; an empty
+  `session_id` is the same as `session_id=None`. The ledger is a
+  process-level singleton (`get_default_ledger()`) so the
+  Workbench and the `loopos model call` CLI land on the same
+  accounting path; spend cannot be double-counted. Thread-safe via
+  `threading.Lock`. Dry-run never creates an entry; failed calls
+  never commit. Added `tests/test_budget_ledger.py` proving the
+  five P0-1 invariants: repeated calls accumulate spend;
+  Workbench + CLI share one ledger; dry-run does not commit;
+  failed calls do not commit; ledger scopes by
+  (provider, model, session).
+
+* **P0-2: Loopback live-provider HTTP smoke.** Added a real-HTTP
+  transport path (`urllib_transport` in
+  `loopos/providers_runtime/openai.py`) using only the standard
+  library. The runtime gains an opt-in `use_real_http=True`
+  constructor flag. New
+  `scripts/v0_3_live_provider_smoke_http.py` boots a
+  `http.server.HTTPServer` on `127.0.0.1:0`, exercises the runtime
+  against it, and asserts five invariants: dry-run keeps the
+  server quiet; missing key returns a structured blocked
+  response; the request reaches the wire; the response metadata
+  round-trips; the persisted `last_prepared` never carries the
+  real key. The smoke is gated by `LOOPOS_LIVE_HTTP_SMOKE=1` (or
+  `--run`). A 23rd readiness check,
+  `check_loopback_http_smoke`, is added and enabled in CI.
+
+* **P0-3: CI / pre-commit / secret scanning.** Rewrote
+  `.github/workflows/ci.yml` into four jobs:
+  `lint-type-test`, `readiness-and-bloat`, `secrets`, `ci-report`.
+  Every required gate runs: ruff, mypy, fast pytest, v0.2
+  readiness, v0.3 readiness (with the loopback gate on),
+  anti-bloat, gitleaks. New `.pre-commit-config.yaml` wires ruff,
+  mypy, pytest-fast, and gitleaks. New `.gitleaks.toml` extends
+  the default ruleset with a LoopOS-specific rule for the
+  `sk-test-` prefix used by the loopback smoke.
+
+* **P0-4: OpenGod boundary (Option B).** OpenGod remains
+  planning-only on v0.3. The `OpenGodDecision → AIL` authority
+  bridge is deferred to v0.4 (see `docs/v0-3-opengod-boundary.md`
+  for the v0.4 plan). `loopos/opengod/__init__.py` carries an
+  explicit "planning-only, NOT wired into AIL execution
+  authority" callout. A new readiness check
+  `check_opengod_planning_only_boundary` enforces the callout, the
+  public-API hygiene, and the authority-path import surface.
+
+No runtime behavior of pre-existing surfaces was modified by the
+P0 hardening pass. No new AIL ops. No new providers. No MCP
+implementation. No Textual / Web UI. The v0.3-alpha status
+remains "implementation snapshot complete; RC blocked pending
+hardening"; the P0 pass closes the four P0 objectives above.
+
 ## Unreleased
 
 ### Added

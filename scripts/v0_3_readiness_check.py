@@ -373,6 +373,132 @@ def check_opengod_budget_guard() -> Finding:
     )
 
 
+def check_opengod_planning_only_boundary() -> Finding:
+    """Enforce the v0.3 OpenGod boundary decision (Option B).
+
+    Asserts:
+
+    * ``loopos/opengod/__init__.py`` carries the explicit
+      "planning-only, NOT wired into AIL execution authority"
+      callout so the boundary is visible to importers.
+    * No AIL-adjacent symbol leaks into the OpenGod public API
+      (after stripping the module docstring, which is allowed to
+      *mention* these symbols by name).
+    * No authority-side runtime path (``loopos/kernel/``,
+      ``loopos/ail/``, ``loopos/agents/``, ``loopos/agent_bus/``)
+      imports ``OpenGodDecision`` / ``OpenGodVerdict`` / ``decide``
+      / ``build_verdict`` for execution purposes.
+
+    See ``docs/v0-3-opengod-boundary.md`` for the full decision
+    and the v0.4 follow-up plan.
+    """
+    import re as _re
+
+    # Module docstring callout.
+    init_path = REPO_ROOT / "loopos" / "opengod" / "__init__.py"
+    if not init_path.exists():
+        return Finding(
+            "opengod_planning_only_boundary",
+            False,
+            "loopos/opengod/__init__.py missing",
+        )
+    text = init_path.read_text(encoding="utf-8")
+    match = _re.search(r'^"""(?P<body>.*?)"""', text, _re.DOTALL | _re.MULTILINE)
+    if match is None:
+        return Finding(
+            "opengod_planning_only_boundary",
+            False,
+            "loopos/opengod/__init__.py has no module docstring",
+        )
+    body = match.group("body")
+    if "planning-only" not in body:
+        return Finding(
+            "opengod_planning_only_boundary",
+            False,
+            "module docstring missing 'planning-only' callout",
+        )
+    if not (_re.search(r"\bNOT\b", body) and _re.search(r"\bWIRE", body, _re.IGNORECASE)):
+        return Finding(
+            "opengod_planning_only_boundary",
+            False,
+            "module docstring missing 'NOT wired' callout",
+        )
+    if "v0.3" not in body:
+        return Finding(
+            "opengod_planning_only_boundary",
+            False,
+            "module docstring missing v0.3 reference",
+        )
+    # Public API hygiene: no AIL-adjacent symbols in the export
+    # surface (after stripping the module docstring, which is
+    # allowed to mention AIL symbols by name to explain the
+    # boundary).
+    stripped = _re.sub(r'^""".*?"""', "", text, count=1, flags=_re.DOTALL)
+    forbidden_substrings = (
+        "KernelLoopEngine",
+        "AILInstruction",
+        "AILPreference",
+        "AILContext",
+        "AILCodec",
+        "AILRuntime",
+        "compile_next_ail",
+    )
+    for s in forbidden_substrings:
+        if s in stripped:
+            return Finding(
+                "opengod_planning_only_boundary",
+                False,
+                f"loopos/opengod/__init__.py leaks AIL symbol {s!r}",
+            )
+    # Import-surface guard: nothing in authority-side runtime
+    # paths imports OpenGodDecision / OpenGodVerdict / decide /
+    # build_verdict.
+    authority_paths = (
+        "loopos/kernel/",
+        "loopos/ail/",
+        "loopos/agents/",
+        "loopos/agent_bus/",
+    )
+    offenders: list[str] = []
+    patterns = (
+        _re.compile(r"from\s+loopos\.opengod[^.\w].*OpenGodDecision"),
+        _re.compile(r"from\s+loopos\.opengod[^.\w].*OpenGodVerdict"),
+        _re.compile(r"from\s+loopos\.opengod[^.\w].*build_verdict"),
+        _re.compile(r"from\s+loopos\.opengod[^.\w].*decide"),
+    )
+    for path in REPO_ROOT.rglob("*.py"):
+        if path == init_path:
+            continue
+        rel = path.relative_to(REPO_ROOT)
+        rel_str = str(rel).replace("\\", "/")
+        if not any(rel_str.startswith(p) for p in authority_paths):
+            continue
+        try:
+            other_text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        for lineno, line in enumerate(other_text.splitlines(), start=1):
+            for pat in patterns:
+                if pat.search(line):
+                    offenders.append(f"{rel}:{lineno}: {line.strip()}")
+                    break
+    if offenders:
+        return Finding(
+            "opengod_planning_only_boundary",
+            False,
+            "OpenGod execution-side imports found in authority-side runtime paths: "
+            + " | ".join(offenders[:3]),
+        )
+    return Finding(
+        "opengod_planning_only_boundary",
+        True,
+        "module docstring declares planning-only; "
+        "no AIL symbols leaked; no authority-side imports of "
+        "OpenGodDecision/OpenGodVerdict/decide/build_verdict in "
+        "loopos/kernel/ loopos/ail/ loopos/agents/ loopos/agent_bus/",
+    )
+
+
 # ---------------------------------------------------------------------------
 # CLI smoke
 # ---------------------------------------------------------------------------
@@ -636,6 +762,7 @@ ALL_CHECKS = (
     check_opengod_decision,
     check_opengod_halt_on_hard_fail,
     check_opengod_budget_guard,
+    check_opengod_planning_only_boundary,
     check_cli_adapters_list,
     check_cli_providers_runtime_list,
     check_cli_model_call_dry_run,
