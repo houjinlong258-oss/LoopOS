@@ -1,10 +1,15 @@
 # LoopOS v0.2 Release Candidate
 
-> **Status: RC pending one CLI fix.** All hard RC gates pass.
-> One CLI surface gap (missing `--fusion-id` option on the
-> `mad-dog` Typer registration) is the only blocker for tagging
-> `v0.2.0`. See `docs/v0-2-rc-audit.md` for the full audit
-> record.
+> **Status: RC blocker closed — Tag v0.2.0 from the post-hotfix
+> HEAD on `main`.** All hard RC gates pass. The original audit
+> (commit `bf3b9a7`) recorded one CLI surface gap (missing
+> `--fusion-id` option on the `mad-dog` Typer registration) as the
+> only blocker for tagging `v0.2.0`. That blocker has been **fixed
+> in the v0.2.0 RC hotfix** on branch
+> `v0.2/rc-fix-mad-dog-fusion-id`. See the "RC Hotfix Closure"
+> section in `docs/v0-2-rc-audit.md` and the "Final Post-Hotfix
+> Recommendation" section at the bottom of this document for the
+> post-fix verdict and validation evidence.
 
 ## What v0.2 is
 
@@ -302,18 +307,71 @@ $ git status --short
 | Web UI / TUI / gateway / daemon / background scheduler | separate |
 | Automatic paid API spending | never (architectural rule) |
 
-## Final Recommendation
+## Final Post-Hotfix Recommendation
 
-**Do not tag `v0.2.0` yet.** The audit base is clean and all
-hard gates pass, but the `mad-dog` Typer surface must be wired
-for `--fusion-id` before the tag.
+**Tag `v0.2.0` from the post-hotfix HEAD on `main`.**
 
-**Once that fix lands:**
+The single RC blocker (the `mad-dog` Typer surface rejecting
+`--fusion-id`) is closed. The hotfix on branch
+`v0.2/rc-fix-mad-dog-fusion-id` is minimal and scoped to the CLI
+surface + tests + audit wrapper + audit docs:
 
-1. Apply the one-line Option declaration to `_typer_mad_dog`.
-2. Add a regression test in `tests/test_fusion_router_cli.py`.
-3. Re-run `rc_audit_cli_smoke.py`, `pytest -m "not slow"`,
-   `ruff`, `mypy`, `anti_bloat_check`, `v0_2_readiness_check`.
-4. Tag `v0.2.0` from the resulting HEAD.
+| file | change | scope |
+|---|---|---|
+| `loopos/cli/app.py` | +2 lines | `fusion_id` option on `_typer_mad_dog` |
+| `tests/test_fusion_router_cli.py` | +209 lines | 7 Typer regression tests + helper |
+| `rc_audit_cli_smoke.py` | ~10 lines | accept `status='planning_only'` as a valid `route` fallback |
+| `docs/v0-2-rc-audit.md` | appended "RC Hotfix Closure" section | blocker-status update |
+| `docs/v0-2-release-candidate.md` | this section | final post-hotfix verdict |
+
+No other files were touched. `loopos/kernel/`, `loopos/model_kernel/`,
+`dist/`, `docs/release-notes/`, and `docs/reports/` remain diff-empty
+against the audit base and against `v0.1.0`. The `v0.1.0` tag
+remains untouched. No push, no tag, no live provider calls, no
+API spend.
+
+### Post-Hotfix Full Validation Snapshot
+
+```
+pytest tests/test_fusion_router_cli.py                                    -> 23 passed (was 16; +7 regression tests)
+pytest tests/test_fusion_router_cli.py tests/test_fusion_router_persistence.py
+       tests/test_fusion_router_kernel_wiring.py tests/test_fusion_router_trace.py
+       tests/test_fusion_router_aci_bridge.py tests/test_fusion_router_scoring.py
+       tests/test_fusion_router_provider_selection.py
+       tests/test_fusion_router_models.py tests/test_fusion_router_roles.py -> 102 passed
+pytest tests/test_v0_2_deep_smoke.py tests/test_v0_2_readiness_check.py   -> 41 passed
+pytest -m "not slow"                                                      -> 830 passed, 46 deselected, 19 subtests passed
+ruff check .                                                              -> All checks passed!
+mypy loopos tests                                                         -> Success: no issues found in 326 source files
+python scripts/anti_bloat_check.py --json                                 -> hard_fail_count=0, warning_count=2
+python scripts/v0_2_readiness_check.py --json                             -> status=pass, hard_fail_count=0
+python rc_audit_cli_smoke.py                                              -> ALL CLI SURFACES OK
+git diff --name-only bf3b9a7..HEAD -- loopos/kernel/                      -> empty
+git diff --name-only bf3b9a7..HEAD -- loopos/model_kernel/                -> empty
+git diff --name-only v0.1.0..HEAD -- dist/ docs/release-notes/ docs/reports/ -> empty
+```
+
+Test count delta: 823 → 830 (**+7**, exactly the new regression
+tests; no test removed or weakened).
+
+### Post-Hotfix Final Safety Invariants
+
+| invariant | status |
+|---|---|
+| No live provider API calls | PASS |
+| No subprocess / shell bypass | PASS |
+| No direct Policy OS bypass | PASS |
+| No Syscall Router bypass | PASS |
+| No hidden authority expansion | PASS |
+| No automatic paid API spending | PASS |
+| No release evidence mutation | PASS |
+| No `v0.1.0` artifact mutation | PASS |
+| No kernel mutation after Phase 5 | PASS |
+| No `model_kernel` mutation | PASS |
+| Hotfix scope contained to CLI surface + tests + docs | PASS |
+
+The detailed audit evidence lives in `docs/v0-2-rc-audit.md`; the
+hotfix closure is documented in the "RC Hotfix Closure — `mad-dog
+--fusion-id` Typer Fix" section of that document.
 
 The detailed audit evidence lives in `docs/v0-2-rc-audit.md`.

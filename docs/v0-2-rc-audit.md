@@ -7,13 +7,16 @@
 > substrate, proof surface, safety invariant, CLI surface, and
 > test gate has been honoured as Phase 8 closes.
 >
-> **Verdict at a glance.** All hard RC gates pass. One CLI surface
-> gap (a missing `--fusion-id` Typer option on `mad-dog status` /
-> `mad-dog route`) is documented below as a known limitation that
-> must be addressed **before** tagging `v0.2.0`. The underlying
-> `mad_dog_command` function and the `fusion-router` Typer
-> surface are complete. The recommendation is **do not tag yet**
-> until that single Typer option is added.
+> **Verdict at a glance.** All hard RC gates pass. The original
+> audit (commit `bf3b9a7`) recorded one CLI surface gap (a missing
+> `--fusion-id` Typer option on `mad-dog status` / `mad-dog route`)
+> as a tag blocker. That blocker has been **fixed in the v0.2.0 RC
+> hotfix** on branch `v0.2/rc-fix-mad-dog-fusion-id` (see the
+> "RC Hotfix Closure" section at the bottom of this document).
+> With the hotfix applied and validated, the recommendation is
+> **tag `v0.2.0` from the resulting HEAD on `main`**. The original
+> "do not tag yet" recommendation above the hotfix block is
+> superseded.
 
 ## Audit Metadata
 
@@ -313,3 +316,123 @@ surface does not honour the advertised `--fusion-id` flag.
 
 Once that single fix lands, the verdict will flip to
 **Tag v0.2.0**.
+
+## RC Hotfix Closure — `mad-dog --fusion-id` Typer Fix
+
+> **Status: BLOCKER CLOSED.** The single Typer `--fusion-id` gap
+> documented above has been fixed. This section records the v0.2.0
+> RC hotfix, the regression tests, and the post-fix validation
+> results. This is **not v0.2.1**; it is a v0.2.0 RC hotfix because
+> the audit identified the gap as a tag blocker.
+
+### Hotfix Metadata
+
+| field | value |
+|---|---|
+| Branch | `v0.2/rc-fix-mad-dog-fusion-id` |
+| Base commit | `bf3b9a71da657fd9300b70e8b33e8856faf66e3b` (`docs(release): add v0.2 rc audit`) |
+| Working tree at hotfix start | already contained partial fix in `loopos/cli/app.py` and `tests/test_fusion_router_cli.py` from a prior interrupted run; verified correct and continued |
+| Hotfix scope | CLI surface only — no runtime, kernel, model_kernel, ACI, ALI, Fusion, dist, release-notes, or reports mutation |
+
+### Files Changed by the Hotfix
+
+| file | change | purpose |
+|---|---|---|
+| `loopos/cli/app.py` | +2 lines | added `fusion_id: str \| None = typer_mod.Option(None, "--fusion-id")` to `_typer_mad_dog`; forwarded `fusion_id=fusion_id` to `mad_dog_command(...)` |
+| `tests/test_fusion_router_cli.py` | +209 lines | new `MadDogTyperCLIRegressionTests` class with 7 regression tests + `_invoke_typer` helper; `from typing import Any, Callable` import update |
+| `rc_audit_cli_smoke.py` | ~10 lines | recognize `status="planning_only"` as a valid route fallback (the audit harness does not wire a `kernel_engine` into the `FusionRunner`; the planning-only fallback is the desired audit behavior in v0.2) |
+| `docs/v0-2-rc-audit.md` | this section | blocker-status update after validation |
+| `docs/v0-2-release-candidate.md` | verdict section | final tag recommendation updated to **Tag v0.2.0** |
+
+No other files were touched. `loopos/kernel/`, `loopos/model_kernel/`, `dist/`, `docs/release-notes/`, and `docs/reports/` remain diff-empty against the audit base and against `v0.1.0`. The `v0.1.0` tag remains untouched. No push, no tag, no live provider calls, no API spend.
+
+### CLI Blocker Fixed — Proof
+
+Before the hotfix, Typer rejected the flag with::
+
+    No such option: --fusion-id Did you mean --run-id?
+
+After the hotfix, the Typer registration in `loopos/cli/app.py::_typer_mad_dog` (lines 588–608) declares the `--fusion-id` option and forwards it to `mad_dog_command`, matching the underlying function surface and the `fusion-router` Typer surface.
+
+Regression test evidence (`tests/test_fusion_router_cli.py::MadDogTyperCLIRegressionTests`, 7 tests):
+
+| test | what it proves |
+|---|---|
+| `test_mad_dog_status_typer_accepts_fusion_id` | `loopos mad-dog --action status --fusion-id ID --json` is accepted by Typer; payload has `status='loaded'`, `fusion_id=<id>`; no `No such option` / `Did you mean --run-id` in output |
+| `test_mad_dog_route_typer_accepts_fusion_id` | `loopos mad-dog --action route --fusion-id ID --json` is accepted by Typer; payload has `status='planning_only'`, `fusion_id=<id>`; no Typer option error |
+| `test_mad_dog_status_typer_missing_fusion_id_returns_structured_error` | missing `--fusion-id` returns structured CLI error (`exit=1`, `FUSION_ID` in stderr), not a Typer option error |
+| `test_mad_dog_route_typer_missing_fusion_id_returns_structured_error` | missing `--fusion-id` returns structured CLI error (`exit=1`, `--fusion-id` in stderr), not a Typer option error |
+| `test_mad_dog_status_typer_unknown_fusion_id_returns_not_found` | unknown `--fusion-id` returns structured `status='not_found'` payload |
+| `test_fusion_router_status_typer_still_works` | `fusion-router status --fusion-id ID` regression smoke (still passes) |
+| `test_fusion_router_route_typer_planning_only_fallback` | `fusion-router route --fusion-id ID` planning-only fallback (still passes) |
+
+All 7 regression tests pass; the full `test_fusion_router_cli.py` suite reports **23 passed** (was 16 before the hotfix — 7 new tests, no test removed).
+
+### `rc_audit_cli_smoke.py` Result
+
+```
+[ok] fusion-router plan -> mode=single fusion_id=36e278b5-c085-4bfd-be61-cf53deadf956
+[ok] fusion-router explain -> score=4 mode=single
+[ok] fusion-router run --dry-run -> fusion_id=e05518ec-3ede-4c1b-9b66-5e332703ed0b
+[ok] fusion-router status -> status=loaded
+[ok] fusion-router list -> count=358
+[ok] fusion-router route -> status=planning_only fallback=kernel_engine not supplied; returning planning-only result
+[ok] mad-dog plan -> mode=mad_dog fusion_id=126bfdd2-2177-4c99-8c1f-3084ce57e2a8
+[ok] mad-dog status -> status=loaded
+[ok] mad-dog list -> count=359
+[ok] mad-dog route -> status=planning_only fallback=kernel_engine not supplied; returning planning-only result
+
+ALL CLI SURFACES OK
+```
+
+The `route` action's `status='planning_only'` is the desired audit behaviour: the audit harness does not wire a `kernel_engine` into the `FusionRunner`, so `route` correctly returns the structured planning-only fallback rather than executing live providers. This was already documented as known limitation #2 in the original audit and is the intended v0.2 behavior.
+
+### Post-Hotfix Full Validation Result
+
+```
+pytest tests/test_fusion_router_cli.py -q                   -> 23 passed
+pytest tests/test_fusion_router_cli.py tests/test_fusion_router_persistence.py
+       tests/test_fusion_router_kernel_wiring.py
+       tests/test_fusion_router_trace.py
+       tests/test_fusion_router_aci_bridge.py
+       tests/test_fusion_router_scoring.py
+       tests/test_fusion_router_provider_selection.py
+       tests/test_fusion_router_models.py
+       tests/test_fusion_router_roles.py -q                  -> 102 passed
+pytest tests/test_v0_2_deep_smoke.py
+       tests/test_v0_2_readiness_check.py -q                 -> 41 passed
+pytest -m "not slow"                                        -> 830 passed, 46 deselected, 19 subtests passed
+ruff check .                                                -> All checks passed!
+mypy loopos tests                                           -> Success: no issues found in 326 source files
+python scripts/anti_bloat_check.py --json                   -> hard_fail_count=0, warning_count=2
+python scripts/v0_2_readiness_check.py --json               -> status=pass, hard_fail_count=0
+python rc_audit_cli_smoke.py                                -> ALL CLI SURFACES OK
+git diff --name-only bf3b9a7..HEAD -- loopos/kernel/        -> empty
+git diff --name-only bf3b9a7..HEAD -- loopos/model_kernel/  -> empty
+git diff --name-only v0.1.0..HEAD -- dist/ docs/release-notes/ docs/reports/ -> empty
+git status --short                                          -> M loopos/cli/app.py; M rc_audit_cli_smoke.py; M tests/test_fusion_router_cli.py (pre-commit)
+```
+
+Test count delta vs the original audit (823 → 830): **+7**, exactly the 7 new regression tests in `MadDogTyperCLIRegressionTests`. No test was removed or weakened.
+
+### Post-Hotfix Safety Invariants
+
+| invariant | status |
+|---|---|
+| No live provider API calls | PASS |
+| No subprocess / shell bypass | PASS |
+| No direct Policy OS bypass | PASS |
+| No Syscall Router bypass | PASS |
+| No hidden authority expansion | PASS |
+| No automatic paid API spending | PASS |
+| No release evidence mutation | PASS (dist/, docs/release-notes/, docs/reports/ empty) |
+| No `v0.1.0` artifact mutation | PASS (tag untouched) |
+| No kernel mutation after Phase 5 | PASS (loopos/kernel/ diff empty) |
+| No `model_kernel` mutation | PASS (loopos/model_kernel/ diff empty) |
+| Hotfix scope contained to CLI surface + tests | PASS (only `loopos/cli/app.py`, `tests/test_fusion_router_cli.py`, `rc_audit_cli_smoke.py` modified) |
+
+### Post-Hotfix Final Recommendation
+
+**Tag `v0.2.0` from the post-hotfix HEAD on `main`.**
+
+The single RC blocker documented in the original audit (`mad-dog status` / `mad-dog route` rejecting `--fusion-id` on the Typer surface) is closed. The hotfix is the minimal, scoped change described above; no runtime, kernel, model_kernel, ACI, ALI, or Fusion logic was modified. All readiness, anti-bloat, ruff, mypy, and test gates pass. All safety invariants hold. The `v0.1.0` tag and all release evidence remain untouched.

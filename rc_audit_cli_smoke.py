@@ -95,11 +95,21 @@ def main() -> int:
         print(f"[ok] fusion-router list -> count={len(ids)}")
 
     # route (planning-only fallback)
+    # The audit harness does not wire a kernel_engine into the
+    # FusionRunner, so route correctly returns the structured
+    # planning-only fallback. This is the desired audit behavior
+    # in v0.2 (Fusion Router is planning-only).
     route_resp = run(["fusion-router", "--action", "route", "--fusion-id", fusion_id, "--json"])
-    if route_resp.get("status") not in ("ok", "loaded") and "run_mode" not in route_resp:
+    if (
+        route_resp.get("status") not in ("ok", "loaded", "planning_only")
+        and "run_mode" not in route_resp
+    ):
         failures.append(f"fusion-router route: {route_resp}")
     else:
-        print(f"[ok] fusion-router route -> status={route_resp.get('status')} run_mode={route_resp.get('run_mode')}")
+        print(
+            f"[ok] fusion-router route -> status={route_resp.get('status')} "
+            f"fallback={route_resp.get('fallback_reason') or '(none)'}"
+        )
 
     # ----- mad-dog surfaces -----
     md_task = json.dumps({
@@ -140,12 +150,18 @@ def main() -> int:
             md_ids = md_list.get("ids") or md_list.get("plans") or []
             print(f"[ok] mad-dog list -> count={len(md_ids)}")
 
-        # mad-dog route
+        # mad-dog route (planning-only fallback, see fusion-router route above)
         md_route = run(["mad-dog", "--action", "route", "--fusion-id", md_fusion_id, "--json"])
-        if md_route.get("status") not in ("ok", "loaded") and "run_mode" not in md_route:
+        if (
+            md_route.get("status") not in ("ok", "loaded", "planning_only")
+            and "run_mode" not in md_route
+        ):
             failures.append(f"mad-dog route: {md_route}")
         else:
-            print(f"[ok] mad-dog route -> status={md_route.get('status')} run_mode={md_route.get('run_mode')}")
+            print(
+                f"[ok] mad-dog route -> status={md_route.get('status')} "
+                f"fallback={md_route.get('fallback_reason') or '(none)'}"
+            )
 
     if failures:
         print("\nFAILURES:")

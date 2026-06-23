@@ -14,7 +14,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from loopos.cli.commands.fusion_router import (
     fusion_router_command,
@@ -227,6 +227,209 @@ class MadDogCLITests(unittest.TestCase):
         payload = json.loads(output)
         self.assertEqual(payload["trigger"]["source"], "kernel")
         self.assertEqual(payload["trigger"]["reason"], "release_blocker")
+
+
+def _invoke_typer(argv: list[str]) -> tuple[int, str]:
+    """Invoke the Typer app in-process and capture combined output.
+
+    Returns ``(returncode, combined_stdout_plus_stderr)``. The
+    return code mirrors what Typer / the wrapped command emit;
+    ``SystemExit`` is caught so the call is safe from inside
+    unittest tests.
+    """
+    import sys as _sys
+    import contextlib
+    from loopos.cli.app import app as _app
+
+    out = io.StringIO()
+    err = io.StringIO()
+    saved = list(_sys.argv)
+    _sys.argv = ["loopos"] + list(argv)
+    try:
+        with redirect_stdout(out), contextlib.redirect_stderr(err):
+            try:
+                _app()
+            except SystemExit as exc:  # pragma: no cover - defensive
+                return int(getattr(exc, "code", 0) or 0), out.getvalue() + err.getvalue()
+    finally:
+        _sys.argv = saved
+    return 0, out.getvalue() + err.getvalue()
+
+
+class MadDogTyperCLIRegressionTests(unittest.TestCase):
+    """Regression tests for the ``mad-dog`` Typer surface.
+
+    These tests cover the v0.2 RC hotfix that exposed the
+    ``--fusion-id`` option on the Typer registration for
+    ``mad-dog status`` and ``mad-dog route``. Before the fix,
+    Typer rejected the flag with::
+
+        No such option: --fusion-id Did you mean --run-id?
+
+    The underlying ``mad_dog_command(fusion_id=...)`` function
+    worked correctly (covered by :class:`MadDogCLITests`), but the
+    Typer registration in :mod:`loopos.cli.app` did not declare
+    or forward the option. These tests prove the Typer surface is
+    now consistent with the function-level surface and with the
+    ``fusion-router`` Typer surface.
+    """
+
+    _MAD_DOG_TASK = json.dumps(
+        {
+            "title": "nasty release blocker",
+            "task_type": "release",
+            "complexity_score": 7,
+            "risk_score": 5,
+            "failure_count": 5,
+            "user_dissatisfaction_count": 4,
+            "affected_file_count": 12,
+            "no_progress_count": 3,
+            "release_blocker": True,
+            "security_sensitive": False,
+            "model_mismatch": False,
+        },
+    )
+
+    def _persist_mad_dog_plan(self) -> str:
+        """Persist a mad-dog plan and return its ``fusion_id``."""
+        code, output = _capture(
+            mad_dog_command,
+            action="plan",
+            task_arg=self._MAD_DOG_TASK,
+            severity="critical",
+            json_output=True,
+        )
+        self.assertEqual(code, 0)
+        payload = json.loads(output)
+        self.assertEqual(payload["mode"], "mad_dog")
+        fusion_id_raw: Any = payload["fusion_id"]
+        fusion_id = str(fusion_id_raw)
+        self.assertIsInstance(fusion_id, str)
+        self.assertTrue(fusion_id)
+        return fusion_id
+
+    def test_mad_dog_status_typer_accepts_fusion_id(self) -> None:
+        """``loopos mad-dog status --fusion-id ID --json`` is accepted."""
+        fusion_id = self._persist_mad_dog_plan()
+
+        code, output = _invoke_typer(
+            [
+                "mad-dog",
+                "--action", "status",
+                "--fusion-id", fusion_id,
+                "--json",
+            ],
+        )
+
+        self.assertNotIn("No such option", output)
+        self.assertNotIn("Did you mean --run-id", output)
+        self.assertEqual(code, 0, msg=output)
+        payload = json.loads(output)
+        self.assertEqual(payload["status"], "loaded")
+        self.assertEqual(payload["fusion_id"], fusion_id)
+
+    def test_mad_dog_route_typer_accepts_fusion_id(self) -> None:
+        """``loopos mad-dog route --fusion-id ID --json`` is accepted."""
+        fusion_id = self._persist_mad_dog_plan()
+
+        code, output = _invoke_typer(
+            [
+                "mad-dog",
+                "--action", "route",
+                "--fusion-id", fusion_id,
+                "--json",
+            ],
+        )
+
+        self.assertNotIn("No such option", output)
+        self.assertNotIn("Did you mean --run-id", output)
+        self.assertEqual(code, 0, msg=output)
+        payload = json.loads(output)
+        self.assertEqual(payload["status"], "planning_only")
+        self.assertEqual(payload["fusion_id"], fusion_id)
+
+    def test_mad_dog_status_typer_missing_fusion_id_returns_structured_error(
+        self,
+    ) -> None:
+        """Missing ``--fusion-id`` is a structured CLI error, not Typer."""
+        code, output = _invoke_typer(
+            ["mad-dog", "--action", "status", "--json"],
+        )
+
+        # Typer must NOT reject the invocation: it is a missing-arg
+        # error from the wrapped mad_dog_command.
+        self.assertNotIn("No such option", output)
+        self.assertNotIn("Did you mean --run-id", output)
+        self.assertEqual(code, 1, msg=output)
+        self.assertIn("FUSION_ID", output)
+
+    def test_mad_dog_route_typer_missing_fusion_id_returns_structured_error(
+        self,
+    ) -> None:
+        """Missing ``--fusion-id`` is a structured CLI error, not Typer."""
+        code, output = _invoke_typer(
+            ["mad-dog", "--action", "route", "--json"],
+        )
+
+        self.assertNotIn("No such option", output)
+        self.assertNotIn("Did you mean --run-id", output)
+        self.assertEqual(code, 1, msg=output)
+        self.assertIn("--fusion-id", output)
+
+    def test_mad_dog_status_typer_unknown_fusion_id_returns_not_found(
+        self,
+    ) -> None:
+        """Unknown ``--fusion-id`` returns a structured not_found payload."""
+        code, output = _invoke_typer(
+            [
+                "mad-dog",
+                "--action", "status",
+                "--fusion-id", "does-not-exist-audit",
+                "--json",
+            ],
+        )
+
+        self.assertNotIn("No such option", output)
+        self.assertEqual(code, 0, msg=output)
+        payload = json.loads(output)
+        self.assertEqual(payload["status"], "not_found")
+        self.assertEqual(payload["fusion_id"], "does-not-exist-audit")
+
+    def test_fusion_router_status_typer_still_works(self) -> None:
+        """``fusion-router status --fusion-id ID`` regression smoke."""
+        fusion_id = self._persist_mad_dog_plan()
+
+        code, output = _invoke_typer(
+            [
+                "fusion-router",
+                "--action", "status",
+                "--fusion-id", fusion_id,
+                "--json",
+            ],
+        )
+
+        self.assertEqual(code, 0, msg=output)
+        payload = json.loads(output)
+        self.assertEqual(payload["status"], "loaded")
+        self.assertEqual(payload["fusion_id"], fusion_id)
+
+    def test_fusion_router_route_typer_planning_only_fallback(self) -> None:
+        """``fusion-router route --fusion-id ID`` planning-only fallback."""
+        fusion_id = self._persist_mad_dog_plan()
+
+        code, output = _invoke_typer(
+            [
+                "fusion-router",
+                "--action", "route",
+                "--fusion-id", fusion_id,
+                "--json",
+            ],
+        )
+
+        self.assertEqual(code, 0, msg=output)
+        payload = json.loads(output)
+        self.assertEqual(payload["status"], "planning_only")
+        self.assertEqual(payload["fusion_id"], fusion_id)
 
 
 class FusionCLIErrorTests(unittest.TestCase):

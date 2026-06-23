@@ -592,6 +592,7 @@ if _HAS_TUI:
         run_id: str | None = typer_mod.Option(None, "--run-id"),
         reason: str = typer_mod.Option("explicit_user_request", "--reason"),
         severity: str = typer_mod.Option("critical", "--severity"),
+        fusion_id: str | None = typer_mod.Option(None, "--fusion-id"),
         json_output: bool = typer_mod.Option(True, "--json/--human"),
     ) -> None:
         raise typer_mod.Exit(
@@ -601,6 +602,7 @@ if _HAS_TUI:
                 run_id=run_id,
                 reason=reason,
                 severity=severity,
+                fusion_id=fusion_id,
                 json_output=json_output,
             )
         )
