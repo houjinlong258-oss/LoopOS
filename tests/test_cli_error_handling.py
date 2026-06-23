@@ -36,6 +36,13 @@ def test_run_with_missing_workspace_returns_clean_error() -> None:
 def test_run_with_file_as_workspace_returns_clean_error(tmp_path: Path) -> None:
     file_path = tmp_path / "not_a_dir.txt"
     file_path.write_text("hello", encoding="utf-8")
+    # Sanity-check the file is visible from the parent process before
+    # we hand the path to a subprocess. On Windows the file system
+    # cache can briefly hide a freshly-created file from a child
+    # process; this assertion ensures we never hand the subprocess
+    # a path that *we* cannot see.
+    assert file_path.exists()
+    assert file_path.is_file()
     result = _run_cli("run", "demo", "--dry-run", "--workspace", str(file_path))
     assert result.returncode == 2
     assert "workspace is not a directory" in result.stderr
