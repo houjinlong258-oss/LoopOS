@@ -69,7 +69,17 @@ def policy_command(
             PolicyAuditLog(data_paths(data_dir)["policy_audit"]).append(scope, subject, decision)
         payload = decision.model_dump(mode="json")
         if human_output:
-            print(render_policy_decision_text(payload))
+            try:
+                from loopos.cli_ui import get_console
+                from rich.panel import Panel
+                con = get_console()
+                if con is not None:
+                    color = "green" if payload.get("allowed") else "red"
+                    con.print(Panel(render_policy_decision_text(payload), title="[bold white]Policy Decision[/bold white]", border_style=color))
+                else:
+                    print(render_policy_decision_text(payload))
+            except Exception:
+                print(render_policy_decision_text(payload))
         else:
             print(decision.model_dump_json(indent=2))
         return 0 if decision.allowed else 2
@@ -97,7 +107,17 @@ def policy_command(
         )
         payload = decision.model_dump(mode="json")
         if human_output:
-            print(render_policy_decision_text(payload, cmd=cmd))
+            try:
+                from loopos.cli_ui import get_console
+                from rich.panel import Panel
+                con = get_console()
+                if con is not None:
+                    color = "green" if payload.get("allowed") else "red"
+                    con.print(Panel(render_policy_decision_text(payload, cmd=cmd), title="[bold white]Policy Decision[/bold white]", border_style=color))
+                else:
+                    print(render_policy_decision_text(payload, cmd=cmd))
+            except Exception:
+                print(render_policy_decision_text(payload, cmd=cmd))
         else:
             print(decision.model_dump_json(indent=2))
         return 0 if decision.allowed else 2

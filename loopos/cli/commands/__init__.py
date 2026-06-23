@@ -32,6 +32,17 @@ from loopos.cli.commands.tasks import tasks_command
 from loopos.cli.commands.triggers import triggers_command
 from loopos.cli.commands.worktrees import worktrees_command
 
+# v0.3 commands.
+from loopos.cli.commands.workbench import workbench_command
+from loopos.cli.commands.adapters import adapters_command
+from loopos.cli.commands.providers_runtime import (
+    model_call_command,
+    providers_runtime_command,
+)
+from loopos.cli.commands.opengod import opengod_command
+from loopos.cli.commands.session import session_command
+from loopos.cli.commands.readiness import readiness_command
+
 __all__ = [
     "ail_command",
     "code_command",
@@ -43,6 +54,7 @@ __all__ = [
     "fusion_router_command",
     "gateway_command",
     "goal_command",
+    "history_command",
     "kernel_command",
     "mad_dog_command",
     "memory_command",
@@ -51,22 +63,29 @@ __all__ = [
     "parse_goal_options",
     "policy_command",
     "profile_command",
-    "release_command",
-    "registry_command",
-    "search_command",
     "providers_command",
-    "review_command",
-    "history_command",
+    "registry_command",
+    "release_command",
     "replay_command",
     "repl_command",
     "resume_command",
+    "review_command",
     "run_command",
+    "search_command",
+    "skills_command",
     "status_command",
     "index_command",
-    "skills_command",
     "tasks_command",
     "tools_command",
     "trace_command",
     "triggers_command",
     "worktrees_command",
+    # v0.3
+    "workbench_command",
+    "adapters_command",
+    "model_call_command",
+    "providers_runtime_command",
+    "opengod_command",
+    "session_command",
+    "readiness_command",
 ]

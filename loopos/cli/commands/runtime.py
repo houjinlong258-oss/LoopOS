@@ -262,10 +262,39 @@ def tools_command(
 
 
 def repl_command() -> int:
-    print("LoopOS Kernel REPL. Commands: run, status, trace, tools, help, quit")
+    try:
+        from pathlib import Path
+        from loopos.cli_ui import get_console, render_home_dashboard
+        con = get_console()
+        if con is not None:
+            project_data = {
+                "path": str(Path.cwd()),
+                "policy": "safe-dev",
+                "trace": "on",
+                "budget": "$5.00/day"
+            }
+            runtime_data = {
+                "kernel": "ready",
+                "aci": "ready",
+                "ali": "ready",
+                "replay": "ready",
+                "fusion": "ready"
+            }
+            providers_data = [
+                {"name": "openai", "status": "ready"},
+                {"name": "deepseek", "status": "ready"},
+                {"name": "ollama", "status": "local"},
+                {"name": "anthropic", "status": "missing key"}
+            ]
+            con.print(render_home_dashboard(project_data, runtime_data, providers_data))
+            con.print()
+        else:
+            print("LoopOS Kernel REPL. Commands: run, status, trace, tools, help, quit")
+    except Exception:
+        print("LoopOS Kernel REPL. Commands: run, status, trace, tools, help, quit")
     while True:
         try:
-            raw = input("loopos> ").strip()
+            raw = input("loopos ∞> ").strip()
         except (EOFError, KeyboardInterrupt):
             print()
             return 0

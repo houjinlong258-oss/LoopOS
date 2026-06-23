@@ -34,6 +34,14 @@ from loopos.cli.commands import (
     trace_command,
     triggers_command,
     worktrees_command,
+    # v0.3
+    workbench_command,
+    adapters_command,
+    providers_runtime_command,
+    model_call_command,
+    opengod_command,
+    session_command,
+    readiness_command,
 )
 
 
@@ -250,6 +258,70 @@ def fallback_main(argv: list[str] | None = None) -> int:
 
     config_parser = sub.add_parser("config")
     config_parser.add_argument("--data-dir", default=".loopos")
+
+    # --- v0.3 ----------------------------------------------------------------
+    workbench_parser = sub.add_parser("workbench")
+    workbench_parser.add_argument("goal_path", nargs="?")
+    workbench_parser.add_argument("--adapter", default="mock")
+    workbench_parser.add_argument("--model", default="mock-model")
+    workbench_parser.add_argument("--provider", default="mock")
+    workbench_parser.add_argument("--mode", default="single")
+    workbench_parser.add_argument("--budget-usd", type=float, default=0.0)
+    workbench_parser.add_argument("--mad-dog", action="store_true")
+    workbench_parser.add_argument("--allow-live-provider", action="store_true")
+    workbench_parser.add_argument("--no-dry-run", action="store_true")
+    workbench_parser.add_argument("--watch", action="store_true")
+    workbench_parser.add_argument("--json", dest="json_output", action="store_true")
+    workbench_parser.add_argument("--project", default="")
+
+    adapters_parser = sub.add_parser("adapters")
+    adapters_parser.add_argument("action", nargs="?", default="list")
+    adapters_parser.add_argument("value", nargs="?")
+    adapters_parser.add_argument("--json", dest="json_output", action="store_true")
+
+    providers_runtime_parser = sub.add_parser("providers-runtime")
+    providers_runtime_parser.add_argument("action", nargs="?", default="list")
+    providers_runtime_parser.add_argument("value", nargs="?")
+    providers_runtime_parser.add_argument("--model", default="mock-model")
+    providers_runtime_parser.add_argument("--no-dry-run", action="store_true")
+    providers_runtime_parser.add_argument("--json", dest="json_output", action="store_true")
+
+    model_call_parser = sub.add_parser("model-call")
+    model_call_parser.add_argument("prompt_path")
+    model_call_parser.add_argument("--provider", default="mock")
+    model_call_parser.add_argument("--model", default="mock-model")
+    model_call_parser.add_argument("--no-dry-run", action="store_true")
+    model_call_parser.add_argument("--allow-live-provider", action="store_true")
+    model_call_parser.add_argument("--budget-usd", type=float, default=0.0)
+    model_call_parser.add_argument("--confirm", action="store_true")
+    model_call_parser.add_argument("--json", dest="json_output", action="store_true")
+
+    opengod_parser = sub.add_parser("opengod")
+    opengod_parser.add_argument("goal_id", nargs="?", default="goal_demo")
+    opengod_parser.add_argument("--goal-title", default="")
+    opengod_parser.add_argument("--goal-risk", default="medium")
+    opengod_parser.add_argument("--fusion-mode", default="single")
+    opengod_parser.add_argument("--fusion-score", type=int, default=0)
+    opengod_parser.add_argument("--hard-fail-count", type=int, default=0)
+    opengod_parser.add_argument("--readiness-status", default="unknown")
+    opengod_parser.add_argument("--adapter-id", default="")
+    opengod_parser.add_argument("--live-provider-calls", action="store_true")
+    opengod_parser.add_argument("--budget-used-usd", type=float, default=0.0)
+    opengod_parser.add_argument("--budget-max-usd", type=float, default=0.0)
+    opengod_parser.add_argument("--max-budget-usd", type=float, default=1.0)
+    opengod_parser.add_argument("--reserve-usd", type=float, default=0.10)
+    opengod_parser.add_argument("--json", dest="json_output", action="store_true")
+
+    session_parser = sub.add_parser("session")
+    session_parser.add_argument("action", nargs="?", default="list")
+    session_parser.add_argument("session_id", nargs="?")
+    session_parser.add_argument("--data-dir", default=".loopos")
+    session_parser.add_argument("--json", dest="json_output", action="store_true")
+
+    readiness_parser = sub.add_parser("readiness")
+    readiness_parser.add_argument("action", nargs="?", default="check")
+    readiness_parser.add_argument("--json", dest="json_output", action="store_true")
+
 
     release_parser = sub.add_parser("release")
     release_parser.add_argument("action", nargs="?", default="check")
@@ -487,5 +559,67 @@ def fallback_main(argv: list[str] | None = None) -> int:
             target=args.target,
             json_output=args.json_output,
         )
+    if args.command == "workbench":
+        return workbench_command(
+            args.goal_path,
+            adapter=args.adapter,
+            model=args.model,
+            provider=args.provider,
+            mode=args.mode,
+            budget_usd=args.budget_usd,
+            mad_dog=args.mad_dog,
+            allow_live_provider=args.allow_live_provider,
+            dry_run=not args.no_dry_run,
+            watch=args.watch,
+            json_output=args.json_output,
+            project=args.project,
+        )
+    if args.command == "adapters":
+        return adapters_command(args.action, args.value, json_output=args.json_output)
+    if args.command == "providers-runtime":
+        return providers_runtime_command(
+            args.action,
+            args.value,
+            model=args.model,
+            dry_run=not args.no_dry_run,
+            json_output=args.json_output,
+        )
+    if args.command == "model-call":
+        return model_call_command(
+            args.prompt_path,
+            provider=args.provider,
+            model=args.model,
+            dry_run=not args.no_dry_run,
+            allow_live_provider=args.allow_live_provider,
+            budget_usd=args.budget_usd,
+            confirm=args.confirm,
+            json_output=args.json_output,
+        )
+    if args.command == "opengod":
+        return opengod_command(
+            args.goal_id,
+            goal_title=args.goal_title,
+            goal_risk=args.goal_risk,
+            fusion_mode=args.fusion_mode,
+            fusion_score=args.fusion_score,
+            hard_fail_count=args.hard_fail_count,
+            readiness_status=args.readiness_status,
+            adapter_id=args.adapter_id,
+            live_provider_calls=args.live_provider_calls,
+            budget_used_usd=args.budget_used_usd,
+            budget_max_usd=args.budget_max_usd,
+            max_budget_usd=args.max_budget_usd,
+            reserve_usd=args.reserve_usd,
+            json_output=args.json_output,
+        )
+    if args.command == "session":
+        return session_command(
+            args.action,
+            args.session_id,
+            data_dir=args.data_dir,
+            json_output=args.json_output,
+        )
+    if args.command == "readiness":
+        return readiness_command(args.action, json_output=args.json_output)
     parser.print_help()
     return 0
