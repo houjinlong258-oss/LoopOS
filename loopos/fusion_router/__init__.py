@@ -67,6 +67,10 @@ from loopos.fusion_router.runner import (
     FusionRunner,
     describe_plan_mode,
 )
+from loopos.fusion_router.orchestrator import (
+    FusionVerdictOrchestrator,
+    OrchestrationResult,
+)
 
 __all__ = [
     "FUSION_MODES",
@@ -86,6 +90,8 @@ __all__ = [
     "FusionTriggerReason",
     "FusionTriggerSource",
     "FusionVerdict",
+    "FusionVerdictOrchestrator",
+    "OrchestrationResult",
     "ModelCapabilityProfile",
     "describe_plan_mode",
     "list_plans",
