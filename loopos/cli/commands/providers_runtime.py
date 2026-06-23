@@ -13,10 +13,11 @@ from pathlib import Path
 from typing import Any
 
 from loopos.providers_runtime import (
+    BudgetLedger,
     ModelCallRequest,
     ModelMessage,
-    ProviderBudget,
     ProviderRuntimeRegistry,
+    get_default_ledger,
     redact_secrets,
 )
 
@@ -123,11 +124,31 @@ def model_call_command(
         allow_live=allow_live_provider and not dry_run,
         budget_usd=budget_usd,
     )
-    # Apply budget guard (only when going live and a budget was set).
-    budget: ProviderBudget | None = None
+    # Apply budget guard via the shared process-level BudgetLedger
+    # (only when going live and a budget was set). The ledger is the
+    # single accounting path; the Workbench goes through the same
+    # ledger so a request that flows through both paths cannot
+    # double-spend.
+    ledger: BudgetLedger = get_default_ledger()
+    ledger_budget_key: tuple[str, str, str | None] | None = None
     if going_live and budget_usd > 0:
-        budget = ProviderBudget(max_usd=budget_usd, used_usd=0.0)
-        decision = budget.check(0.01, approved=confirm)
+        ledger_budget_key = ledger.make_key(provider, model, None)
+        # ``get_or_create`` is idempotent: if the Workbench already
+        # created the entry on the same key, we land on the same
+        # ProviderBudget instance and see its cumulative spend.
+        ledger.get_or_create(
+            provider_id=provider,
+            model_id=model,
+            session_id=None,
+            max_usd=budget_usd,
+        )
+        decision = ledger.check(
+            provider,
+            model,
+            None,
+            0.01,
+            approved=confirm,
+        )
         if not decision.allowed:
             payload = {
                 "status": "blocked",
@@ -151,10 +172,15 @@ def model_call_command(
         )
     response = runtime.call(request)
     # Commit the (estimated) cost when we actually went live and a
-    # budget was configured. Without this, the budget guard would
-    # never see the cumulative spend.
-    if budget is not None and response.status == "completed":
-        budget.commit(0.01)
+    # budget was configured. Dry-run and non-completed responses do
+    # NOT commit. A failed call does not commit; the ledger records
+    # only the spend that actually happened.
+    if (
+        ledger_budget_key is not None
+        and response.status == "completed"
+        and not dry_run
+    ):
+        ledger.commit(provider, model, None, 0.01)
     payload = response.model_dump(mode="json", exclude_none=True)
     # Defence in depth: redact any leaked secrets in the rendered output.
     payload = _recursive_redact(payload)

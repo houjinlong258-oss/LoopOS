@@ -30,10 +30,11 @@ from loopos.opengod import (
     decide,
 )
 from loopos.providers_runtime import (
+    BudgetLedger,
     ModelCallRequest,
     ModelMessage,
-    ProviderBudget,
     ProviderRuntimeRegistry,
+    get_default_ledger,
 )
 
 
@@ -78,11 +79,16 @@ class Workbench:
         self.fusion_router = fusion_router or FusionRouter()
         self.opengod_budget_guard = opengod_budget_guard or OpenGodBudgetGuard()
         self.project = project
-        # Persistent budget trackers per provider so ``call_model``
-        # actually accumulates spend across calls. (The CLI does the
-        # same per-process; the Workbench has the same property
-        # because it is typically long-lived.)
-        self._budget_tracker: dict[str, ProviderBudget] = {}
+        # Optional caller-supplied session id (e.g. a goal id). When
+        # set, the Workbench uses it as the third ledger key so
+        # different sessions have isolated spend. When unset, the
+        # ledger groups by ``(provider_id, model_id)`` only.
+        self.session_id: str | None = None
+        # The Workbench always goes through the process-level
+        # ``BudgetLedger`` so the CLI command and the Workbench share
+        # one accounting path. The ledger entry is created lazily
+        # when ``call_model`` actually sees a budget.
+        self._ledger: BudgetLedger = get_default_ledger()
 
     # -------------------------------------------------------------------
     # High-level operations
@@ -260,6 +266,7 @@ class Workbench:
         budget_max_usd: float = 0.0,
         allow_live: bool = False,
         dry_run: bool = True,
+        session_id: str | None = None,
     ) -> dict[str, Any]:
         runtime = self.provider_registry.get(provider_id)
         if runtime is None:
@@ -278,15 +285,23 @@ class Workbench:
             budget_usd=budget_max_usd if budget_max_usd > 0 else None,
             live_provider_calls_allowed=live,
         )
-        # Apply budget guard — but only on the live path. In dry-run
-        # the budget is not consumed.
-        budget: ProviderBudget | None = None
+        # Apply the shared ledger — but only on the live path. In
+        # dry-run the ledger is not consumed and no entry is created.
+        effective_session = session_id if session_id is not None else self.session_id
         if live and budget_max_usd > 0:
-            budget = self._budget_tracker.get(provider_id)
-            if budget is None:
-                budget = ProviderBudget(max_usd=budget_max_usd, used_usd=0.0)
-                self._budget_tracker[provider_id] = budget
-            decision = budget.check(0.01, approved=True)
+            self._ledger.get_or_create(
+                provider_id=provider_id,
+                model_id=model_id,
+                session_id=effective_session,
+                max_usd=budget_max_usd,
+            )
+            decision = self._ledger.check(
+                provider_id,
+                model_id,
+                effective_session,
+                0.01,
+                approved=True,
+            )
             if not decision.allowed:
                 return {
                     "status": "blocked",
@@ -295,9 +310,15 @@ class Workbench:
                     "max_usd": decision.max_usd,
                 }
         response = runtime.call(request)
-        # Commit the (estimated) cost on the live path.
-        if budget is not None and response.status == "completed":
-            budget.commit(0.01)
+        # Commit the (estimated) cost only on the live, completed
+        # path. Dry-run and failed calls do NOT commit. This is the
+        # invariant the P0-1 hardening task asserts.
+        if (
+            live
+            and budget_max_usd > 0
+            and response.status == "completed"
+        ):
+            self._ledger.commit(provider_id, model_id, effective_session, 0.01)
         return response.model_dump(mode="json", exclude_none=True)
 
     # -------------------------------------------------------------------

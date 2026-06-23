@@ -16,7 +16,14 @@ endpoint — but every live call is gated:
 
 from __future__ import annotations
 
-from loopos.providers_runtime.budget import ProviderBudget, BudgetDecision
+from loopos.providers_runtime.budget import (
+    BudgetDecision,
+    BudgetLedger,
+    LedgerKey,
+    ProviderBudget,
+    get_default_ledger,
+    reset_default_ledger,
+)
 from loopos.providers_runtime.errors import (
     ProviderRuntimeError,
     ProviderConfigError,
@@ -38,6 +45,10 @@ from loopos.providers_runtime.usage import redact_secrets
 __all__ = [
     "ProviderBudget",
     "BudgetDecision",
+    "BudgetLedger",
+    "LedgerKey",
+    "get_default_ledger",
+    "reset_default_ledger",
     "ProviderRuntimeError",
     "ProviderConfigError",
     "ProviderBudgetError",
