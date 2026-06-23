@@ -696,7 +696,7 @@ def check_loopback_http_smoke() -> Finding:
         )
     try:
         payload = json.loads(result.stdout)
-    except Exception as exc:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         return Finding(
             "loopback_http_smoke",
             False,

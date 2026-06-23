@@ -148,7 +148,6 @@ def _start_loopback_server() -> _LoopbackServer:
 
 def _wait_for_listening(server: _LoopbackServer, timeout_s: float = 5.0) -> None:
     """Block until the loopback server is reachable, or fail loud."""
-    deadline = socket.gettimebyname if hasattr(socket, "gettimebyname") else None
     import time
 
     end = time.time() + timeout_s

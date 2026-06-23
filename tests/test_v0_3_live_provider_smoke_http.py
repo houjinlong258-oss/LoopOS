@@ -14,8 +14,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SMOKE_SCRIPT = REPO_ROOT / "scripts" / "v0_3_live_provider_smoke_http.py"

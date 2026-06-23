@@ -12,7 +12,6 @@ These tests are the P0-1 acceptance gate. They prove:
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 
@@ -21,12 +20,10 @@ import pytest
 from loopos.providers_runtime import (
     BudgetLedger,
     ModelCallRequest,
-    ModelMessage,
     MockProviderRuntime,
     get_default_ledger,
     reset_default_ledger,
 )
-from loopos.providers_runtime.errors import ProviderConfigError
 
 
 # ---------------------------------------------------------------------------
