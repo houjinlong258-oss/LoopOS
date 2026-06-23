@@ -18,7 +18,10 @@ injection is provided.
 
 from __future__ import annotations
 
+import json
 import os
+import urllib.error
+import urllib.request
 from typing import Any, Callable, Iterable
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -76,6 +79,73 @@ def _default_transport(_request: PreparedRequest) -> PreparedResponse:  # pragma
     )
 
 
+def urllib_transport(request: PreparedRequest, *, timeout: float = 30.0) -> PreparedResponse:
+    """Real HTTP transport over the standard library only.
+
+    The v0.3-alpha injection contract is preserved: callers can
+    still pass ``transport=...``. When ``use_real_http=True`` is set
+    on the runtime and no explicit transport was passed, this
+    function runs the request through ``urllib.request`` and parses
+    the JSON response.
+
+    The transport is intentionally limited:
+
+    * No HTTPS verification bypass — the runtime trusts the
+      ``base_url`` it was given. Loopback HTTP is fine because the
+      smoke script boots a local ``http.server`` on a random port.
+    * No retries — the runtime's caller decides retry policy.
+    * No streaming — the smoke proves the wire-level request shape
+      and the response parsing path, not SSE.
+    * No external dependencies — this keeps the smoke runnable in
+      a clean ``pip install -e .`` venv without ``requests`` or
+      ``httpx``.
+    """
+    data = json.dumps(request.body).encode("utf-8")
+    req = urllib.request.Request(
+        request.url,
+        data=data,
+        headers=request.headers,
+        method=request.method,
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw_body = resp.read()
+            text = raw_body.decode("utf-8", errors="replace")
+            try:
+                body_obj = json.loads(text) if text else {}
+            except json.JSONDecodeError:
+                body_obj = {}
+            return PreparedResponse(
+                status=resp.status,
+                headers=dict(resp.headers.items()),
+                body=body_obj,
+                text=text,
+            )
+    except urllib.error.HTTPError as exc:
+        raw_body = exc.read() if hasattr(exc, "read") else b""
+        text = raw_body.decode("utf-8", errors="replace")
+        try:
+            body_obj = json.loads(text) if text else {}
+        except json.JSONDecodeError:
+            body_obj = {}
+        return PreparedResponse(
+            status=exc.code,
+            headers=dict(exc.headers.items()) if exc.headers else {},
+            body=body_obj,
+            text=text,
+        )
+    except urllib.error.URLError as exc:
+        # ``URLError`` wraps DNS failures, connection refused, and
+        # timeouts. Surface a 0-status response so the runtime's
+        # parser can emit a structured failure reason code.
+        return PreparedResponse(
+            status=0,
+            headers={},
+            body={},
+            text=f"urllib_error: {exc.reason}",
+        )
+
+
 class OpenAICompatibleProviderRuntime:
     """OpenAI-style chat completion provider runtime."""
 
@@ -88,10 +158,12 @@ class OpenAICompatibleProviderRuntime:
         api_key: str | None = None,
         base_url: str | None = None,
         transport: Transport | None = None,
+        use_real_http: bool = False,
     ) -> None:
         self._api_key = api_key
         self._base_url = (base_url or os.environ.get("OPENAI_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
         self._explicit_transport = transport
+        self._use_real_http = use_real_http
         self.last_prepared: PreparedRequest | None = None
 
     def info(self) -> ProviderInfo:
@@ -222,7 +294,10 @@ class OpenAICompatibleProviderRuntime:
         redacted_for_log = prepared.model_copy(deep=True)
         redacted_for_log.headers["Authorization"] = "Bearer ***REDACTED***"
         self.last_prepared = redacted_for_log
-        transport = self._explicit_transport or _default_transport
+        transport = (
+            self._explicit_transport
+            or (urllib_transport if self._use_real_http else _default_transport)
+        )
         try:
             response = transport(prepared)
         except ProviderConfigError as exc:
@@ -262,5 +337,6 @@ __all__ = [
     "PreparedRequest",
     "PreparedResponse",
     "Transport",
+    "urllib_transport",
     "DEFAULT_BASE_URL",
 ]

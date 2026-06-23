@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -531,6 +532,60 @@ def check_live_provider_smoke() -> Finding:
     )
 
 
+def check_loopback_http_smoke() -> Finding:
+    """Delegate to ``scripts/v0_3_live_provider_smoke_http.py``.
+
+    Unlike ``check_live_provider_smoke`` (which uses an injected
+    transport), this check boots a real ``http.server`` on
+    ``127.0.0.1:0`` and exercises the runtime's stdlib
+    ``urllib_transport``. It is gated on
+    ``LOOPOS_LIVE_HTTP_SMOKE=1`` because it occupies a local port
+    and (if extended in the future) may take longer than the
+    injected-transport smoke. CI sets the env var to enable it.
+    """
+    import subprocess as _sp
+    script = REPO_ROOT / "scripts" / "v0_3_live_provider_smoke_http.py"
+    if not script.exists():
+        return Finding(
+            "loopback_http_smoke",
+            False,
+            "loopback HTTP smoke script missing",
+        )
+    env = os.environ.copy()
+    env["LOOPOS_LIVE_HTTP_SMOKE"] = "1"
+    try:
+        result = _sp.run(
+            [sys.executable, str(script), "--json", "--run"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            cwd=str(REPO_ROOT),
+            env=env,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return Finding(
+            "loopback_http_smoke",
+            False,
+            f"subprocess failed: {exc}",
+        )
+    try:
+        payload = json.loads(result.stdout)
+    except Exception as exc:  # noqa: BLE001
+        return Finding(
+            "loopback_http_smoke",
+            False,
+            f"non-JSON output: {(result.stdout or '')[:200]!r} stderr={(result.stderr or '')[:200]!r}",
+        )
+    hard_fails = int(payload.get("hard_fail_count", 0))
+    passed = result.returncode == 0 and hard_fails == 0
+    detail = (
+        f"status={payload.get('status')}; hard_fail_count={hard_fails}; "
+        f"loopback_url={payload.get('loopback_url')}; "
+        f"request_hit_count={payload.get('request_hit_count')}"
+    )
+    return Finding("loopback_http_smoke", passed, detail)
+
+
 # ---------------------------------------------------------------------------
 # v0.2 regression guard
 # ---------------------------------------------------------------------------
@@ -587,6 +642,7 @@ ALL_CHECKS = (
     check_cli_model_call_blocks_live,
     check_cli_workbench_renders,
     check_live_provider_smoke,
+    check_loopback_http_smoke,
     check_v0_2_readiness_passes,
 )
 
