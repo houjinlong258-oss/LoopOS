@@ -573,10 +573,16 @@ if _HAS_TUI:
         dry_run: bool = typer_mod.Option(False, "--dry-run"),
         json_output: bool = typer_mod.Option(True, "--json/--human"),
     ) -> None:
+        # ``--task`` is meaningful only for plan / explain / run.
+        # For escalate / status / list / route the wrapper must not
+        # forward ``task`` (the underlying command does not need it,
+        # and forwarding can re-trigger ``Path(task_arg).exists()`` if
+        # ``task`` was a long inline-JSON payload).
+        task_arg = task if action in ("plan", "explain", "run") else None
         raise typer_mod.Exit(
             fusion_router_command(
                 action=action,
-                task_arg=task,
+                task_arg=task_arg,
                 run_id=run_id,
                 reason=reason,
                 fusion_id=fusion_id,
@@ -595,10 +601,15 @@ if _HAS_TUI:
         fusion_id: str | None = typer_mod.Option(None, "--fusion-id"),
         json_output: bool = typer_mod.Option(True, "--json/--human"),
     ) -> None:
+        # See note in ``_typer_fusion_router``: ``--task`` is meaningful
+        # only for plan / explain. For escalate / status / list / route
+        # we deliberately drop ``task`` so the wrapper never re-parses
+        # a long inline-JSON payload as a filesystem path.
+        task_arg = task if action in ("plan", "explain") else None
         raise typer_mod.Exit(
             mad_dog_command(
                 action=action,
-                task_arg=task,
+                task_arg=task_arg,
                 run_id=run_id,
                 reason=reason,
                 severity=severity,

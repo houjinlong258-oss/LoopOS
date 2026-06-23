@@ -469,5 +469,143 @@ class FusionCLIErrorTests(unittest.TestCase):
         self.assertIn("Unknown", output)
 
 
+class FusionCLINoTaskFileRegressionTests(unittest.TestCase):
+    """Regression tests for the Linux ``OSError(ENAMETOOLONG)`` bug.
+
+    On Linux the kernel's per-component ``NAME_MAX`` is typically
+    255 bytes. Long inline-JSON payloads (e.g. the ``nasty release
+    blocker`` task profile used by the Typer regression tests)
+    exceed that limit. The Typer wrapper for ``mad-dog`` and
+    ``fusion-router`` must therefore never forward ``--task`` to
+    status / list / route actions and the underlying
+    :func:`_read_task_input` must not probe the filesystem for
+    strings that already look like inline JSON.
+    """
+
+    # 281-char JSON payload; > 255 so it would trip NAME_MAX on Linux.
+    _LONG_INLINE_JSON = json.dumps(
+        {
+            "title": "nasty release blocker",
+            "task_type": "release",
+            "complexity_score": 7,
+            "risk_score": 5,
+            "failure_count": 5,
+            "user_dissatisfaction_count": 4,
+            "affected_file_count": 12,
+            "no_progress_count": 3,
+            "release_blocker": True,
+            "security_sensitive": False,
+            "model_mismatch": False,
+        },
+    )
+
+    def test_mad_dog_status_typer_drops_task(self) -> None:
+        """``mad-dog status --task <long-json> --fusion-id ID`` works.
+
+        The wrapper must not forward ``--task`` for status, so the
+        long inline JSON must never be re-parsed as a path. We pass
+        a synthetic ``--fusion-id`` that won't be found; we only
+        assert the wrapper reaches the status branch and emits a
+        structured ``not_found`` (no OSError, no traceback).
+        """
+        code, output = _invoke_typer(
+            [
+                "mad-dog",
+                "--action", "status",
+                "--task", self._LONG_INLINE_JSON,
+                "--fusion-id", "does-not-exist-status-typer",
+                "--json",
+            ],
+        )
+        self.assertNotIn("OSError", output)
+        self.assertNotIn("Traceback", output)
+        self.assertEqual(code, 0, msg=output)
+        payload = json.loads(output)
+        self.assertEqual(payload["status"], "not_found")
+
+    def test_mad_dog_route_typer_drops_task(self) -> None:
+        """``mad-dog route --task <long-json> --fusion-id ID`` works.
+
+        Same shape as the status test, but exercises the route
+        branch (which loads a persisted plan). With an unknown
+        ``fusion_id`` the wrapper should emit a structured error,
+        not an OSError / traceback.
+        """
+        code, output = _invoke_typer(
+            [
+                "mad-dog",
+                "--action", "route",
+                "--task", self._LONG_INLINE_JSON,
+                "--fusion-id", "does-not-exist-route-typer",
+                "--json",
+            ],
+        )
+        self.assertNotIn("OSError", output)
+        self.assertNotIn("Traceback", output)
+        # route returns 1 for unknown fusion_id but must not crash.
+        self.assertIn(code, (0, 1), msg=output)
+
+    def test_fusion_router_status_typer_drops_task(self) -> None:
+        """``fusion-router status --task <long-json> --fusion-id ID`` works."""
+        code, output = _invoke_typer(
+            [
+                "fusion-router",
+                "--action", "status",
+                "--task", self._LONG_INLINE_JSON,
+                "--fusion-id", "does-not-exist-fr-status-typer",
+                "--json",
+            ],
+        )
+        self.assertNotIn("OSError", output)
+        self.assertNotIn("Traceback", output)
+        self.assertEqual(code, 0, msg=output)
+        payload = json.loads(output)
+        self.assertEqual(payload["status"], "not_found")
+
+    def test_fusion_router_route_typer_drops_task(self) -> None:
+        """``fusion-router route --task <long-json> --fusion-id ID`` works."""
+        code, output = _invoke_typer(
+            [
+                "fusion-router",
+                "--action", "route",
+                "--task", self._LONG_INLINE_JSON,
+                "--fusion-id", "does-not-exist-fr-route-typer",
+                "--json",
+            ],
+        )
+        self.assertNotIn("OSError", output)
+        self.assertNotIn("Traceback", output)
+        self.assertIn(code, (0, 1), msg=output)
+
+    def test_read_task_input_handles_long_inline_json(self) -> None:
+        """``_read_task_input`` treats ``{``-prefixed strings as inline JSON.
+
+        This is the second half of the fix: even if some caller
+        hands a long JSON string to ``_read_task_input``, the
+        function must skip the filesystem probe so it never trips
+        ``OSError(ENAMETOOLONG)`` on Linux.
+        """
+        from loopos.fusion_router.cli import _read_task_input
+
+        data = _read_task_input(self._LONG_INLINE_JSON)
+        self.assertEqual(data["title"], "nasty release blocker")
+        self.assertEqual(data["release_blocker"], True)
+
+    def test_read_task_input_still_reads_files(self) -> None:
+        """``_read_task_input`` still reads real files when the path exists.
+
+        The inline-JSON heuristic must not regress the file-path
+        case used by ``rc_audit_cli_smoke.py`` and the
+        ``tests/test_fusion_router_cli.py`` plan tests.
+        """
+        from loopos.fusion_router.cli import _read_task_input
+
+        with tempfile.TemporaryDirectory() as tmp:
+            payload_path = Path(tmp) / "task.json"
+            payload_path.write_text(self._LONG_INLINE_JSON, encoding="utf-8")
+            data = _read_task_input(str(payload_path))
+            self.assertEqual(data["title"], "nasty release blocker")
+
+
 if __name__ == "__main__":
     unittest.main()

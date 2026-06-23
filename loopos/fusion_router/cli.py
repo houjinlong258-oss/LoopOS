@@ -30,18 +30,30 @@ from loopos.fusion_router.router import FusionRouter
 
 
 def _read_task_input(task_arg: str) -> dict[str, Any]:
-    """Read a task profile from a JSON file path or a JSON string.
+    """Read a task profile from a JSON file path or an inline JSON string.
 
     The CLI accepts either ``task.json`` (path) or an inline
     JSON payload. The two share the same :class:`FusionTaskProfile`
     schema.
+
+    Implementation note: the inline-JSON heuristic is necessary
+    because on Linux the kernel's per-component ``NAME_MAX`` is
+    typically 255 bytes; a JSON payload longer than that cannot
+    be passed through ``Path(task_arg).exists()`` without
+    triggering ``OSError(ENAMETOOLONG)``. We therefore treat any
+    string whose first non-whitespace character is ``{`` or ``[``
+    as inline JSON and skip the filesystem probe entirely.
     """
 
-    candidate = Path(task_arg)
-    if candidate.exists() and candidate.is_file():
-        raw = candidate.read_text(encoding="utf-8")
-    else:
+    stripped = task_arg.lstrip()
+    if stripped[:1] in ("{", "["):
         raw = task_arg
+    else:
+        candidate = Path(task_arg)
+        if candidate.exists() and candidate.is_file():
+            raw = candidate.read_text(encoding="utf-8")
+        else:
+            raw = task_arg
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as exc:
