@@ -1,0 +1,56 @@
+# Pre-commit hooks for LoopOS.
+#
+# Install once per clone:
+#
+#     pip install pre-commit
+#     pre-commit install
+#
+# Run on demand (CI parity):
+#
+#     pre-commit run --all-files
+#
+# CI also runs the same hooks via GitHub Actions
+# (``.github/workflows/ci.yml``).
+#
+# The hooks are intentionally split:
+#
+# * ``ruff`` and ``ruff-format`` run on every commit (cheap).
+# * ``mypy`` and ``pytest-fast`` run on pre-push (slower; the local
+#   default ``pre-commit run`` does not trigger them).
+# * ``gitleaks`` runs on every commit and blocks secrets from
+#   landing in history.
+#
+# Local developers without ``gitleaks`` installed can skip that
+# hook with ``SKIP=gitleaks git commit ...``; CI catches the same
+# condition in the ``secrets`` job.
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.2
+    hooks:
+      - id: mypy
+        files: '^(loopos|tests)/.*\.py$'
+        args: ["--config-file", "pyproject.toml"]
+        stages: [pre-push]
+
+  - repo: local
+    hooks:
+      - id: pytest-fast
+        name: pytest-fast (not slow)
+        entry: python -m pytest -m "not slow" -q --no-header -p no:cacheprovider
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        types: [python]
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks

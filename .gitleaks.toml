@@ -1,0 +1,49 @@
+# gitleaks configuration for LoopOS.
+#
+# This config blocks commits that introduce obvious secrets:
+# OpenAI / Anthropic / GitHub PAT / AWS / private key material.
+# The default gitleaks ruleset already covers most of these; this
+# file extends it with a LoopOS-specific rule for the
+# ``sk-test-...`` keys used by the loopback smoke (which must
+# never leak into real history even though they are test-only).
+
+title = "LoopOS gitleaks config"
+
+[extend]
+# Use the bundled default ruleset as a base.
+useDefault = true
+
+# Block PR / push scans on the configured paths.
+[allowlist]
+description = "Allow-list for known test fixtures"
+paths = [
+  '''^\.venv/''',
+  '''^dist/''',
+  '''^docs/reports/latest-test-report\.json$''',
+  '''^\.loopos-demo/''',
+]
+
+# A LoopOS-specific rule: the loopback smoke uses ``sk-test-...``
+# keys at runtime. They must never appear in tracked files except
+# in the runtime + the loopback smoke + the test that exercises
+# the smoke.
+[[rules]]
+id = "loopos-test-openai-key"
+description = "LoopOS test OpenAI keys must never appear in real history"
+regex = '''sk-test-[A-Za-z0-9_-]{16,}'''
+keywords = ["sk-test-"]
+tags = ["test-fixture", "openai"]
+
+  [[rules.allowlists]]
+  description = "Allow-list for files where the prefix legitimately appears"
+  paths = [
+    '''^loopos/providers_runtime/openai\.py$''',
+    '''^tests/test_v0_3_live_provider_smoke_http\.py$''',
+    '''^scripts/v0_3_live_provider_smoke_http\.py$''',
+  ]
+
+[[rules]]
+id = "loopos-bearer-in-source"
+description = "Bearer tokens in source files"
+regex = '''(?i)Bearer\s+sk-[A-Za-z0-9]{8,}'''
+tags = ["bearer", "openai"]
