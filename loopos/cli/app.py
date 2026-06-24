@@ -37,15 +37,8 @@ from loopos.cli.commands import (  # noqa: E402
     tasks_command as tasks_command,
     triggers_command as triggers_command,
     worktrees_command as worktrees_command,
-    # v0.3
-    workbench_command as workbench_command,
-    adapters_command as adapters_command,
-    providers_runtime_command as providers_runtime_command,
-    model_call_command as model_call_command,
-    opengod_command as opengod_command,
-    session_command as session_command,
-    readiness_command as readiness_command,
 )
+
 from loopos.cli.context import data_paths  # noqa: E402
 from loopos.cli.fallback import fallback_main  # noqa: E402
 from loopos.cli.commands.runtime import (  # noqa: E402
@@ -652,145 +645,9 @@ if _HAS_TUI:
             )
         )
 
-    @app.command("workbench")
-    def _typer_workbench(
-        goal_path: str | None = typer_mod.Argument(None),
-        adapter: str = typer_mod.Option("mock", "--adapter"),
-        model: str = typer_mod.Option("mock-model", "--model"),
-        provider: str = typer_mod.Option("mock", "--provider"),
-        mode: str = typer_mod.Option("single", "--mode"),
-        budget_usd: float = typer_mod.Option(0.0, "--budget-usd"),
-        mad_dog: bool = typer_mod.Option(False, "--mad-dog"),
-        allow_live_provider: bool = typer_mod.Option(False, "--allow-live-provider"),
-        dry_run: bool = typer_mod.Option(True, "--dry-run/--no-dry-run"),
-        watch: bool = typer_mod.Option(False, "--watch"),
-        json_output: bool = typer_mod.Option(False, "--json"),
-        project: str = typer_mod.Option("", "--project"),
-    ) -> None:
-        raise typer_mod.Exit(
-            workbench_command(
-                goal_path,
-                adapter=adapter,
-                model=model,
-                provider=provider,
-                mode=mode,
-                budget_usd=budget_usd,
-                mad_dog=mad_dog,
-                allow_live_provider=allow_live_provider,
-                dry_run=dry_run,
-                watch=watch,
-                json_output=json_output,
-                project=project,
-            )
-        )
-
-    @app.command("adapters")
-    def _typer_adapters(
-        action: str = typer_mod.Argument("list"),
-        value: str | None = typer_mod.Argument(None),
-        json_output: bool = typer_mod.Option(False, "--json"),
-    ) -> None:
-        raise typer_mod.Exit(
-            adapters_command(action, value, json_output=json_output)
-        )
-
-    @app.command("providers-runtime")
-    def _typer_providers_runtime(
-        action: str = typer_mod.Argument("list"),
-        value: str | None = typer_mod.Argument(None),
-        model: str = typer_mod.Option("mock-model", "--model"),
-        dry_run: bool = typer_mod.Option(True, "--dry-run"),
-        json_output: bool = typer_mod.Option(False, "--json"),
-    ) -> None:
-        raise typer_mod.Exit(
-            providers_runtime_command(
-                action, value, model=model, dry_run=dry_run, json_output=json_output
-            )
-        )
-
-    @app.command("model-call")
-    def _typer_model_call(
-        prompt_path: str,
-        provider: str = typer_mod.Option("mock", "--provider"),
-        model: str = typer_mod.Option("mock-model", "--model"),
-        dry_run: bool = typer_mod.Option(True, "--dry-run/--no-dry-run"),
-        allow_live_provider: bool = typer_mod.Option(False, "--allow-live-provider"),
-        budget_usd: float = typer_mod.Option(0.0, "--budget-usd"),
-        confirm: bool = typer_mod.Option(False, "--confirm"),
-        json_output: bool = typer_mod.Option(True, "--json"),
-    ) -> None:
-        raise typer_mod.Exit(
-            model_call_command(
-                prompt_path,
-                provider=provider,
-                model=model,
-                dry_run=dry_run,
-                allow_live_provider=allow_live_provider,
-                budget_usd=budget_usd,
-                confirm=confirm,
-                json_output=json_output,
-            )
-        )
-
-    @app.command("opengod")
-    def _typer_opengod(
-        goal_id: str = typer_mod.Argument("goal_demo"),
-        goal_title: str = typer_mod.Option("", "--goal-title"),
-        goal_risk: str = typer_mod.Option("medium", "--goal-risk"),
-        fusion_mode: str = typer_mod.Option("single", "--fusion-mode"),
-        fusion_score: int = typer_mod.Option(0, "--fusion-score"),
-        hard_fail_count: int = typer_mod.Option(0, "--hard-fail-count"),
-        readiness_status: str = typer_mod.Option("unknown", "--readiness-status"),
-        adapter_id: str = typer_mod.Option("", "--adapter-id"),
-        live_provider_calls: bool = typer_mod.Option(False, "--live-provider-calls"),
-        budget_used_usd: float = typer_mod.Option(0.0, "--budget-used-usd"),
-        budget_max_usd: float = typer_mod.Option(0.0, "--budget-max-usd"),
-        max_budget_usd: float = typer_mod.Option(1.0, "--max-budget-usd"),
-        reserve_usd: float = typer_mod.Option(0.10, "--reserve-usd"),
-        json_output: bool = typer_mod.Option(True, "--json"),
-    ) -> None:
-        raise typer_mod.Exit(
-            opengod_command(
-                goal_id,
-                goal_title=goal_title,
-                goal_risk=goal_risk,
-                fusion_mode=fusion_mode,
-                fusion_score=fusion_score,
-                hard_fail_count=hard_fail_count,
-                readiness_status=readiness_status,
-                adapter_id=adapter_id,
-                live_provider_calls=live_provider_calls,
-                budget_used_usd=budget_used_usd,
-                budget_max_usd=budget_max_usd,
-                max_budget_usd=max_budget_usd,
-                reserve_usd=reserve_usd,
-                json_output=json_output,
-            )
-        )
-
-    @app.command("session")
-    def _typer_session(
-        action: str = typer_mod.Argument("list"),
-        session_id: str | None = typer_mod.Argument(None),
-        data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
-        json_output: bool = typer_mod.Option(False, "--json"),
-    ) -> None:
-        raise typer_mod.Exit(
-            session_command(
-                action, session_id, data_dir=data_dir, json_output=json_output
-            )
-        )
-
-    @app.command("readiness")
-    def _typer_readiness(
-        action: str = typer_mod.Argument("check"),
-        json_output: bool = typer_mod.Option(True, "--json"),
-    ) -> None:
-        raise typer_mod.Exit(
-            readiness_command(action, json_output=json_output)
-        )
-
-
+    # v0.3 commands (extracted to loopos/cli/typer_v0_3.py)
+    from loopos.cli.typer_v0_3 import register_v0_3_commands
+    register_v0_3_commands(app, typer_mod)
 
     @app.command("release")
     def _typer_release(

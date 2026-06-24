@@ -193,8 +193,23 @@ timing-flaky test. The final RC verdict is recorded in
   ``docs/v0-3-mcp-boundary.md`` for the full audit and the
   v0.4 plan.
 
-* **P1-4: `loopos/cli/app.py` extraction.** *Lands in the
-  next commit on the same branch.*
+* **P1-4: `loopos/cli/app.py` extraction.** The seven v0.3
+  Typer bindings (``workbench``, ``adapters``,
+  ``providers-runtime``, ``model-call``, ``opengod``,
+  ``session``, ``readiness``) are extracted from
+  ``loopos/cli/app.py`` into a new module
+  ``loopos/cli/typer_v0_3.py``. ``app.py`` shrinks from 851
+  to 654 lines (-197 lines, -23%). No CLI behavior change:
+  the Typer path and the argparse fallback continue to expose
+  the same seven command names. A single
+  ``register_v0_3_commands(app, typer_mod)`` call replaces
+  the 140 lines of v0.3 Typer bindings; the v0.3 command
+  imports move from ``app.py`` to the new module. New
+  ``tests/test_typer_v0_3_extraction.py`` proves the
+  extraction (8 tests: regression guard against re-inlining,
+  ``register_v0_3_commands`` API surface, no-op when
+  ``app=None`` or ``typer_mod=None``, Typer and argparse
+  agree on the seven command names).
 
 * **P1-5: Mutation testing pilot.** *Lands in the next
   commit on the same branch.*
