@@ -118,3 +118,22 @@ The following are tracked but **not blocking** v0.3:
    roadmap.
 
 End of v0.3 RC audit.
+
+---
+
+## Final release note (v0.3.0 release metadata aligned on main)
+
+The release-metadata commit on `main` bumps:
+
+- `VERSION` from `0.2.0` to `0.3.0`
+- `pyproject.toml` `version` from `0.2.0` to `0.3.0`
+- `README.md` top banner from v0.2.0 to v0.3.0, plus a new
+  "v0.3 Highlights" section near the top
+- `CHANGELOG.md` v0.3 heading to `## 0.3.0 (Universal Agent Runtime) - 2026-06-24`
+- `docs/v0-3-readiness.md` and `docs/reports/v0-3-rc-decision.md` updated with this
+  final release note
+
+No runtime code (`loopos/`, `tests/`) is changed. The v0.1.0 / v0.2.0
+tags and `scripts/baselines/v0_1_0_loopos.txt` are not touched. The
+v0.3.0 tag is the user's separate decision after the eight validation
+gates pass on this `main` HEAD.

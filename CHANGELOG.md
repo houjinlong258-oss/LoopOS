@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.3 (Universal Agent Runtime)
+## 0.3.0 (Universal Agent Runtime) - 2026-06-24
 
 ### Added
 

@@ -1,12 +1,26 @@
 # LoopOS
 
-> **v0.2.0 released — True Agent OS Kernel.** v0.1.0 release evidence is
-> **FROZEN**; see [`docs/v0.1.0-FREEZE.md`](docs/v0.1.0-FREEZE.md). The
+> **v0.3.0 released — Universal Agent Runtime.** v0.2.0 remains the
+> True Agent OS Kernel baseline; v0.1.0 release evidence is **FROZEN**;
+> see [`docs/v0.1.0-FREEZE.md`](docs/v0.1.0-FREEZE.md). The
 > v0.2.0 source archive (`dist/LoopOS-v0.2.0-source.zip`) is cut from
 > the annotated tag `v0.2.0` on `main`. Do **not** modify the v0.1.0
 > tag, v0.1.0 dist artifact, release notes, CI report, or any file in
 > `scripts/baselines/v0_1_0_loopos.txt`. All changes must pass
 > `python scripts/anti_bloat_check.py` before commit.
+
+## v0.3 Highlights
+
+- Rich CLI / Workbench product surface (`loopos.product`)
+- Adapter Layer (`loopos.adapters`) and Agent Bus (`loopos.agent_bus`)
+- governed Provider Runtime (`loopos.providers_runtime`) with default-deny live calls
+- shared `BudgetLedger` across CLI, Workbench, and Provider Runtime
+- loopback live-provider HTTP smoke (`scripts/v0_3_live_provider_smoke_http.py`)
+- Fusion Verdict Orchestration (`loopos.fusion_orchestrator`)
+- OpenGod planning-only layer (`loopos.opengod`) — decisions, never exec
+- v0.3 readiness 26/26 (`python scripts/v0_3_readiness_check.py --json`)
+- CI / pre-commit / gitleaks secret scan
+- architecture map / non-goals / real / mock / planning classification
 
 ![LoopOS - the kernel for running agents](docs/assets/brand/loopos-hero.png)
 
