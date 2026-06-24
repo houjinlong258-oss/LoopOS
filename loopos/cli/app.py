@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 from typing import Any
 
@@ -55,15 +56,28 @@ from loopos.cli.renderers import render_run as _render_run  # noqa: E402, F401
 from loopos.cli.renderers import render_state as _render_state  # noqa: E402, F401
 
 
+# Probe optional CLI dependencies up front so the rest of the module
+# sees a single, type-narrowable binding for ``typer_mod`` and
+# ``ConsoleCls``.  The previous ``try/except import`` shape made
+# mypy report ``no-redef`` for the re-binding in the ``except`` arm
+# and was easy to misuse (callers had to assume ``Any`` everywhere).
+# ``importlib.util.find_spec`` keeps the bootstrap path optional
+# without introducing a second definition; the explicit ``Any``
+# annotations keep call sites (``typer_mod.Option(...)`` etc.)
+# narrowable without the helper having to assert non-None on every
+# branch.
 typer_mod: Any
 ConsoleCls: Any
 
-try:  # Optional for local bootstrapping.
+if (
+    importlib.util.find_spec("typer") is not None
+    and importlib.util.find_spec("rich") is not None
+):
     import typer as typer_mod
     from rich.console import Console as ConsoleCls
 
     _HAS_TUI = True
-except Exception:  # pragma: no cover - exercised in dependency-light environments.
+else:  # pragma: no cover - exercised in dependency-light environments.
     typer_mod = None
     ConsoleCls = None
     _HAS_TUI = False
