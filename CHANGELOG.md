@@ -175,8 +175,23 @@ timing-flaky test. The final RC verdict is recorded in
   the absence of v0.4 governance symbols. See
   `docs/v0-3-skills-boundary.md` for the v0.4 plan.
 
-* **P1-3: MCP boundary (Option B).** *Lands in the next
-  commit on the same branch.*
+* **P1-3: MCP boundary (Option B).** MCP remains a
+  compatibility facade over the canonical syscall router on
+  v0.3. The kernel loop's ``_SYSCALLS`` table does **not**
+  include ``TOOL.CALL`` (asserted via reflection). The router
+  is reachable from tests and from manual wiring but is not
+  production-wired. Full Governed MCP Gateway work is deferred
+  to v0.4. ``loopos/mcp/__init__.py`` carries an explicit
+  "present but not production-wired" callout. The
+  ``__all__`` list is expanded to include the typed exports
+  (``ToolRouter``, ``ToolHandler``, ``ToolRiskLevel``,
+  ``RegisteredTool``) so the public surface matches the
+  module's actual exports. New
+  ``check_mcp_present_not_wired_boundary`` readiness check
+  enforces the callout, the missing ``TOOL.CALL`` entry, and
+  the v0.3 syscalls' continued presence. See
+  ``docs/v0-3-mcp-boundary.md`` for the full audit and the
+  v0.4 plan.
 
 * **P1-4: `loopos/cli/app.py` extraction.** *Lands in the
   next commit on the same branch.*

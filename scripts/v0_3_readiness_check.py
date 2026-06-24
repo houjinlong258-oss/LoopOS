@@ -373,6 +373,99 @@ def check_opengod_budget_guard() -> Finding:
     )
 
 
+def check_mcp_present_not_wired_boundary() -> Finding:
+    """Enforce the v0.3 MCP boundary (Option B).
+
+    Asserts:
+
+    * ``loopos/mcp/__init__.py`` carries the explicit
+      "present but not production-wired" callout so the
+      boundary is visible to importers.
+    * ``KernelLoopEngine._SYSCALLS`` does not include
+      ``TOOL.CALL`` (reflection check, not textual grep).
+    * The v0.3 syscalls (``TERM.EXEC``, ``FILE.READ``,
+      ``FILE.WRITE``, ``GIT.STATUS``, ``GIT.DIFF``) are still
+      present (regression guard).
+
+    See ``docs/v0-3-mcp-boundary.md`` for the full audit and
+    the v0.4 follow-up plan (Governed MCP Gateway).
+    """
+    import re as _re
+
+    # Module docstring callout.
+    init_path = REPO_ROOT / "loopos" / "mcp" / "__init__.py"
+    if not init_path.exists():
+        return Finding(
+            "mcp_present_not_wired_boundary",
+            False,
+            "loopos/mcp/__init__.py missing",
+        )
+    text = init_path.read_text(encoding="utf-8")
+    match = _re.search(r'^"""(?P<body>.*?)"""', text, _re.DOTALL | _re.MULTILINE)
+    if match is None:
+        return Finding(
+            "mcp_present_not_wired_boundary",
+            False,
+            "loopos/mcp/__init__.py has no module docstring",
+        )
+    body = match.group("body")
+    if "not production-wired" not in body:
+        return Finding(
+            "mcp_present_not_wired_boundary",
+            False,
+            "module docstring missing 'not production-wired' callout",
+        )
+    if "v0.4" not in body:
+        return Finding(
+            "mcp_present_not_wired_boundary",
+            False,
+            "module docstring missing v0.4 follow-up reference",
+        )
+    if "TOOL.CALL" not in body:
+        return Finding(
+            "mcp_present_not_wired_boundary",
+            False,
+            "module docstring missing TOOL.CALL reference",
+        )
+    # Reflection check on the kernel-loop syscall table.
+    try:
+        import loopos.kernel.loop_engine as _loop_engine
+    except Exception as exc:  # noqa: BLE001
+        return Finding(
+            "mcp_present_not_wired_boundary",
+            False,
+            f"could not import loopos.kernel.loop_engine: {exc}",
+        )
+    syscalls = getattr(_loop_engine, "_SYSCALLS", None)
+    if not isinstance(syscalls, dict):
+        return Finding(
+            "mcp_present_not_wired_boundary",
+            False,
+            f"loopos.kernel.loop_engine._SYSCALLS must be a dict, got {type(syscalls)!r}",
+        )
+    if "TOOL.CALL" in syscalls:
+        return Finding(
+            "mcp_present_not_wired_boundary",
+            False,
+            "TOOL.CALL must not be in _SYSCALLS on v0.3; "
+            "production MCP wiring is deferred to v0.4",
+        )
+    for required in ("TERM.EXEC", "FILE.READ", "FILE.WRITE", "GIT.STATUS", "GIT.DIFF"):
+        if required not in syscalls:
+            return Finding(
+                "mcp_present_not_wired_boundary",
+                False,
+                f"v0.3 syscall {required!r} missing from _SYSCALLS",
+            )
+    return Finding(
+        "mcp_present_not_wired_boundary",
+        True,
+        "module docstring declares present-but-not-wired; "
+        "TOOL.CALL not in _SYSCALLS; "
+        "v0.3 syscalls still wired",
+    )
+
+
 def check_skills_memory_backed_boundary() -> Finding:
     """Enforce the v0.3 skills module boundary (Option B).
 
@@ -870,6 +963,7 @@ ALL_CHECKS = (
     check_opengod_budget_guard,
     check_opengod_planning_only_boundary,
     check_skills_memory_backed_boundary,
+    check_mcp_present_not_wired_boundary,
     check_cli_adapters_list,
     check_cli_providers_runtime_list,
     check_cli_model_call_dry_run,
