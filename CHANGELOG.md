@@ -233,8 +233,21 @@ timing-flaky test. The final RC verdict is recorded in
   lives in the dev venv only; it is not on the v0.3-RC
   dependency list.
 
-* **P1-6: Docs minimum upgrade.** *Lands in the next
-  commit on the same branch.*
+* **P1-6: Docs minimum upgrade.** New
+  ``docs/v0-3-non-goals.md`` enumerates the v0.3 surface
+  that is intentionally absent (OpenGod → AIL bridge,
+  new providers, MCP production wiring, skill governance,
+  Textual / Web UI, multi-tenant isolation, etc.) as a
+  contract with downstream users. New
+  ``docs/architecture-v0-3.md`` provides the v0.3
+  architecture map: a Mermaid component diagram of the
+  CLI / product / authority / compat / data layers; a
+  layer table that marks the authority boundary; a
+  real / dry-run / mock / planning-only classification
+  table for every v0.3 surface; the v0.4 deferred-items
+  list (10 items, each with a concrete plan); and the
+  architecture invariants that the v0.3 readiness check
+  enforces.
 
 The v0.3-alpha status remains "implementation snapshot
 complete; RC blocked pending hardening"; the P1 pass
