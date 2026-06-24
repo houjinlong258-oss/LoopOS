@@ -59,6 +59,16 @@ from loopos.quality import (
     QualityScorer,
 )
 
+try:
+    from rich.console import Console, Group
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
+    from rich.box import ROUNDED
+    _HAS_RICH = True
+except ImportError:  # pragma: no cover - exercised in dependency-light envs
+    _HAS_RICH = False
+
 
 # The in-process holder is kept for back-compat / debugging; it
 # is no longer the source of truth.
@@ -114,12 +124,275 @@ def _emit(obj: Any, json_output: bool) -> int:
         sys.stdout.write(json.dumps(obj, indent=2, default=str))
         sys.stdout.write("\n")
         return 0
-    if isinstance(obj, dict):
-        d: dict[str, Any] = obj
-        for k, v in d.items():
-            sys.stdout.write(f"{k}: {v}\n")
-    else:
-        sys.stdout.write(str(obj) + "\n")
+    # --human mode: render via Rich panels (v0.4.0 closeout).
+    return _emit_human(obj)
+
+
+def _emit_human(obj: Any) -> int:
+    """Render a v0.4 result dict/list as a Rich panel for ``--human`` mode.
+
+    The v0.4 commands return different shapes; this dispatcher picks the
+    right panel. Unknown shapes fall back to a generic key-value panel.
+    """
+    if not _HAS_RICH:
+        # Plain fallback: same flat key:value behaviour the v0.4 closeout shipped.
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                sys.stdout.write(f"{k}: {v}\n")
+        else:
+            sys.stdout.write(str(obj) + "\n")
+        return 0
+
+    console = Console()
+
+    if not isinstance(obj, dict):
+        if isinstance(obj, list):
+            t = Table(box=ROUNDED, show_header=True, header_style="bold cyan")
+            if obj and isinstance(obj[0], dict):
+                cols = list(obj[0].keys())
+                for c in cols:
+                    t.add_column(c)
+                for row in obj:
+                    t.add_row(*[str(row.get(c, "")) for c in cols])
+            else:
+                t.add_column("value")
+                for v in obj:
+                    t.add_row(str(v))
+            console.print(t)
+            return 0
+        console.print(str(obj))
+        return 0
+
+    # Shape: loop run output (has 'iterations' + 'delivery' keys)
+    if "iterations" in obj and ("current_status" in obj or "delivery" in obj):
+        return _emit_human_run(obj, console)
+
+    # Shape: loop status output (has 'last_iteration' or 'lail_signals')
+    if "lail_signals" in obj or "last_iteration" in obj or "checkpoint_path" in obj:
+        return _emit_human_status(obj, console)
+
+    # Shape: loop deliver output (has 'delivery_status' or 'success_criteria_coverage')
+    if "delivery_status" in obj or "success_criteria_coverage" in obj or "why" in obj:
+        return _emit_human_deliver(obj, console)
+
+    # Generic: flat key-value panel
+    return _emit_human_generic(obj, console)
+
+
+def _xiao_huanli(mood: str) -> Text:
+    """Compact Xiao Huanli (the raccoon mascot) for ``--human`` panels.
+
+    4 lines, ASCII-compatible. Mood: calm / running / blocked / halted.
+    """
+    if mood == "running":
+        lines = ["   /\\_/\\  ", "  (^  ^) ", "   (v) »»", "   ||||  "]
+        return Text("\n".join(lines), style="cyan")
+    if mood == "blocked":
+        lines = ["   /\\_/\\  ", "  (>  <) ", "   (X)   ", "   ||||  "]
+        return Text("\n".join(lines), style="red")
+    if mood == "halted":
+        lines = ["   /\\_/\\  ", "  (T  T) ", "   (o)   ", "   ||||  "]
+        return Text("\n".join(lines), style="yellow")
+    lines = ["   /\\_/\\  ", "  (o  o) ", "   (v)   ", "   ||||  "]
+    return Text("\n".join(lines), style="green")
+
+
+def _mood_for_obj(obj: dict[str, Any]) -> str:
+    """Pick a mood based on the v0.4 result object's status field."""
+    status = (obj.get("current_status") or obj.get("status") or
+              obj.get("delivery_status") or "")
+    s = str(status).lower()
+    if s in {"ready_to_deliver", "ready", "ok", "completed", "pass"}:
+        return "calm"
+    if s in {"running", "active", "in_progress"}:
+        return "running"
+    if s in {"blocked", "denied", "halt", "error", "failed"}:
+        return "blocked"
+    if s in {"halted", "budget_exhausted"}:
+        return "halted"
+    if obj.get("fake_convergence") or obj.get("fake_convergence_findings"):
+        return "blocked"
+    return "calm"
+
+
+def _emit_human_run(obj: dict[str, Any], console: Any) -> int:
+    """Render a ``loop run`` result as a Rich panel."""
+    mood = _mood_for_obj(obj)
+    cat = _xiao_huanli(mood)
+    mood_color = {"calm": "green", "running": "cyan", "blocked": "red", "halted": "yellow"}[mood]
+
+    grid = Table.grid(expand=True, padding=(0, 1))
+    grid.add_column(width=10)
+    grid.add_column()
+
+    rows = [
+        ("Run",          obj.get("run_id", "?")),
+        ("Status",       f"[{mood_color}]{obj.get('current_status', '?')}[/{mood_color}]"),
+        ("Iterations",   str(len(obj.get("iterations", [])))),
+    ]
+    # The user goal lives on the loop state (not the run-output dict);
+    # when present we surface it. Otherwise we fall through silently.
+    if obj.get("user_goal"):
+        rows.insert(1, ("User goal", str(obj["user_goal"])))
+    delivery = obj.get("delivery") or {}
+    if delivery:
+        rows.append(("Delivery", f"[{mood_color}]{delivery.get('status', '?')}[/{mood_color}]"))
+        if delivery.get("known_limitations"):
+            rows.append(("Known limits", ", ".join(delivery["known_limitations"])))
+
+    for k, v in rows:
+        grid.add_row(f"[bold white]{k}[/bold white]", str(v))
+
+    last = (obj.get("iterations") or [{}])[-1]
+    inner_rows: list[str] = []
+    if last.get("plan"):
+        plan = last["plan"]
+        inner_rows.append(
+            f"[bold]Last plan[/bold]: [cyan]{plan.get('title', '?')}[/cyan] "
+            f"(source=[magenta]{plan.get('source', '?')}[/magenta])"
+        )
+    if last.get("build_result"):
+        b = last["build_result"]
+        inner_rows.append(
+            f"[bold]Build[/bold]: [{mood_color}]{b.get('status', '?')}[/{mood_color}] "
+            f"source=[dim]{b.get('source', '?')}[/dim]"
+        )
+    if last.get("test_result"):
+        t = last["test_result"]
+        inner_rows.append(
+            f"[bold]Test[/bold]: [{mood_color}]{t.get('status', '?')}[/{mood_color}] "
+            f"passed={t.get('passed', 0)} failed={t.get('failed', 0)}"
+        )
+    if last.get("quality_score"):
+        q = last["quality_score"]
+        inner_rows.append(
+            f"[bold]Quality[/bold]: [green]{q.get('overall', '?')}[/green]"
+        )
+    if last.get("convergence"):
+        c = last["convergence"]
+        inner_rows.append(
+            f"[bold]Convergence[/bold]: [cyan]{c.get('status', '?')}[/cyan]"
+            f"  fake_convergence={len(c.get('fake_convergence') or [])}"
+        )
+    inner = "\n".join(inner_rows) if inner_rows else "[dim]no iteration details[/dim]"
+
+    body = Group(cat, Text(""), grid, Text(""), Text(inner, style="white"))
+    title = f"[bold {mood_color}]loop run · {obj.get('run_id', '?')}[/bold {mood_color}] [{mood_color}]{obj.get('current_status', '?')}[/{mood_color}]"
+    console.print(Panel(body, title=title, border_style=mood_color, box=ROUNDED))
+    return 0
+
+
+def _emit_human_status(obj: dict[str, Any], console: Any) -> int:
+    """Render a ``loop status`` result as a Rich panel."""
+    mood = _mood_for_obj(obj)
+    cat = _xiao_huanli(mood)
+    mood_color = {"calm": "green", "running": "cyan", "blocked": "red", "halted": "yellow"}[mood]
+
+    grid = Table.grid(expand=True, padding=(0, 1))
+    grid.add_column(width=18)
+    grid.add_column()
+    rows = [
+        ("Run",               obj.get("run_id", "?")),
+        ("User goal",         obj.get("user_goal", "?")),
+        ("Current status",    f"[{mood_color}]{obj.get('current_status', '?')}[/{mood_color}]"),
+        ("Current iteration", str(obj.get("current_iteration", "?"))),
+        ("Checkpoint path",   obj.get("checkpoint_path", "?")),
+    ]
+    if obj.get("lail_kind_summary"):
+        kinds = obj["lail_kind_summary"]
+        rows.append(("LAIL kinds",
+                     "  ".join(f"[cyan]{k}[/cyan]=[magenta]{v}[/magenta]" for k, v in kinds.items())))
+    if obj.get("last_quality_score") or obj.get("quality_score"):
+        q = obj.get("last_quality_score") or obj.get("quality_score") or {}
+        rows.append(("Last quality",
+                     f"overall=[green]{q.get('overall', '?')}[/green] "
+                     f"goal=[green]{q.get('goal_alignment', '?')}[/green] "
+                     f"test=[green]{q.get('test_health', '?')}[/green] "
+                     f"delivery=[green]{q.get('delivery_readiness', '?')}[/green]"))
+    if obj.get("last_loss") or obj.get("loss"):
+        loss = obj.get("last_loss") or obj.get("loss") or {}
+        rows.append(("Last loss",
+                     f"total=[yellow]{loss.get('total', '?')}[/yellow] "
+                     f"unsat=[yellow]{loss.get('unsat_required', '?')}[/yellow] "
+                     f"blocking=[yellow]{loss.get('blocking_findings', '?')}[/yellow]"))
+    if obj.get("convergence"):
+        c = obj["convergence"]
+        rows.append(("Convergence",
+                     f"status=[cyan]{c.get('status', '?')}[/cyan] "
+                     f"fake=[{mood_color}]{len(c.get('fake_convergence') or [])}[/{mood_color}]"))
+    if obj.get("next_recommended_action"):
+        rows.append(("Next action", f"[cyan]{obj['next_recommended_action']}[/cyan]"))
+
+    for k, v in rows:
+        grid.add_row(f"[bold white]{k}[/bold white]", str(v))
+
+    note = "[dim]this process is a fresh Python interpreter — no in-process state[/dim]"
+    body = Group(cat, Text(""), grid, Text(""), Text(note))
+    title = f"[bold {mood_color}]loop status --latest[/bold {mood_color}] [{mood_color}]{obj.get('current_status', '?')}[/{mood_color}]"
+    console.print(Panel(body, title=title, border_style=mood_color, box=ROUNDED))
+    return 0
+
+
+def _emit_human_deliver(obj: dict[str, Any], console: Any) -> int:
+    """Render a ``loop deliver`` result as a Rich panel."""
+    ready = bool(obj.get("ready"))
+    mood = "calm" if ready else ("blocked" if obj.get("fake_convergence_findings") else "halted")
+    cat = _xiao_huanli(mood)
+    mood_color = "green" if ready else ("red" if mood == "blocked" else "yellow")
+
+    grid = Table.grid(expand=True, padding=(0, 1))
+    grid.add_column(width=18)
+    grid.add_column()
+    rows = [
+        ("Run",            obj.get("run_id", "?")),
+        ("User goal",      obj.get("user_goal", "?")),
+        ("Delivery status", f"[{mood_color}]{obj.get('delivery_status', '?')}[/{mood_color}]"),
+        ("Ready",          f"[{mood_color}]{obj.get('ready', '?')}[/{mood_color}]"),
+        ("Why",            str(obj.get("why", "?") or "?")),
+    ]
+    cov = obj.get("success_criteria_coverage") or {}
+    if cov:
+        rows.append(("Coverage",
+                     f"required=[magenta]{cov.get('required', 0)}[/magenta] "
+                     f"satisfied=[green]{cov.get('satisfied', 0)}[/green] "
+                     f"unsatisfied=[red]{cov.get('unsatisfied', 0)}[/red]"))
+    if obj.get("quality_score"):
+        q = obj["quality_score"]
+        rows.append(("Quality",
+                     f"overall=[green]{q.get('overall', '?')}[/green] "
+                     f"goal=[green]{q.get('goal_alignment', '?')}[/green] "
+                     f"test=[green]{q.get('test_health', '?')}[/green]"))
+    if obj.get("convergence_status"):
+        rows.append(("Convergence", f"[cyan]{obj['convergence_status']}[/cyan]"))
+    if obj.get("iterations") is not None:
+        rows.append(("Iterations", str(obj["iterations"])))
+    if obj.get("known_limitations"):
+        rows.append(("Known limits", "  ".join(f"[yellow]{x}[/yellow]" for x in obj["known_limitations"])))
+    if obj.get("recommended_next_loop"):
+        rows.append(("Next loop", f"[cyan]{obj['recommended_next_loop']}[/cyan]"))
+
+    for k, v in rows:
+        grid.add_row(f"[bold white]{k}[/bold white]", str(v))
+
+    body = Group(cat, Text(""), grid)
+    title = f"[bold {mood_color}]loop deliver --latest[/bold {mood_color}] [{mood_color}]{obj.get('delivery_status', '?')}[/{mood_color}]"
+    console.print(Panel(body, title=title, border_style=mood_color, box=ROUNDED))
+    return 0
+
+
+def _emit_human_generic(obj: dict[str, Any], console: Any) -> int:
+    """Render any unknown dict as a flat key-value panel."""
+    cat = _xiao_huanli("calm")
+    grid = Table.grid(expand=True, padding=(0, 1))
+    grid.add_column(width=20)
+    grid.add_column()
+    for k, v in obj.items():
+        if isinstance(v, (dict, list)):
+            v = json.dumps(v, default=str, indent=2)
+        grid.add_row(f"[bold white]{k}[/bold white]", str(v))
+    body = Group(cat, Text(""), grid)
+    title = "[bold green]loop[/bold green] [green]ok[/green]"
+    console.print(Panel(body, title=title, border_style="green", box=ROUNDED))
     return 0
 
 

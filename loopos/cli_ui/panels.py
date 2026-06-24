@@ -107,23 +107,53 @@ def render_panels_rich(panels: Any) -> Group:
     
     return Group(grid)
 
+def _xiao_huanli(mood: str) -> list[str]:
+    """Xiao Huanli (小浣力) — the raccoon mascot, in 4-line ASCII.
+
+    Mood keys: ``calm`` (default, green), ``running`` (cyan, AIL executing),
+    ``blocked`` (red, policy denied), ``halted`` (yellow, fail/critical).
+    """
+    if mood == "running":
+        return [
+            "   /\\_/\\  ",
+            "  (^  ^) ",
+            "   (v) »»",
+            "   ||||  ",
+        ]
+    if mood == "blocked":
+        return [
+            "   /\\_/\\  ",
+            "  (>  <) ",
+            "   (X)   ",
+            "   ||||  ",
+        ]
+    if mood == "halted":
+        return [
+            "   /\\_/\\  ",
+            "  (T  T) ",
+            "   (o)   ",
+            "   ||||  ",
+        ]
+    # calm / default
+    return [
+        "   /\\_/\\  ",
+        "  (o  o) ",
+        "   (v)   ",
+        "   ||||  ",
+    ]
+
+
 def render_home_dashboard(project_data: dict[str, Any], runtime_data: dict[str, Any], providers_data: list[dict[str, Any]]) -> Any:
     grid_header = Table.grid(expand=True)
     grid_header.add_column(width=12)
     grid_header.add_column()
-    
-    cat_lines = [
-        "   /\\_/\\  ",
-        "  ( o.o ) ",
-        "   /∞\\    ",
-        "  /___\\ ))="
-    ]
-    cat_text = Text("\n".join(cat_lines), style="cyan")
-    
+
+    cat_text = Text("\n".join(_xiao_huanli("calm")), style="green")
+
     title_text = Text.assemble(
-        ("LoopOS v0.3\n", "bold cyan"),
-        ("The command center for governed agents\n", "white"),
-        ("Think freely. Act governed.", "dim")
+        ("LoopOS v0.4\n", "bold cyan"),
+        ("Project Training Runtime\n", "white"),
+        ("Train projects, not just agents.", "dim")
     )
     grid_header.add_row(cat_text, title_text)
     header = Panel(grid_header, border_style="cyan")
@@ -169,13 +199,7 @@ def render_approval_required(
     command: str, target: str, risk: str, policy: str, reason: str,
     diff_summary: str, safety_checks: list[dict[str, Any]]
 ) -> Panel:
-    cat_lines = [
-        "   /\\_/\\  ",
-        "  ( o.o ) ",
-        "   /∞\\    ",
-        "  /___\\ ))="
-    ]
-    cat_text = Text("\n".join(cat_lines), style="yellow")
+    cat_text = Text("\n".join(_xiao_huanli("running")), style="cyan")
     
     details = Table.grid(padding=(0, 2))
     details.add_column(style="bold white", width=12)
@@ -215,13 +239,7 @@ def render_approval_required(
 def render_blocked_by_policy(
     command: str, input_str: str, policy: str, reason: str, trace_id: str
 ) -> Panel:
-    cat_lines = [
-        "   /\\_/\\  ",
-        "  ( o.o ) ",
-        "   /∞\\    ",
-        "  /___\\ ))="
-    ]
-    cat_text = Text("\n".join(cat_lines), style="red")
+    cat_text = Text("\n".join(_xiao_huanli("blocked")), style="red")
     
     details = Table.grid(padding=(0, 2))
     details.add_column(style="bold white", width=12)
@@ -259,6 +277,8 @@ def render_run_complete(
     status: str, state: str, duration: str, budget_used: str, budget_max: str,
     trace_id: str, what_changed: list[str], proofs: list[str]
 ) -> Panel:
+    cat_text = Text("\n".join(_xiao_huanli("calm")), style="green")
+
     details = Table.grid(padding=(0, 2))
     details.add_column(style="bold white", width=12)
     details.add_column(style="green")
@@ -267,6 +287,11 @@ def render_run_complete(
     details.add_row("Duration", duration)
     details.add_row("Budget", f"{budget_used} / {budget_max}")
     details.add_row("Trace ID", trace_id)
+
+    top_grid = Table.grid(expand=True)
+    top_grid.add_column(width=12)
+    top_grid.add_column()
+    top_grid.add_row(cat_text, details)
     
     changed_text = Text()
     for item in what_changed:
@@ -291,5 +316,5 @@ def render_run_complete(
         style="bold green"
     )
     
-    group = Group(details, Text(""), bottom_grid, next_steps)
+    group = Group(top_grid, Text(""), bottom_grid, next_steps)
     return Panel(group, title="[bold green]Run Complete[/bold green]", border_style="green")
