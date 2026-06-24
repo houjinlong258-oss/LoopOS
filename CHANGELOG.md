@@ -142,6 +142,56 @@ implementation. No Textual / Web UI. The v0.3-alpha status
 remains "implementation snapshot complete; RC blocked pending
 hardening"; the P0 pass closes the four P0 objectives above.
 
+### v0.3-alpha hardening (P1)
+
+The `v0.3-alpha-hardening` branch continues with the P1
+objectives. P1 closes five of the six non-P0 RC blockers
+inherited from the v0.3 alpha split-audit (F.4, F.5, F.6
+sub-item, F.7 sub-items, F.8, F.9) and one pre-existing
+timing-flaky test. The final RC verdict is recorded in
+`docs/reports/v0-3-alpha-hardening-p1.md`.
+
+* **P1-1: Stabilize deep-smoke global timeout assertion.** The
+  pre-existing assertion `assert report['duration_ms'] < 6000`
+  on `test_deep_smoke_global_timeout_names_running_check` is a
+  brittle wall-clock threshold that flaked under machine load.
+  P1-1 replaced it with semantic assertions: configured
+  timeout is honored, running check is named, global-timeout
+  result is reported, process exits cleanly, duration is
+  bounded by `configured timeout + 8s explicit grace window`,
+  no side effects remain at the repo root. New
+  `tests/test_deep_smoke_global_timeout_stability.py` proves
+  the fix is stable across 8 repeated runs plus a structural
+  determinism check.
+
+* **P1-2: Skills module boundary (Option B).** Skills remain
+  memory-backed on v0.3. The 4-line `loopos/skills/__init__.py`
+  re-export shim carries an explicit "memory-backed, v0.3
+  shim; full governance deferred to v0.4" callout. The
+  canonical implementation stays in `loopos.memory.skill_store`
+  and `loopos.memory.skill_proposals`. A new
+  `check_skills_memory_backed_boundary` readiness check
+  enforces the callout, the four-symbol export surface, and
+  the absence of v0.4 governance symbols. See
+  `docs/v0-3-skills-boundary.md` for the v0.4 plan.
+
+* **P1-3: MCP boundary (Option B).** *Lands in the next
+  commit on the same branch.*
+
+* **P1-4: `loopos/cli/app.py` extraction.** *Lands in the
+  next commit on the same branch.*
+
+* **P1-5: Mutation testing pilot.** *Lands in the next
+  commit on the same branch.*
+
+* **P1-6: Docs minimum upgrade.** *Lands in the next
+  commit on the same branch.*
+
+The v0.3-alpha status remains "implementation snapshot
+complete; RC blocked pending hardening"; the P1 pass
+inherits that status until the final P1 report records the
+verdict.
+
 ## Unreleased
 
 ### Added

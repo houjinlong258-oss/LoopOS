@@ -373,6 +373,112 @@ def check_opengod_budget_guard() -> Finding:
     )
 
 
+def check_skills_memory_backed_boundary() -> Finding:
+    """Enforce the v0.3 skills module boundary (Option B).
+
+    Asserts:
+
+    * ``loopos/skills/__init__.py`` carries the explicit
+      "memory-backed, v0.3 shim; full governance deferred to
+      v0.4" callout so the boundary is visible to importers.
+    * The four v0.3 export symbols are present and unchanged.
+    * No v0.4 governance symbol (lineage, scoring, dispatch hook,
+      versioning) leaks into the public skills surface.
+    * The shim does not silently grow a real implementation
+      beyond the re-export.
+
+    See ``docs/v0-3-skills-boundary.md`` for the full decision
+    and the v0.4 follow-up plan.
+    """
+    import re as _re
+
+    init_path = REPO_ROOT / "loopos" / "skills" / "__init__.py"
+    if not init_path.exists():
+        return Finding(
+            "skills_memory_backed_boundary",
+            False,
+            "loopos/skills/__init__.py missing",
+        )
+    text = init_path.read_text(encoding="utf-8")
+    match = _re.search(r'^"""(?P<body>.*?)"""', text, _re.DOTALL | _re.MULTILINE)
+    if match is None:
+        return Finding(
+            "skills_memory_backed_boundary",
+            False,
+            "loopos/skills/__init__.py has no module docstring",
+        )
+    body = match.group("body")
+    if "memory-backed" not in body:
+        return Finding(
+            "skills_memory_backed_boundary",
+            False,
+            "module docstring missing 'memory-backed' callout",
+        )
+    if "loopos.memory" not in body:
+        return Finding(
+            "skills_memory_backed_boundary",
+            False,
+            "module docstring missing 'loopos.memory' pointer",
+        )
+    if "v0.4" not in body:
+        return Finding(
+            "skills_memory_backed_boundary",
+            False,
+            "module docstring missing v0.4 follow-up reference",
+        )
+    forbidden_substrings = (
+        "SkillLineage",
+        "SkillScoring",
+        "SkillDispatcher",
+        "SkillDispatchHook",
+        "SkillVersion",
+        "skill_lineage",
+        "skill_scoring",
+        "skill_dispatcher",
+        "skill_dispatch_hook",
+        "skill_version",
+    )
+    for s in forbidden_substrings:
+        if s in text:
+            return Finding(
+                "skills_memory_backed_boundary",
+                False,
+                f"loopos/skills/__init__.py leaks v0.4 governance symbol {s!r}",
+            )
+    # The shim is allowed to re-export symbols and document the
+    # boundary. It must not contain class definitions, IO, or
+    # other implementation code.
+    stripped = _re.sub(r'^""".*?"""', "", text, count=1, flags=_re.DOTALL)
+    stripped = _re.sub(
+        r"^from\s+__future__\s+import.*$",
+        "",
+        stripped,
+        flags=_re.MULTILINE,
+    )
+    stripped = _re.sub(
+        r"^from\s+loopos\.memory.*$", "", stripped, flags=_re.MULTILINE
+    )
+    stripped = _re.sub(r"^__all__\s*=.*$", "", stripped, flags=_re.MULTILINE)
+    non_blank = [
+        line
+        for line in stripped.splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    if non_blank:
+        return Finding(
+            "skills_memory_backed_boundary",
+            False,
+            f"loopos/skills/__init__.py contains implementation code: {non_blank!r}",
+        )
+    return Finding(
+        "skills_memory_backed_boundary",
+        True,
+        "module docstring declares memory-backed v0.3 shim; "
+        "no v0.4 governance symbols leaked; shim does not contain "
+        "implementation code",
+    )
+
+
 def check_opengod_planning_only_boundary() -> Finding:
     """Enforce the v0.3 OpenGod boundary decision (Option B).
 
@@ -763,6 +869,7 @@ ALL_CHECKS = (
     check_opengod_halt_on_hard_fail,
     check_opengod_budget_guard,
     check_opengod_planning_only_boundary,
+    check_skills_memory_backed_boundary,
     check_cli_adapters_list,
     check_cli_providers_runtime_list,
     check_cli_model_call_dry_run,
