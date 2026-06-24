@@ -762,7 +762,7 @@ def check_cli_model_call_dry_run() -> Finding:
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         rc = model_call_command(
-            "C:\\Windows\\System32\\drivers\\etc\\hosts",
+            os.devnull,
             provider="mock",
             model="mock-model",
             dry_run=True,

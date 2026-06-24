@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import io
 import json
-import contextlib
+import os
 
 from loopos.cli.commands import (
     adapters_command,
@@ -83,7 +84,7 @@ def test_cli_providers_runtime_test_mock() -> None:
 def test_cli_model_call_dry_run() -> None:
     rc, out = _capture(
         model_call_command,
-        r"C:\Windows\System32\drivers\etc\hosts",
+        os.devnull,
         provider="mock",
         model="mock-model",
         dry_run=True,
