@@ -472,9 +472,7 @@ The 9 v0.3 audit blockers resolve to:
 
 The v0.3 surface is now auditable end-to-end:
 
-* 24/24 v0.3 readiness checks pass (plus the 25th
-  P1-2 skills boundary check and the 26th P1-3 MCP
-  boundary check).
+* 26/26 v0.3 readiness checks pass.
 * `anti_bloat_check.py` reports `hard_fail_count=0`.
 * `rc_audit_cli_smoke.py` reports `ALL CLI SURFACES OK`.
 * `mypy` is clean across 401 source files.
@@ -494,8 +492,8 @@ The v0.3 surface is now auditable end-to-end:
   branch to `origin`. The branch lives on the local
   clone only; pushing is the user's decision.
 * It does **not** rewrite any v0.3 history. The
-  eight P0 + P1 commits plus the 1 wording fixup are
-  the full delta on top of the v0.3-alpha cleanup
+  P0 + P1 hardening commits and the RC decision audit
+  are the full delta on top of the v0.3-alpha cleanup
   base.
 * It does **not** weaken any test. The P0 + P1 pass
   added 69 tests; the P1 pass closed two real gaps
