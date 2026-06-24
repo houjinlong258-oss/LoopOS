@@ -32,7 +32,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install
-        run: python -m pip install -e ".[dev]"
+        # Install both dev and workbench extras: dev is required for
+        # mypy/pytest/ruff, and workbench pulls in ``rich`` + ``typer``
+        # so mypy can resolve their inline stubs (these are real
+        # runtime dependencies of the CLI, but optional for boot).
+        run: python -m pip install -e ".[dev,workbench]"
 
       - name: Lint (ruff)
         run: python -m ruff check .
@@ -61,7 +65,10 @@ jobs:
           python-version: "3.12"
 
       - name: Install
-        run: python -m pip install -e ".[dev]"
+        # Same as the lint-type-test job: workbench is required so
+        # downstream readiness checks can import rich / typer and the
+        # mypy step (if re-enabled here later) sees their stubs.
+        run: python -m pip install -e ".[dev,workbench]"
 
       - name: v0.2 readiness (JSON)
         run: python scripts/v0_2_readiness_check.py --json
@@ -104,7 +111,11 @@ jobs:
           python-version: "3.12"
 
       - name: Install
-        run: python -m pip install -e ".[dev]"
+        # ci_report.py --run re-invokes pytest/ruff/mypy locally, so
+        # it needs the same dependency surface as the lint-type-test
+        # job. Pulling in workbench keeps mypy from reporting missing
+        # rich/typer stubs during the report generation step.
+        run: python -m pip install -e ".[dev,workbench]"
 
       - name: Generate CI report
         run: python scripts/ci_report.py --run --output docs/reports/latest-test-report.json
