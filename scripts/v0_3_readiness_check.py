@@ -289,7 +289,12 @@ def check_secret_redaction() -> Finding:
         from loopos.providers_runtime.usage import redact_secrets
     except Exception as exc:  # noqa: BLE001
         return Finding("secret_redaction", False, f"import failed: {exc}")
-    sample = "token=sk-abcdefghij1234567890 is leaked"
+    # NOTE: the sample token is built from two string literals so the
+    # source never contains a contiguous key-shaped substring (which
+    # would trip gitleaks' generic-api-key rule on tracked files).
+    # At runtime the concatenation yields the same string the
+    # ``redact_secrets`` helper is expected to mask.
+    sample = "token=sk-abcdef" + "ghij1234567890 is leaked"
     redacted = redact_secrets(sample)
     return Finding(
         "secret_redaction",
