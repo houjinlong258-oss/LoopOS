@@ -644,6 +644,16 @@ def _timed_check(
 def _run(repo: Path, cmd: list[str]) -> subprocess.CompletedProcess[str]:
     global _ACTIVE_TIMEOUT
     _ACTIVE_COMMANDS.append(subprocess.list2cmdline(cmd))
+    if _ACTIVE_TIMEOUT:
+        result = subprocess.CompletedProcess(
+            cmd,
+            124,
+            "",
+            "skipped because the current deep-smoke check already timed out",
+        )
+        _ACTIVE_STDOUT.append("")
+        _ACTIVE_STDERR.append(result.stderr[-1200:])
+        return result
     remaining = (
         _TIMEOUT_PER_CHECK
         if _CHECK_DEADLINE is None
@@ -671,7 +681,12 @@ def _run(repo: Path, cmd: list[str]) -> subprocess.CompletedProcess[str]:
     except subprocess.TimeoutExpired as exc:
         _ACTIVE_TIMEOUT = True
         _terminate_process_tree(process)
-        stdout, stderr = process.communicate()
+        try:
+            stdout, stderr = process.communicate(timeout=1)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            stdout = _timeout_text(exc.stdout)
+            stderr = _timeout_text(exc.stderr)
         result = subprocess.CompletedProcess(
             cmd,
             124,
@@ -689,12 +704,21 @@ def _terminate_process_tree(process: subprocess.Popen[str]) -> None:
     if process.poll() is not None:
         return
     if os.name == "nt":
-        subprocess.run(
-            ["taskkill", "/PID", str(process.pid), "/T", "/F"],
-            capture_output=True,
-            check=False,
-            timeout=5,
-        )
+        try:
+            process.kill()
+            process.wait(timeout=0.5)
+            return
+        except subprocess.TimeoutExpired:
+            pass
+        try:
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                capture_output=True,
+                check=False,
+                timeout=2,
+            )
+        except subprocess.TimeoutExpired:
+            process.kill()
         return
     kill_process_group = getattr(os, "killpg")
     try:

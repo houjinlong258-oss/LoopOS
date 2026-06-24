@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "loopos"
-version = "0.3.0"
-description = "The open operating runtime for AI agents with policy-governed syscalls, trace replay, memory governance, data guard, maintainability gates, and plugin standards."
+version = "0.4.0"
+description = "LoopOS is a Project Training Runtime for AI agents: goal, plan, build, test, review, repair, optimize, repeat, deliver."
 readme = "README.md"
 license = {file = "LICENSE"}
 requires-python = ">=3.11"
