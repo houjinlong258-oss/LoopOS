@@ -42,13 +42,19 @@ The pre-existing timing-flaky
 **stable** thanks to the P1-1 fix. The full fast pytest
 suite (1019 cases) is now timing-clean.
 
-The remaining RC blockers (Section F) are not runtime
-bugs; they are structural (commit topology), architectural
-(OpenGod → AIL bridge), maintenance (app.py size, mutation
-coverage, auto-generated API reference), or process
-(async/signed-releases). All of them are documented in
-`docs/architecture-v0-3.md` Section D with concrete v0.4
-plans.
+The remaining items in the v0.3 RC-bucket list (Section F)
+are not runtime bugs. The mega-commit topology (F.1) was
+closed by the v0.3-alpha history cleanup pass (pre-P0;
+see `docs/reports/v0-3-alpha-history-cleanup.md`). The
+remaining items are architectural (OpenGod → AIL bridge),
+maintenance (app.py size, mutation coverage, auto-generated
+API reference), or process (async/signed-releases). All of
+them are documented in `docs/architecture-v0-3.md` Section
+D with concrete v0.4 plans. The P0 + P1 pass closed five
+of the nine audit blockers and partially closed three;
+the remaining one is explicitly deferred to v0.4. See
+Section F for the per-blocker status and Section H for
+the rationale on why the partial items do not block v0.3-RC.
 
 ---
 
@@ -382,8 +388,9 @@ any of the following:
 All six P1 objectives are closed; every required
 validation gate passes on the new HEAD `1ab7f98` plus
 the `fedc0ec` type-hint fixup. Five of the nine v0.3 RC
-blockers are closed; two are partially closed; one is
-explicitly deferred to v0.4 with a concrete plan.
+blockers are closed; three are partially closed (F.7, F.8,
+F.9); one is explicitly deferred to v0.4 with a concrete
+plan (F.2).
 
 The RC verdict is **still blocked** because:
 
