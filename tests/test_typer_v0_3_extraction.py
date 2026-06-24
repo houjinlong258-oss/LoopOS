@@ -24,8 +24,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-
-import pytest
+from typing import Any, Callable, Dict, List
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -111,17 +110,17 @@ def test_register_v0_3_commands_registers_all_seven() -> None:
     """
     from loopos.cli import typer_v0_3
 
-    registered: list[str] = []
-    decorators: dict[str, list] = {}
+    registered: List[str] = []
+    decorators: Dict[str, List[Callable[..., Any]]] = {}
 
     class _Option:
-        def __init__(self, default=..., *args, **kwargs):
+        def __init__(self, default: Any = ..., *args: Any, **kwargs: Any) -> None:
             self.default = default
             self.args = args
             self.kwargs = kwargs
 
     class _Argument:
-        def __init__(self, default=..., *args, **kwargs):
+        def __init__(self, default: Any = ..., *args: Any, **kwargs: Any) -> None:
             self.default = default
             self.args = args
             self.kwargs = kwargs
@@ -136,8 +135,8 @@ def test_register_v0_3_commands_registers_all_seven() -> None:
         Exit = _Exit
 
         @staticmethod
-        def command(name: str):
-            def decorator(fn):
+        def command(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+            def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
                 registered.append(name)
                 decorators[name] = decorators.get(name, []) + [fn]
                 return fn
@@ -146,8 +145,8 @@ def test_register_v0_3_commands_registers_all_seven() -> None:
 
     class _App:
         @staticmethod
-        def command(name: str):
-            def decorator(fn):
+        def command(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+            def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
                 registered.append(name)
                 return fn
 
@@ -181,8 +180,10 @@ def test_register_v0_3_commands_is_no_op_when_typer_is_none() -> None:
     from loopos.cli import typer_v0_3
 
     class _App:
-        def command(self, name):
-            def decorator(fn):
+        def command(
+            self, name: str
+        ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+            def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
                 return fn
             return decorator
 
@@ -199,7 +200,6 @@ def test_cli_help_lists_all_v0_3_commands() -> None:
     v0.3 commands. We invoke ``loopos.cli.app`` with ``--help``
     and parse the rendered command list.
     """
-    import json
     import subprocess
     import sys
 
