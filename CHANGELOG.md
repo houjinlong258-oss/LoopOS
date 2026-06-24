@@ -211,8 +211,27 @@ timing-flaky test. The final RC verdict is recorded in
   ``app=None`` or ``typer_mod=None``, Typer and argparse
   agree on the seven command names).
 
-* **P1-5: Mutation testing pilot.** *Lands in the next
-  commit on the same branch.*
+* **P1-5: Mutation testing pilot.** A small mutmut 2.2.0
+  pilot on the four highest-risk v0.3 modules
+  (``providers_runtime/budget.py``,
+  ``providers_runtime/openai.py``, ``agent_bus/bus.py``,
+  ``fusion_router/orchestrator.py``) reports a 50.3%
+  overall kill rate (189 killed / 186 survived / 1
+  suspicious / 0 timeout / 0 skipped across 376
+  mutations). Most survivors are mutmut's
+  constant-replacement operators against Pydantic
+  defaults and string literals, not real coverage gaps.
+  Two real gaps in ``budget.py`` (``max_usd=0.0`` boundary
+  and ``approved=True`` override) are addressed by new
+  regression tests in
+  ``tests/test_budget_ledger.py``. New wrapper
+  ``scripts/run_mutation_pilot.py`` hard-codes the venv
+  Python and pins the per-module test runner so the
+  timing-flaky deep-smoke test cannot poison the
+  baseline. Pilot report in
+  ``docs/reports/v0-3-mutation-pilot.md``. ``mutmut``
+  lives in the dev venv only; it is not on the v0.3-RC
+  dependency list.
 
 * **P1-6: Docs minimum upgrade.** *Lands in the next
   commit on the same branch.*

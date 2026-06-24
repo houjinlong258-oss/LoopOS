@@ -21,6 +21,7 @@ from loopos.providers_runtime import (
     BudgetLedger,
     ModelCallRequest,
     MockProviderRuntime,
+    ProviderBudget,
     get_default_ledger,
     reset_default_ledger,
 )
@@ -96,6 +97,46 @@ def test_ledger_check_without_entry_is_allowed_noop() -> None:
     decision = led.check("openai", "gpt-4.1", None, 1.0, approved=True)
     assert decision.allowed
     assert decision.used_usd == 0.0
+
+
+def test_provider_budget_max_usd_zero_means_unlimited() -> None:
+    """``max_usd=0.0`` is the documented "no limit" sentinel for
+    :class:`ProviderBudget`. The budget guard must NOT emit
+    the ``provider_budget_exceeded`` reason code when
+    ``max_usd=0.0`` regardless of the requested estimate. This
+    is a regression guard for the v0.3 mutation pilot: a
+    ``> 0.0`` to ``> 1.0`` mutation in
+    ``loopos/providers_runtime/budget.py`` would otherwise
+    flip the ``max_usd=0.0`` boundary case; the assertion
+    below pins the budget semantics explicitly. We pass
+    ``approved=True`` so the unrelated
+    ``provider_call_requires_approval`` reason does not
+    contaminate the assertion.
+    """
+    b = ProviderBudget(max_usd=0.0)
+    d = b.check(estimated_cost_usd=10_000.0, approved=True)
+    assert "provider_budget_exceeded" not in d.reason_codes, (
+        f"max_usd=0.0 must mean 'no budget limit'; got "
+        f"reason_codes={d.reason_codes}"
+    )
+
+
+def test_provider_budget_approved_true_skips_requires_approval() -> None:
+    """When the caller passes ``approved=True``, the
+    ``provider_call_requires_approval`` reason code must NOT
+    be appended regardless of the estimate. This pins the
+    ``approved`` parameter default (``False``) and the
+    ``not approved`` conjunction in the check method.
+    """
+    b = ProviderBudget(
+        max_usd=100.0,
+        require_approval_above_usd=1.0,
+    )
+    d_approved = b.check(estimated_cost_usd=5.0, approved=True)
+    assert "provider_call_requires_approval" not in d_approved.reason_codes
+    # Sanity: same call without approval DOES require approval.
+    d_not_approved = b.check(estimated_cost_usd=5.0, approved=False)
+    assert "provider_call_requires_approval" in d_not_approved.reason_codes
 
 
 def test_ledger_commit_without_entry_is_noop() -> None:

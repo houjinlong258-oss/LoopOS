@@ -13,6 +13,13 @@ __pycache__/
 dist/
 build/
 
+# Mutation testing pilot caches and artefacts (mutmut 2.x).
+.mutmut-cache
+.mutmut-cache.*
+html/
+*.py.bak
+
+
 # Local third-party source snapshots used as architecture references.
 OpenHands-1.8.0/
 langgraph-1.2.6/
