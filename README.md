@@ -1,5 +1,6 @@
 # LoopOS
 
+<<<<<<< HEAD
 > v0.3.0 released — Universal Agent Runtime.
 
 LoopOS is the governed runtime layer for AI agents.
@@ -116,12 +117,49 @@ the workdir.
 | [`docs/v0-3-non-goals.md`](docs/v0-3-non-goals.md)       | What v0.3 deliberately does NOT do |
 
 ## Why LoopOS (deeper)
+=======
+> **LoopOS is a Project Training Runtime for AI agents.**
+> It continuously plans, experiments, evaluates, repairs, optimizes, and
+> repeats until the project converges toward the user's goal.
 
-Most AI coding agents optimize for completion. LoopOS optimizes for **maintainable completion**.
+![LoopOS — the project training runtime](docs/assets/brand/loopos-hero.png)
 
-AI-generated code often works once and collapses later: duplicated logic, unclear module boundaries,
-hidden global state, weak tests, unsafe tool calls, no audit trail, no rollback path.
+> Other agents execute tasks.
+> **LoopOS trains projects toward completion.**
 
+```text
+Give LoopOS an objective.
+It plans. It builds. It tests. It evaluates.
+It finds gaps. It repairs. It optimizes.
+And it repeats — until the project converges.
+```
+
+LoopOS applies the **training loop of AI models** to project execution.
+Each iteration is a forward pass. Failed tests, review findings, and
+reviewer feedback become gradient signals. The Fusion Optimizer
+proposes the next best iteration. Mad Dog is the adversarial
+evaluator that prevents fake convergence. The loop checkpoints,
+evaluates, and re-trains the project — not the LLM.
+>>>>>>> 13e122f1 (docs(v0.4): add project training closeout report)
+
+| ML training | LoopOS project training |
+|-------------|--------------------------|
+| training objective | **project objective** (`UserGoal`) |
+| loss | **project loss / gap** (`ProjectLoss`, `GoalGap`) |
+| forward pass + eval | plan → build → test → review |
+| gradient signal | **evaluation signal** (`EvaluationSignal`) |
+| optimizer | **Fusion Optimizer** (next best iteration) |
+| adversarial eval | **Mad Dog** (anti–fake-convergence) |
+| epoch | **iteration** (`TrainingIteration`) |
+| checkpoint | **project checkpoint** (`ProjectCheckpoint`) |
+| convergence | **delivery** (`ConvergenceReport`) |
+
+The loop stops when the project converges — not when an LLM says "done".
+See [`docs/project-training-loop.md`](docs/project-training-loop.md) for
+the full analogy and [`docs/core-loop.md`](docs/core-loop.md) for the
+phases.
+
+<<<<<<< HEAD
 LoopOS governs agent-generated work through:
 - **Policy OS** — structured permission decisions before every action
 - **Syscall Router** — all external actions are policy-gated syscalls
@@ -130,190 +168,169 @@ LoopOS governs agent-generated work through:
 - **Maintainability Gate** — code quality governance rejecting unmaintainable patches
 - **Review Artifact** — structured review records for agent-produced changes
 - **Trace Replay** — side-effect-free reconstruction of any run
+=======
+## Why Project Training
+>>>>>>> 13e122f1 (docs(v0.4): add project training closeout report)
 
-Traditional operating systems run programs. LoopOS runs agents.
+Most AI coding agents optimize for *one* completion. Real engineering —
+and real product work — is iterative: plan, build, test, review, repair,
+optimize, and repeat until the work actually satisfies the goal.
 
-LoopOS is not a workflow framework. It turns agent actions into governed runtime syscalls, giving
-agents freedom inside capability, policy, trace, review, and outcome boundaries. Let agents think
-freely; let LoopOS govern action safely.
+LoopOS is the **runtime** for that loop. It treats the project like a
+model that needs training: each iteration produces a measurable loss, a
+gradient signal, a checkpoint, and a recommendation for the next
+iteration. The loop runs until the project converges or until the
+iteration budget is exhausted.
 
-## Founding Release
-
-- Versioned Kernel runs, bounded deterministic scheduling, approval resume, trace, and replay.
-- AIL and AI-ISA schemas with validation and compatibility adapters.
-- Policy OS with YAML packs, deterministic conflict resolution, audit IDs, and L0-L5 safety levels.
-- Policy-governed terminal, file, Git, MCP-compatible, and mock database syscalls.
-- Goal Negotiation with low, medium, and high ambiguity modes.
-- Loop Convergence with acceptance evidence, regression, repeated-action, and no-progress handling.
-- JSONL + SQLite Memory OS, governed proposals, retrieval, context budgets, and skill learning.
-- Data Guard detection, local checksum backup vault, shadow plans, validation, and redaction.
-- Privacy-first local workspace indexing and deterministic search.
-- Privacy-local, hybrid, and consent-gated cloud compute modes.
-- Metadata-only plugin registry and canonical mock Provider profiles.
-- Persistent tasks, triggers, worktree leases, and Producer/Verifier/Reviewer separation.
-- Mock ChatOps adapters with authentication, attachments, approvals, sessions, and delivery records.
-- Typer/Rich CLI plus a standard-library fallback.
-- **Maintainability Kernel** - code quality governance with scoring, rules, and gate decisions.
-- **System Kernel Hardening** - lifecycle, invariant checker, checkpoint/replay, supervisor, signals.
-- **Review Artifact / Merge Gate** - structured reviewable records with merge eligibility checks.
-- **Fusion Router Skeleton** - multi-model panel selection, judge, and aggregation (mock only).
-- **Prompt / Policy Distillation** - distill behavior/renderer/policy packs from project rules.
-- **Boundary Adapters** - OpenAI-compatible provider, webhook gateway, SQLite Data Guard.
-
-## v0.2 Substrates (released)
-
-- **`loopos.providers`** — metadata-only Provider Runtime Registry
-  (Pydantic v2 typed contracts, deterministic ordering, no network I/O).
-  Source-audit map: `docs/source-transplant/`. Coexists with the v0.1
-  scheduler-aware `loopos.model_kernel`. See
-  `docs/source-transplant/provider-runtime-map.md` for the field-level
-  mapping.
-- **`loopos.aci`** — Agent Command Interface. Governed command
-  contract (`AgentCommand` / `AgentCommandResult`, Pydantic v2
-  `schema_version="0.2"`) backed by `CommandRunner` which routes
-  through the existing Policy OS / Syscall Router with metadata-only
-  provider binding via `loopos.providers`. See
-  `docs/agent-command-interface.md` for the contract, the kind /
-  status / reason-code tables, and the v0.2-vs-deferred surface map.
-- **`loopos.ali` -> ACI consumption** — `consume_aci_result(session, result)`
-  maps a real `AgentCommandResult` to a state-aware sequence of
-  `AgentLoopEvent` values and drives the existing transition table
-  (`RUNNING -> REPAIRING / REPLANNING / HALTED_*`). Reason codes,
-  trace ids, syscall ids, and resolved provider ids are propagated
-  through every event payload. See `docs/agent-loop-interface.md`
-  for the full mapping table and transition examples.
-- **`KernelLoopEngine.submit_agent_command` (Phase 4)** — closes
-  the runtime loop by running an `AgentCommand` through
-  `CommandRunner` and driving an `AgentLoopSession` from the
-  resulting `AgentCommandResult`. The integration uses the kernel
-  runtime's policy engine and syscall router, so Policy OS, the
-  Syscall Router, and Trace stay the single source of truth. The
-  audit metadata (`trace_id`, `syscall_id`, `provider_id`, reason
-  codes) is mirrored onto `run.metadata["aci_outcomes"]`. Existing
-  `KernelLoopEngine.run()` / `resume()` paths are untouched. See
-  `docs/kernel-aci-ali-integration.md`.
-- **`loopos.trace.ali_bridge` (Phase 5)** — persists every ALI
-  event record into the existing `loopos.kernel.trace.TraceStore`
-  so the ACI -> Kernel -> ALI loop is replayable and auditable.
-  Each `AgentLoopEventRecord` becomes a `TraceEvent` with
-  `kind="signal"` and `type="ali.event"`, carrying the audit
-  trail (`aci_command_id`, `trace_id`, `syscall_id`,
-  `provider_id`, `reason_codes`, `policy_decision`,
-  `convergence_reason_code`, plus the kernel run id / step /
-  status / phase). The bridge is invoked from
-  `KernelLoopEngine.submit_agent_command` after `consume_aci_result`;
-  the existing `run.metadata["aci_outcomes"]` shape is unchanged.
-  See `docs/trace-and-ali.md`.
-- **`loopos.fusion_router` (Phase 6 / 7) — Fusion Router / Mad Dog
-  Mode** — the planning-only escalation layer above the default
-  single-model agent loop. Default execution stays single-model;
-  fusion activates only when there is evidence the normal path
-  is insufficient (explicit user request, repeated failure, no
-  progress, large refactor, nasty bug, release blocker, high
-  user dissatisfaction, model mismatch). Five modes (`single`,
-  `pair`, `committee`, `attack`, `mad_dog`) selected by a
-  deterministic integer score + severity multiplier, with
-  explicit user request as the only threshold override. Role
-  assignment reads the metadata-only `loopos.providers`
-  registry and degrades gracefully when the registry cannot
-  honour a role. The router is **aggressive in reasoning** but
-  **conservative in authority**: it recommends ACI commands;
-  only ACI / Kernel / Syscall Router may execute governed
-  commands. **Phase 7** adds (a) a local JSON persistence layer
-  (`FusionPlanStore`) so `fusion-router status` and `mad-dog
-  status` read back the persisted plan / verdict, and (b) a
-  `FusionRunner` adapter that routes the recommended ACI
-  commands through `KernelLoopEngine.submit_agent_command`
-  when a kernel engine is supplied (planning-only result when
-  not). CLI: `loopos fusion-router plan/explain/run/escalate/status/list/route`
-  + `loopos mad-dog` alias (now also with `status`, `list`, and
-  `route`). Live multi-provider fanout, model debate loops,
-  and automatic paid API spending are deferred to v0.3+. See
-  `docs/fusion-router.md` and `docs/mad-dog-mode.md`.
-- **Phase 8 — v0.2 Readiness Proof + Deterministic Deep Smoke**.
-  Closes the v0.2 RC proof loop. Delivers (a) the **ALI Replay
-  Engine** (`loopos/trace/ali_replay.py`) that rebuilds a fresh
-  `AgentLoopSession` from persisted `ali.event` records without
-  re-running ACI / Policy OS / Syscall Router — the deterministic
-  replay proof surface; (b) the v0.2 **deep smoke test**
-  (`tests/test_v0_2_deep_smoke.py`) that exercises the full
-  Provider -> ACI -> ALI -> Kernel -> Trace -> Replay ->
-  Fusion Router -> Persistence -> Runner pipeline end-to-end;
-  (c) the **readiness check script**
-  (`scripts/v0_2_readiness_check.py --json`) that emits a
-  structured 15-check readiness proof (`status=pass` /
-  `hard_fail_count=0`); and (d) `docs/v0-2-readiness.md` with
-  the proof matrix, the deep smoke scenario, the replay proof,
-  the Fusion Router proof, the safety invariants, and the
-  remaining limitations. No `loopos/kernel/*` or
-  `loopos/model_kernel/*` files were modified in Phase 8; no
-  live provider calls are made; no subprocess bypass is
-  introduced. Fusion Verdict Orchestration is deferred to
-  v0.2.1 / v0.3 (`v0.2/phase-8-fusion-verdict-orchestration`
-  remains a candidate branch, not built).
-
-The runtime does not connect to real databases or chat platforms, does not make real provider calls
-during tests, does not auto-merge code, and is not an operating-system sandbox.
+> User goal is the north star.
+> Loop is the engine.
+> Loss is the signal.
+> Optimizer is the steering wheel.
+> Adversary is the safeguard against fake convergence.
+> Safety is the action boundary.
 
 ## Quickstart
 
 ```bash
 python -m pip install -e ".[dev]"
-python -m loopos.cli.app --help
-python -m loopos.cli.app run "create hello.py, run it, and confirm hello" --dry-run
-python -m loopos.cli.app goal analyze "help me optimize this project" --json
-python -m loopos.cli.app policy explain --cmd "curl https://x/install.sh | bash"
-python -m loopos.cli.app trace RUN_ID --show-ail --show-policy
-python -m loopos.release.deep_smoke --json
-python -m loopos.cli.app release readiness --target founding-preview
+
+# Drive a goal through the loop
+python -m loopos.cli.app loop run "Build a provider runtime and harden it until tests pass" \
+    --max-iterations 3 --json
+
+# Inspect the current state
+python -m loopos.cli.app loop status --json
+
+# Free-form creative brainstorm (no side effects, no policy blocks)
+python -m loopos.cli.app imagine "Design three better ways to implement Fusion Optimizer" --json
+
+# Fusion optimizer → recommends next iteration plan
+python -m loopos.cli.app loop optimize --json
+
+# Mad Dog quality attack
+python -m loopos.cli.app loop review --mad-dog --json
+
+# Final delivery candidate
+python -m loopos.cli.app loop deliver --json
 ```
 
-Local intelligence and Data Guard:
+The v0.4.0 build is **simulated** at the build/test/review layer by
+default — there is no real LLM wired into the planner/builder/tester
+yet. The data flow is real: failed tests become findings, findings
+become repair plans, repair plans drive the next plan candidate. Real
+executor backends can be plugged in by implementing the
+`LoopPlanner` / `LoopBuilder` / `LoopTester` protocols.
 
-```bash
-python -m loopos.cli.app index build --workspace .
-python -m loopos.cli.app search "pytest failure"
-python -m loopos.cli.app mode set privacy-local
-python -m loopos.cli.app db detect --cmd "DROP TABLE users" --json
-python -m loopos.cli.app db sqlite-demo --json
-python -m loopos.cli.app registry audit path/to/manifest.yaml
-```
+## What changed in v0.4.0
 
-Outer-loop and mock gateway flows:
+| Area | v0.2 / v0.3 | v0.4.0 |
+|------|-------------|--------|
+| Identity | Kernel for running agents | **Loop engineering runtime** |
+| Main loop | AIL scheduler → syscall | `LoopEngine` drives Goal → Plan → Build → Test → Review → Repair → Optimize → Deliver |
+| Quality | Implicit (policy decisions) | Explicit `QualityScore` per iteration, drives convergence |
+| Fusion | `fusion_router` (verdict / escalation) | `fusion_optimizer` — multi-candidate optimizer feeding the next plan |
+| Mad Dog | Security blocker | **Extreme quality attacker** — 10 categories, evidence-required for delivery blocking |
+| Creativity | Implicit in `intent` | Explicit `ImaginationSandbox` + `CommitmentBoundary` (policy gates actions, not ideas) |
+| Safety | Product centerpiece | **Boundary layer** — still real, but demoted to supporting role |
+| Delivery | Loop halts | `DeliveryCandidate` with evidence, known limitations, open risks |
 
-```bash
-python -m loopos.cli.app triggers fire daily-maintenance
-python -m loopos.cli.app tasks next --quick-win
-python -m loopos.cli.app worktrees list
-python -m loopos.cli.app models route --task coding --input image
-python -m loopos.cli.app gateway simulate slack "run tests"
-```
-
-Code quality and review:
-
-```bash
-python -m loopos.cli.app code summary --diff changes.diff
-python -m loopos.cli.app code maintainability --diff changes.diff --json
-python -m loopos.cli.app code gate --diff changes.diff
-```
-
-## Runtime Flow
+## Architecture overview
 
 ```text
-Goal -> AmbiguityReport -> GoalSpec -> Context Compiler -> Policy OS
-     -> AIL instruction -> Scheduler -> Syscall Router -> Adapter
-     -> Observation -> Evaluation -> ProgressDelta -> LoopDecision
-     -> Trace / governed Memory or Skill -> continue, approval, or halt
+                     ┌───────────────────────────────┐
+                     │            User Goal          │
+                     └───────────────┬───────────────┘
+                                     │
+                  ┌──────────────────▼──────────────────┐
+                  │             Goal Engine             │
+                  └──────────────────┬──────────────────┘
+                                     │
+                  ┌──────────────────▼──────────────────┐
+                  │       Success Criteria              │
+                  └──────────────────┬──────────────────┘
+                                     │
+   ┌───────────────  LoopEngine (product)  ───────────────┐
+   │                                                       │
+   │   Plan → Build → Test → Review → Repair → Optimize    │
+   │                          │                            │
+   │                          └─► QualityScore             │
+   │                          └─► ConvergenceStatus        │
+   │                          └─► next iteration / Deliver │
+   └─────────────────────┬─────────────────────────────────┘
+                         │
+              ┌──────────▼──────────┐
+              │   Fusion Optimizer  │   (multi-candidate next-plan)
+              │   + Mad Dog Review  │   (10 quality categories)
+              └──────────┬──────────┘
+                         │
+              ┌──────────▼──────────┐
+              │   Quality Engine    │   (score + convergence + delivery)
+              └──────────┬──────────┘
+                         │
+              ┌──────────▼──────────┐
+              │ Commitment Boundary │   (idea → action gating)
+              └──────────┬──────────┘
+                         │
+   ┌──────────  Action Boundary / Safety Layer  ──────────┐
+   │   Policy OS · Syscall Router · Approval · Trace       │
+   │   (only triggers on real side effects)                 │
+   └───────────────────────────────────────────────────────┘
 ```
 
-Kernel invariants:
+Read [`docs/loop-engineering-runtime.md`](docs/loop-engineering-runtime.md) for the
+full thesis, [`docs/core-loop.md`](docs/core-loop.md) for the loop walkthrough,
+and [`docs/v0-4-architecture.md`](docs/v0-4-architecture.md) for layering details.
 
-- Every external action is a syscall and every syscall is policy checked.
-- Every transition is traced and replay never repeats side effects.
-- Durable memory and skill writes pass governance.
-- Ambiguous goals do not execute and loops are bounded.
-- Triggers create tasks; they do not directly run tools.
-- High-risk producers cannot approve their own work.
+## CLI surface (v0.4.0)
+
+```bash
+# Loop-first workflow
+loopos loop run         "<goal>"  --max-iterations N --json
+loopos loop status      --json
+loopos loop review      [--mad-dog] --json
+loopos loop repair      --json
+loopos loop optimize    --json
+loopos loop deliver     --json
+
+# Creative space
+loopos imagine          "<prompt>" --json
+
+# Fusion optimizer
+loopos fusion optimize  --json
+loopos mad-dog attack   <target>  --json
+```
+
+All v0.2 / v0.3 commands still work (kernel, policy, syscall, fusion-router,
+goal, memory, worktree, …). v0.4.0 is a layer on top, not a replacement.
+
+## Safety Boundary
+
+LoopOS still ships an action boundary for real side effects: file writes,
+shell commands, network calls, provider calls, release operations. That
+boundary is **real, intact, and policy-driven** — it just no longer occupies
+the first screen.
+
+> Safety is not the product thesis. Loop engineering is the product thesis.
+
+Read [`docs/action-boundary.md`](docs/action-boundary.md) for the
+re-positioning and [`docs/safety.md`](docs/safety.md) for the underlying
+enforcement.
+
+## What LoopOS is **not**
+
+LoopOS is **not**:
+
+- a chat bot
+- a plain agent runner
+- a security audit tool
+- a pure policy engine
+- a pure syscall router
+- an approval inbox
+- a multi-model answer aggregator
+- a planner that never closes the loop
+
+It is a **goal-driven loop engineering runtime**. See
+[`docs/non-goals.md`](docs/non-goals.md).
 
 ## Development
 
@@ -321,43 +338,46 @@ Kernel invariants:
 python -m pytest
 python -m ruff check .
 python -m mypy loopos tests
+
+# Readiness proofs
+python scripts/v0_2_readiness_check.py --json
+python scripts/v0_3_readiness_check.py --json
+python scripts/v0_4_readiness_check.py --json
+python scripts/anti_bloat_check.py --json
 ```
 
-The test suite is deterministic and offline. See `CONTRIBUTING.md`, `SECURITY.md`,
-`GOVERNANCE.md`, and `PLUGIN_SPEC.md` before contributing.
+The test suite is deterministic and offline. See
+[`CONTRIBUTING.md`](CONTRIBUTING.md) and [`SECURITY.md`](SECURITY.md)
+before contributing.
 
 ## Documentation
 
+### v0.4.0 — Loop Engineering
+
+- [Loop Engineering Runtime](docs/loop-engineering-runtime.md)
+- [Core Loop](docs/core-loop.md)
+- [v0.4 Architecture](docs/v0-4-architecture.md)
+- [Imagination Sandbox](docs/imagination-sandbox.md)
+- [Creativity Boundary](docs/creativity-boundary.md)
+- [Fusion Optimizer](docs/fusion-optimizer.md)
+- [Mad Dog Quality Attacker](docs/mad-dog-quality-attacker.md)
+- [Quality Engine](docs/quality-engine.md)
+- [Convergence and Delivery](docs/convergence-and-delivery.md)
+- [Action Boundary](docs/action-boundary.md)
+- [Non-Goals](docs/non-goals.md)
+
+### Foundational
+
 - [Architecture](docs/architecture.md)
-- [CLI](docs/cli-ui.md)
+- [Quickstart](docs/quickstart.md)
 - [Safety](docs/safety.md)
-- [Goal Negotiation](docs/goal-negotiation.md)
-- [Loop Convergence](docs/loop-convergence.md)
-- [Data Guard](docs/data-guard.md)
-- [Local Intelligence](docs/local-intelligence.md)
-- [Provider Gateway](docs/provider-gateway.md)
+- [Policy OS](docs/policy-os.md)
+- [Syscalls](docs/syscalls.md)
 - [Memory Governance](docs/memory-governance.md)
-- [Implementation Map](docs/mvp-implementation-map.md)
-- [Brand and Loopi](docs/brand-loopi.md)
-- [Maintainability Kernel](docs/maintainability.md)
-- [Kernel Hardening](docs/kernel-hardening.md)
-- [Review Artifact](docs/review-artifact.md)
-- [Fusion Router](docs/fusion-router.md)
-- [Prompt Distillation](docs/prompt-distillation.md)
-- [Founding Preview Limitations](docs/founding-preview-limitations.md)
-- [Demo Flows](docs/demo-flows.md)
-- [Plugin Development](docs/plugin-development.md)
-- [Plugin Permissions](docs/plugin-permissions.md)
-- [Founding Preview Release Notes](docs/release-notes/founding-preview.md)
-- [Release Hygiene and Artifact Verification](docs/release-hygiene.md)
-- [Governed Agent Loop](docs/governed-agent-loop.md)
+- [Fusion Router (legacy)](docs/fusion-router.md) — preserved for compatibility
 - [Agent Freedom Runtime](docs/agent-freedom-runtime.md)
-- [Agent Command Interface](docs/agent-command-interface.md)
-- [Agent Loop Interface](docs/agent-loop-interface.md)
-- [Anti-Bloat Gate](docs/anti-bloat-gate.md)
-- [Go Core Roadmap](docs/go-core-roadmap.md)
-- [Klein Loopi](docs/brand/klein-loopi.md)
+- [CLI](docs/cli-ui.md)
 
 ## License
 
-Licensed under the Apache License, Version 2.0. See `LICENSE`.
+Licensed under the Apache License, Version 2.0. See [`LICENSE`](LICENSE).
