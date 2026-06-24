@@ -43,6 +43,7 @@ from loopos.cli.commands import (
     session_command,
     readiness_command,
 )
+from loopos.cli.help_text import COMMAND_HELP as _COMMAND_HELP
 
 
 def fallback_main(argv: list[str] | None = None) -> int:
@@ -260,7 +261,12 @@ def fallback_main(argv: list[str] | None = None) -> int:
     config_parser.add_argument("--data-dir", default=".loopos")
 
     # --- v0.3 ----------------------------------------------------------------
-    workbench_parser = sub.add_parser("workbench")
+    workbench_parser = sub.add_parser(
+        "workbench",
+        help=_COMMAND_HELP["workbench"].short,
+        description=_COMMAND_HELP["workbench"].long,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     workbench_parser.add_argument("goal_path", nargs="?")
     workbench_parser.add_argument("--adapter", default="mock")
     workbench_parser.add_argument("--model", default="mock-model")
@@ -274,19 +280,34 @@ def fallback_main(argv: list[str] | None = None) -> int:
     workbench_parser.add_argument("--json", dest="json_output", action="store_true")
     workbench_parser.add_argument("--project", default="")
 
-    adapters_parser = sub.add_parser("adapters")
+    adapters_parser = sub.add_parser(
+        "adapters",
+        help=_COMMAND_HELP["adapters"].short,
+        description=_COMMAND_HELP["adapters"].long,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     adapters_parser.add_argument("action", nargs="?", default="list")
     adapters_parser.add_argument("value", nargs="?")
     adapters_parser.add_argument("--json", dest="json_output", action="store_true")
 
-    providers_runtime_parser = sub.add_parser("providers-runtime")
+    providers_runtime_parser = sub.add_parser(
+        "providers-runtime",
+        help=_COMMAND_HELP["providers-runtime"].short,
+        description=_COMMAND_HELP["providers-runtime"].long,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     providers_runtime_parser.add_argument("action", nargs="?", default="list")
     providers_runtime_parser.add_argument("value", nargs="?")
     providers_runtime_parser.add_argument("--model", default="mock-model")
     providers_runtime_parser.add_argument("--no-dry-run", action="store_true")
     providers_runtime_parser.add_argument("--json", dest="json_output", action="store_true")
 
-    model_call_parser = sub.add_parser("model-call")
+    model_call_parser = sub.add_parser(
+        "model-call",
+        help=_COMMAND_HELP["model-call"].short,
+        description=_COMMAND_HELP["model-call"].long,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     model_call_parser.add_argument("prompt_path")
     model_call_parser.add_argument("--provider", default="mock")
     model_call_parser.add_argument("--model", default="mock-model")
@@ -296,7 +317,12 @@ def fallback_main(argv: list[str] | None = None) -> int:
     model_call_parser.add_argument("--confirm", action="store_true")
     model_call_parser.add_argument("--json", dest="json_output", action="store_true")
 
-    opengod_parser = sub.add_parser("opengod")
+    opengod_parser = sub.add_parser(
+        "opengod",
+        help=_COMMAND_HELP["opengod"].short,
+        description=_COMMAND_HELP["opengod"].long,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     opengod_parser.add_argument("goal_id", nargs="?", default="goal_demo")
     opengod_parser.add_argument("--goal-title", default="")
     opengod_parser.add_argument("--goal-risk", default="medium")
@@ -312,15 +338,55 @@ def fallback_main(argv: list[str] | None = None) -> int:
     opengod_parser.add_argument("--reserve-usd", type=float, default=0.10)
     opengod_parser.add_argument("--json", dest="json_output", action="store_true")
 
-    session_parser = sub.add_parser("session")
+    session_parser = sub.add_parser(
+        "session",
+        help=_COMMAND_HELP["session"].short,
+        description=_COMMAND_HELP["session"].long,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     session_parser.add_argument("action", nargs="?", default="list")
     session_parser.add_argument("session_id", nargs="?")
     session_parser.add_argument("--data-dir", default=".loopos")
     session_parser.add_argument("--json", dest="json_output", action="store_true")
 
-    readiness_parser = sub.add_parser("readiness")
+    readiness_parser = sub.add_parser(
+        "readiness",
+        help=_COMMAND_HELP["readiness"].short,
+        description=_COMMAND_HELP["readiness"].long,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     readiness_parser.add_argument("action", nargs="?", default="check")
     readiness_parser.add_argument("--json", dest="json_output", action="store_true")
+
+    fusion_router_parser = sub.add_parser(
+        "fusion-router",
+        help=_COMMAND_HELP["fusion-router"].short,
+        description=_COMMAND_HELP["fusion-router"].long,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    fusion_router_parser.add_argument("action", nargs="?", default="plan")
+    fusion_router_parser.add_argument("task", nargs="?")
+    fusion_router_parser.add_argument("--run-id")
+    fusion_router_parser.add_argument("--reason", default="repeated_failure")
+    fusion_router_parser.add_argument("--fusion-id")
+    fusion_router_parser.add_argument("--dry-run", action="store_true")
+    fusion_router_parser.add_argument("--json", dest="json_output", action="store_true")
+    fusion_router_parser.add_argument("--human", dest="json_output", action="store_false")
+
+    mad_dog_parser = sub.add_parser(
+        "mad-dog",
+        help=_COMMAND_HELP["mad-dog"].short,
+        description=_COMMAND_HELP["mad-dog"].long,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    mad_dog_parser.add_argument("action", nargs="?", default="plan")
+    mad_dog_parser.add_argument("task", nargs="?")
+    mad_dog_parser.add_argument("--run-id")
+    mad_dog_parser.add_argument("--reason", default="explicit_user_request")
+    mad_dog_parser.add_argument("--severity", default="critical")
+    mad_dog_parser.add_argument("--fusion-id")
+    mad_dog_parser.add_argument("--json", dest="json_output", action="store_true")
+    mad_dog_parser.add_argument("--human", dest="json_output", action="store_false")
 
 
     release_parser = sub.add_parser("release")

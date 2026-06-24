@@ -43,6 +43,7 @@ from loopos.cli.commands import (
     session_command,
     workbench_command,
 )
+from loopos.cli.help_text import COMMAND_HELP as _COMMAND_HELP
 
 
 def register_v0_3_commands(app: Any, typer_mod: Any) -> None:
@@ -57,7 +58,7 @@ def register_v0_3_commands(app: Any, typer_mod: Any) -> None:
     if app is None or typer_mod is None:
         return
 
-    @app.command("workbench")
+    @app.command("workbench", help=_COMMAND_HELP["workbench"].short, epilog=_COMMAND_HELP["workbench"].long)
     def _typer_workbench(
         goal_path: str | None = typer_mod.Argument(None),
         adapter: str = typer_mod.Option("mock", "--adapter"),
@@ -91,7 +92,7 @@ def register_v0_3_commands(app: Any, typer_mod: Any) -> None:
             )
         )
 
-    @app.command("adapters")
+    @app.command("adapters", help=_COMMAND_HELP["adapters"].short, epilog=_COMMAND_HELP["adapters"].long)
     def _typer_adapters(
         action: str = typer_mod.Argument("list"),
         value: str | None = typer_mod.Argument(None),
@@ -101,7 +102,7 @@ def register_v0_3_commands(app: Any, typer_mod: Any) -> None:
             adapters_command(action, value, json_output=json_output)
         )
 
-    @app.command("providers-runtime")
+    @app.command("providers-runtime", help=_COMMAND_HELP["providers-runtime"].short, epilog=_COMMAND_HELP["providers-runtime"].long)
     def _typer_providers_runtime(
         action: str = typer_mod.Argument("list"),
         value: str | None = typer_mod.Argument(None),
@@ -115,7 +116,7 @@ def register_v0_3_commands(app: Any, typer_mod: Any) -> None:
             )
         )
 
-    @app.command("model-call")
+    @app.command("model-call", help=_COMMAND_HELP["model-call"].short, epilog=_COMMAND_HELP["model-call"].long)
     def _typer_model_call(
         prompt_path: str,
         provider: str = typer_mod.Option("mock", "--provider"),
@@ -141,7 +142,7 @@ def register_v0_3_commands(app: Any, typer_mod: Any) -> None:
             )
         )
 
-    @app.command("opengod")
+    @app.command("opengod", help=_COMMAND_HELP["opengod"].short, epilog=_COMMAND_HELP["opengod"].long)
     def _typer_opengod(
         goal_id: str = typer_mod.Argument("goal_demo"),
         goal_title: str = typer_mod.Option("", "--goal-title"),
@@ -181,7 +182,7 @@ def register_v0_3_commands(app: Any, typer_mod: Any) -> None:
             )
         )
 
-    @app.command("session")
+    @app.command("session", help=_COMMAND_HELP["session"].short, epilog=_COMMAND_HELP["session"].long)
     def _typer_session(
         action: str = typer_mod.Argument("list"),
         session_id: str | None = typer_mod.Argument(None),
@@ -194,7 +195,7 @@ def register_v0_3_commands(app: Any, typer_mod: Any) -> None:
             )
         )
 
-    @app.command("readiness")
+    @app.command("readiness", help=_COMMAND_HELP["readiness"].short, epilog=_COMMAND_HELP["readiness"].long)
     def _typer_readiness(
         action: str = typer_mod.Argument("check"),
         json_output: bool = typer_mod.Option(True, "--json"),

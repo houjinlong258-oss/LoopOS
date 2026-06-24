@@ -52,6 +52,7 @@ from loopos.cli.commands.runtime import (  # noqa: E402
     tools_command as tools_command,
     trace_command as trace_command,
 )
+from loopos.cli.help_text import COMMAND_HELP as _COMMAND_HELP  # noqa: E402
 from loopos.cli.renderers import render_run as _render_run  # noqa: E402, F401
 from loopos.cli.renderers import render_state as _render_state  # noqa: E402, F401
 
@@ -578,7 +579,11 @@ if _HAS_TUI:
             )
         )
 
-    @app.command("fusion-router")
+    @app.command(
+        "fusion-router",
+        help=_COMMAND_HELP["fusion-router"].short,
+        epilog=_COMMAND_HELP["fusion-router"].long,
+    )
     def _typer_fusion_router(
         action: str = typer_mod.Option("plan", "--action"),
         task: str | None = typer_mod.Option(None, "--task"),
@@ -606,7 +611,11 @@ if _HAS_TUI:
             )
         )
 
-    @app.command("mad-dog")
+    @app.command(
+        "mad-dog",
+        help=_COMMAND_HELP["mad-dog"].short,
+        epilog=_COMMAND_HELP["mad-dog"].long,
+    )
     def _typer_mad_dog(
         action: str = typer_mod.Option("plan", "--action"),
         task: str | None = typer_mod.Option(None, "--task"),

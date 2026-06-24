@@ -145,7 +145,9 @@ def test_register_v0_3_commands_registers_all_seven() -> None:
 
     class _App:
         @staticmethod
-        def command(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        def command(
+            name: str, **kwargs: Any
+        ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
             def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
                 registered.append(name)
                 return fn
