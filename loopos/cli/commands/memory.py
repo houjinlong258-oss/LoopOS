@@ -8,6 +8,8 @@ from pathlib import Path
 
 from loopos.cli.context import data_paths
 from loopos.memory.repository import MemoryRepository
+from loopos.agent_language.roles import AgentRole
+from loopos.project_memory import MemoryCompiler
 
 
 def skills_command(
@@ -76,6 +78,7 @@ def memory_command(
     from_run: str | None = None,
     data_dir: str | Path = ".loopos",
     verbose: bool = False,
+    role: str | None = None,
 ) -> int:
     repo = MemoryRepository(data_paths(data_dir)["base"])
     if action == "list":
@@ -145,6 +148,42 @@ def memory_command(
     if action == "reindex":
         counts = repo.reindex()
         print(json.dumps(counts, ensure_ascii=False, indent=2))
+        return 0
+    if action == "compile":
+        target_role = AgentRole(role or arg or "repairer")
+        packet = MemoryCompiler().compile(
+            target_role=target_role,
+            goal_summary="latest LoopOS project goal",
+            current_gap="no persisted project-memory gap supplied",
+            token_budget=900,
+        )
+        print(json.dumps(packet.model_dump(mode="json"), ensure_ascii=False, indent=2))
+        return 0
+    if action == "failures":
+        items = [
+            item for item in repo.list_memory(status="active")
+            if item.type == "failure" or "failure" in item.tags
+        ]
+        print(
+            json.dumps(
+                [item.model_dump(mode="json") for item in items],
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0
+    if action == "decisions":
+        items = [
+            item for item in repo.list_memory(status="active")
+            if item.type == "fact" and "decision" in item.tags
+        ]
+        print(
+            json.dumps(
+                [item.model_dump(mode="json") for item in items],
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
         return 0
     print(f"Unknown memory action: {action}", file=sys.stderr)
     return 1

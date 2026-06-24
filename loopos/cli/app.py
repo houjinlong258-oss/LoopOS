@@ -20,9 +20,18 @@ from loopos.cli.commands import (  # noqa: E402
     fusion_router_command as fusion_router_command,
     gateway_command as gateway_command,
     goal_command as goal_command,
+    imagine_command as imagine_command,
     kernel_command as kernel_command,
+    lail_encode_command as lail_encode_command,
+    loop_deliver_command as loop_deliver_command,
+    loop_optimize_command as loop_optimize_command,
+    loop_repair_command as loop_repair_command,
+    loop_review_command as loop_review_command,
+    loop_run_command as loop_run_command,
+    loop_status_command as loop_status_command,
     mad_dog_command as mad_dog_command,
     memory_command as memory_command,
+    memory_compile_command as memory_compile_command,
     mode_command as mode_command,
     models_command as models_command,
     parse_goal_options as _parse_goal_options,  # noqa: F401 - compatibility export
@@ -490,9 +499,45 @@ if _HAS_TUI:
         from_run: str | None = typer_mod.Option(None, "--from-run"),
         data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
         verbose: bool = typer_mod.Option(False, "--verbose"),
+        role: str | None = typer_mod.Option(None, "--role"),
+        # v0.4.0 closeout: route ``memory compile --items`` to the
+        # closeout ``memory_compile_command``. All other actions go
+        # to the v0.1 ``memory_command`` (which still supports
+        # ``list`` / ``search`` / ``propose`` / ``reindex`` /
+        # ``review`` / ``accept`` / ``reject`` / ``compile``
+        # (no-items) / ``failures`` / ``decisions``).
+        items: str | None = typer_mod.Option(None, "--items"),
+        items_file: str | None = typer_mod.Option(None, "--items-file"),
+        goal_summary: str = typer_mod.Option("", "--goal"),
+        current_gap: str = typer_mod.Option("", "--gap"),
+        token_budget: int = typer_mod.Option(900, "--token-budget"),
+        run_id: str | None = typer_mod.Option(None, "--run-id"),
+        iteration_index: int = typer_mod.Option(0, "--iteration"),
+        json_output: bool = typer_mod.Option(True, "--json/--human"),
     ) -> None:
+        if action == "compile" and (items is not None or items_file is not None):
+            raise typer_mod.Exit(
+                memory_compile_command(
+                    items=items or "[]",
+                    items_file=items_file,
+                    target_role=role or "planner",
+                    goal_summary=goal_summary,
+                    current_gap=current_gap,
+                    token_budget=token_budget,
+                    run_id=run_id,
+                    iteration_index=iteration_index,
+                    json_output=json_output,
+                )
+            )
         raise typer_mod.Exit(
-            memory_command(action, arg, from_run=from_run, data_dir=data_dir, verbose=verbose)
+            memory_command(
+                action,
+                arg,
+                from_run=from_run,
+                data_dir=data_dir,
+                verbose=verbose,
+                role=role,
+            )
         )
 
     @app.command("profile")
@@ -539,6 +584,11 @@ if _HAS_TUI:
         verbose: bool = typer_mod.Option(False, "--verbose"),
     ) -> None:
         raise typer_mod.Exit(ail_command(action, file, verbose=verbose))
+
+    @app.command("lail")
+    # v0.4.0 — LAIL encode is registered at the bottom of this block
+    # in the closeout section. The v0.1 stub `lail_command` was
+    # removed because it was never implemented in the v0.1 tree.
 
     @app.command("code")
     def _typer_code(
@@ -671,6 +721,105 @@ if _HAS_TUI:
     # v0.3 commands (extracted to loopos/cli/typer_v0_3.py)
     from loopos.cli.typer_v0_3 import register_v0_3_commands
     register_v0_3_commands(app, typer_mod)
+
+    # v0.4.0 — Loop Engineering commands (closeout: cross-process)
+    @app.command("loop")
+    def _typer_loop(
+        action: str = typer_mod.Argument("run"),
+        goal: str | None = typer_mod.Argument(None),
+        max_iterations: int = typer_mod.Option(3, "--max-iterations"),
+        dry_run: bool = typer_mod.Option(True, "--dry-run/--no-dry-run"),
+        mad_dog: bool = typer_mod.Option(False, "--mad-dog"),
+        json_output: bool = typer_mod.Option(True, "--json/--human"),
+        run_id: str | None = typer_mod.Option(None, "--run-id"),
+        latest: bool = typer_mod.Option(False, "--latest"),
+        data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+    ) -> None:
+        rid = "latest" if latest else run_id
+        if action == "run":
+            if not goal:
+                raise typer_mod.BadParameter("goal is required for `loop run`")
+            raise typer_mod.Exit(
+                loop_run_command(
+                    goal=goal,
+                    max_iterations=max_iterations,
+                    dry_run=dry_run,
+                    json_output=json_output,
+                    run_id=rid,
+                    data_dir=data_dir,
+                )
+            )
+        if action == "status":
+            raise typer_mod.Exit(
+                loop_status_command(
+                    run_id=rid, json_output=json_output, data_dir=data_dir,
+                )
+            )
+        if action == "review":
+            raise typer_mod.Exit(
+                loop_review_command(
+                    mad_dog=mad_dog, json_output=json_output,
+                    run_id=rid, data_dir=data_dir,
+                )
+            )
+        if action == "repair":
+            raise typer_mod.Exit(
+                loop_repair_command(
+                    json_output=json_output, run_id=rid, data_dir=data_dir,
+                )
+            )
+        if action == "optimize":
+            raise typer_mod.Exit(
+                loop_optimize_command(
+                    json_output=json_output, run_id=rid, data_dir=data_dir,
+                )
+            )
+        if action == "deliver":
+            raise typer_mod.Exit(
+                loop_deliver_command(
+                    run_id=rid, json_output=json_output, data_dir=data_dir,
+                )
+            )
+        raise typer_mod.BadParameter(f"unknown loop action: {action}")
+
+    @app.command("imagine")
+    def _typer_imagine(
+        prompt: str,
+        mode: str = typer_mod.Option("brainstorm", "--mode"),
+        max_candidates: int = typer_mod.Option(3, "--max-candidates"),
+        json_output: bool = typer_mod.Option(True, "--json/--human"),
+    ) -> None:
+        raise typer_mod.Exit(
+            imagine_command(
+                prompt=prompt,
+                mode=mode,
+                max_candidates=max_candidates,
+                json_output=json_output,
+            )
+        )
+
+    @app.command("lail")
+    def _typer_lail(
+        action: str = typer_mod.Argument("encode"),
+        kind: str = typer_mod.Option("iteration_started", "--kind"),
+        run_id: str = typer_mod.Option("run_local", "--run-id"),
+        iteration_index: int = typer_mod.Option(0, "--iteration"),
+        trace_id: str | None = typer_mod.Option(None, "--trace-id"),
+        payload: str | None = typer_mod.Option(None, "--payload"),
+        json_output: bool = typer_mod.Option(True, "--json/--human"),
+    ) -> None:
+        if action == "encode":
+            raise typer_mod.Exit(
+                lail_encode_command(
+                    kind=kind,
+                    run_id=run_id,
+                    iteration_index=iteration_index,
+                    trace_id=trace_id,
+                    payload=payload,
+                    json_output=json_output,
+                )
+            )
+        raise typer_mod.BadParameter(f"unknown lail action: {action}")
 
     @app.command("release")
     def _typer_release(

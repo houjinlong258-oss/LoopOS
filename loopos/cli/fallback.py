@@ -13,7 +13,16 @@ from loopos.cli.commands import (
     gateway_command,
     goal_command,
     history_command,
+    imagine_command,
+    lail_encode_command,
+    loop_deliver_command,
+    loop_optimize_command,
+    loop_repair_command,
+    loop_review_command,
+    loop_run_command,
+    loop_status_command,
     memory_command,
+    memory_compile_command,
     mode_command,
     models_command,
     policy_command,
@@ -43,7 +52,6 @@ from loopos.cli.commands import (
     session_command,
     readiness_command,
 )
-from loopos.cli.help_text import COMMAND_HELP as _COMMAND_HELP
 
 
 def fallback_main(argv: list[str] | None = None) -> int:
@@ -235,6 +243,20 @@ def fallback_main(argv: list[str] | None = None) -> int:
     memory_parser.add_argument("--from-run")
     memory_parser.add_argument("--verbose", action="store_true")
     memory_parser.add_argument("--data-dir", default=".loopos")
+    memory_parser.add_argument("--role")
+    # v0.4.0 closeout: --items and --items-file gate the new
+    # ``memory compile`` action without breaking v0.1 ``memory
+    # list`` / ``memory show`` / etc.
+    memory_parser.add_argument("--items", default=None)
+    memory_parser.add_argument("--items-file", dest="items_file", default=None)
+    memory_parser.add_argument("--goal", dest="goal_summary", default="")
+    memory_parser.add_argument("--gap", dest="current_gap", default="")
+    memory_parser.add_argument("--token-budget", dest="token_budget",
+                               type=int, default=900)
+    memory_parser.add_argument("--run-id", dest="run_id", default=None)
+    memory_parser.add_argument("--iteration", dest="iteration_index",
+                               type=int, default=0)
+    memory_parser.add_argument("--json", dest="json_output", action="store_true")
 
     profile_parser = sub.add_parser("profile")
     profile_parser.add_argument("action", nargs="?", default="show")
@@ -257,16 +279,22 @@ def fallback_main(argv: list[str] | None = None) -> int:
     ail_parser.add_argument("file", nargs="?")
     ail_parser.add_argument("--verbose", action="store_true")
 
+    lail_parser = sub.add_parser("lail")
+    lail_parser.add_argument("action", nargs="?", default="encode")
+    lail_parser.add_argument("value", nargs="?")
+    lail_parser.add_argument("--json", dest="json_output", action="store_true")
+    lail_parser.add_argument("--kind", default="iteration_started")
+    lail_parser.add_argument("--run-id", dest="run_id", default="run_local")
+    lail_parser.add_argument("--iteration", dest="iteration_index",
+                             type=int, default=0)
+    lail_parser.add_argument("--trace-id", dest="trace_id", default=None)
+    lail_parser.add_argument("--payload", default=None)
+
     config_parser = sub.add_parser("config")
     config_parser.add_argument("--data-dir", default=".loopos")
 
     # --- v0.3 ----------------------------------------------------------------
-    workbench_parser = sub.add_parser(
-        "workbench",
-        help=_COMMAND_HELP["workbench"].short,
-        description=_COMMAND_HELP["workbench"].long,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
+    workbench_parser = sub.add_parser("workbench")
     workbench_parser.add_argument("goal_path", nargs="?")
     workbench_parser.add_argument("--adapter", default="mock")
     workbench_parser.add_argument("--model", default="mock-model")
@@ -280,34 +308,19 @@ def fallback_main(argv: list[str] | None = None) -> int:
     workbench_parser.add_argument("--json", dest="json_output", action="store_true")
     workbench_parser.add_argument("--project", default="")
 
-    adapters_parser = sub.add_parser(
-        "adapters",
-        help=_COMMAND_HELP["adapters"].short,
-        description=_COMMAND_HELP["adapters"].long,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
+    adapters_parser = sub.add_parser("adapters")
     adapters_parser.add_argument("action", nargs="?", default="list")
     adapters_parser.add_argument("value", nargs="?")
     adapters_parser.add_argument("--json", dest="json_output", action="store_true")
 
-    providers_runtime_parser = sub.add_parser(
-        "providers-runtime",
-        help=_COMMAND_HELP["providers-runtime"].short,
-        description=_COMMAND_HELP["providers-runtime"].long,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
+    providers_runtime_parser = sub.add_parser("providers-runtime")
     providers_runtime_parser.add_argument("action", nargs="?", default="list")
     providers_runtime_parser.add_argument("value", nargs="?")
     providers_runtime_parser.add_argument("--model", default="mock-model")
     providers_runtime_parser.add_argument("--no-dry-run", action="store_true")
     providers_runtime_parser.add_argument("--json", dest="json_output", action="store_true")
 
-    model_call_parser = sub.add_parser(
-        "model-call",
-        help=_COMMAND_HELP["model-call"].short,
-        description=_COMMAND_HELP["model-call"].long,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
+    model_call_parser = sub.add_parser("model-call")
     model_call_parser.add_argument("prompt_path")
     model_call_parser.add_argument("--provider", default="mock")
     model_call_parser.add_argument("--model", default="mock-model")
@@ -317,12 +330,7 @@ def fallback_main(argv: list[str] | None = None) -> int:
     model_call_parser.add_argument("--confirm", action="store_true")
     model_call_parser.add_argument("--json", dest="json_output", action="store_true")
 
-    opengod_parser = sub.add_parser(
-        "opengod",
-        help=_COMMAND_HELP["opengod"].short,
-        description=_COMMAND_HELP["opengod"].long,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
+    opengod_parser = sub.add_parser("opengod")
     opengod_parser.add_argument("goal_id", nargs="?", default="goal_demo")
     opengod_parser.add_argument("--goal-title", default="")
     opengod_parser.add_argument("--goal-risk", default="medium")
@@ -338,55 +346,35 @@ def fallback_main(argv: list[str] | None = None) -> int:
     opengod_parser.add_argument("--reserve-usd", type=float, default=0.10)
     opengod_parser.add_argument("--json", dest="json_output", action="store_true")
 
-    session_parser = sub.add_parser(
-        "session",
-        help=_COMMAND_HELP["session"].short,
-        description=_COMMAND_HELP["session"].long,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
+    session_parser = sub.add_parser("session")
     session_parser.add_argument("action", nargs="?", default="list")
     session_parser.add_argument("session_id", nargs="?")
     session_parser.add_argument("--data-dir", default=".loopos")
     session_parser.add_argument("--json", dest="json_output", action="store_true")
 
-    readiness_parser = sub.add_parser(
-        "readiness",
-        help=_COMMAND_HELP["readiness"].short,
-        description=_COMMAND_HELP["readiness"].long,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
+    readiness_parser = sub.add_parser("readiness")
     readiness_parser.add_argument("action", nargs="?", default="check")
     readiness_parser.add_argument("--json", dest="json_output", action="store_true")
 
-    fusion_router_parser = sub.add_parser(
-        "fusion-router",
-        help=_COMMAND_HELP["fusion-router"].short,
-        description=_COMMAND_HELP["fusion-router"].long,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    fusion_router_parser.add_argument("action", nargs="?", default="plan")
-    fusion_router_parser.add_argument("task", nargs="?")
-    fusion_router_parser.add_argument("--run-id")
-    fusion_router_parser.add_argument("--reason", default="repeated_failure")
-    fusion_router_parser.add_argument("--fusion-id")
-    fusion_router_parser.add_argument("--dry-run", action="store_true")
-    fusion_router_parser.add_argument("--json", dest="json_output", action="store_true")
-    fusion_router_parser.add_argument("--human", dest="json_output", action="store_false")
+    # v0.4.0 — Loop Engineering commands
+    loop_parser = sub.add_parser("loop")
+    loop_parser.add_argument("action", nargs="?", default="run")
+    loop_parser.add_argument("goal", nargs="?")
+    loop_parser.add_argument("--max-iterations", type=int, default=3)
+    loop_parser.add_argument("--dry-run", dest="dry_run", action="store_true")
+    loop_parser.add_argument("--mad-dog", dest="mad_dog", action="store_true")
+    loop_parser.add_argument("--json", dest="json_output", action="store_true")
+    loop_parser.add_argument("--run-id", dest="run_id", default=None)
+    loop_parser.add_argument("--latest", dest="latest", action="store_true")
+    loop_parser.add_argument("--data-dir", dest="data_dir", default=None)
 
-    mad_dog_parser = sub.add_parser(
-        "mad-dog",
-        help=_COMMAND_HELP["mad-dog"].short,
-        description=_COMMAND_HELP["mad-dog"].long,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    mad_dog_parser.add_argument("action", nargs="?", default="plan")
-    mad_dog_parser.add_argument("task", nargs="?")
-    mad_dog_parser.add_argument("--run-id")
-    mad_dog_parser.add_argument("--reason", default="explicit_user_request")
-    mad_dog_parser.add_argument("--severity", default="critical")
-    mad_dog_parser.add_argument("--fusion-id")
-    mad_dog_parser.add_argument("--json", dest="json_output", action="store_true")
-    mad_dog_parser.add_argument("--human", dest="json_output", action="store_false")
+    imagine_parser = sub.add_parser("imagine")
+    imagine_parser.add_argument("prompt")
+    imagine_parser.add_argument("--mode", default="brainstorm",
+                                choices=["brainstorm", "wild", "alternatives",
+                                         "architecture", "repair", "optimization"])
+    imagine_parser.add_argument("--max-candidates", type=int, default=3)
+    imagine_parser.add_argument("--json", dest="json_output", action="store_true")
 
 
     release_parser = sub.add_parser("release")
@@ -585,12 +573,33 @@ def fallback_main(argv: list[str] | None = None) -> int:
             deny=args.deny,
         )
     if args.command == "memory":
+        # v0.4.0 closeout: `memory compile` is the new command.
+        # v0.1 `memory <action> <arg>` is preserved for back-compat.
+        if args.action == "compile":
+            # ``--role`` is the v0.1 surface; ``--target-role`` is the
+            # v0.4 closeout surface. We prefer the closeout one when
+            # the user provided it; otherwise we fall back to the
+            # legacy ``--role`` (which v0.4 also accepts via the
+            # ``target_role`` alias below).
+            target_role = getattr(args, "target_role", None) or args.role
+            return memory_compile_command(
+                items=args.items or "[]",
+                items_file=args.items_file,
+                target_role=target_role,
+                goal_summary=args.goal_summary,
+                current_gap=args.current_gap,
+                token_budget=args.token_budget,
+                run_id=args.run_id,
+                iteration_index=args.iteration_index,
+                json_output=args.json_output,
+            )
         return memory_command(
             args.action,
             args.arg,
             from_run=args.from_run,
             data_dir=args.data_dir,
             verbose=args.verbose,
+            role=args.role,
         )
     if args.command == "profile":
         return profile_command(args.action, args.key, args.value, data_dir=args.data_dir)
@@ -607,6 +616,18 @@ def fallback_main(argv: list[str] | None = None) -> int:
         )
     if args.command == "ail":
         return ail_command(args.action, args.file, verbose=args.verbose)
+    if args.command == "lail":
+        if args.action == "encode":
+            payload = getattr(args, "payload", None)
+            return lail_encode_command(
+                kind=args.kind,
+                run_id=args.run_id,
+                iteration_index=args.iteration_index,
+                trace_id=args.trace_id,
+                payload=payload,
+                json_output=args.json_output,
+            )
+        return 2
     if args.command == "config":
         return config_command(data_dir=args.data_dir)
     if args.command == "release":
@@ -687,5 +708,51 @@ def fallback_main(argv: list[str] | None = None) -> int:
         )
     if args.command == "readiness":
         return readiness_command(args.action, json_output=args.json_output)
+    if args.command == "loop":
+        rid = args.run_id
+        if args.latest:
+            rid = "latest"
+        if args.action == "run":
+            return loop_run_command(
+                goal=args.goal,
+                max_iterations=args.max_iterations,
+                dry_run=args.dry_run,
+                json_output=args.json_output,
+                run_id=rid,
+                data_dir=args.data_dir,
+            )
+        if args.action == "status":
+            return loop_status_command(
+                run_id=rid, json_output=args.json_output,
+                data_dir=args.data_dir,
+            )
+        if args.action == "review":
+            return loop_review_command(
+                mad_dog=args.mad_dog, json_output=args.json_output,
+                run_id=rid, data_dir=args.data_dir,
+            )
+        if args.action == "repair":
+            return loop_repair_command(
+                json_output=args.json_output,
+                run_id=rid, data_dir=args.data_dir,
+            )
+        if args.action == "optimize":
+            return loop_optimize_command(
+                json_output=args.json_output,
+                run_id=rid, data_dir=args.data_dir,
+            )
+        if args.action == "deliver":
+            return loop_deliver_command(
+                run_id=rid, json_output=args.json_output,
+                data_dir=args.data_dir,
+            )
+        return 2
+    if args.command == "imagine":
+        return imagine_command(
+            prompt=args.prompt,
+            mode=args.mode,
+            max_candidates=args.max_candidates,
+            json_output=args.json_output,
+        )
     parser.print_help()
     return 0

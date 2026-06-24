@@ -43,6 +43,19 @@ from loopos.cli.commands.opengod import opengod_command
 from loopos.cli.commands.session import session_command
 from loopos.cli.commands.readiness import readiness_command
 
+# v0.4 commands
+from loopos.cli.commands.imagine import imagine_command
+from loopos.cli.commands.lail import lail_encode_command
+from loopos.cli.commands.loop import (
+    loop_deliver_command,
+    loop_optimize_command,
+    loop_repair_command,
+    loop_review_command,
+    loop_run_command,
+    loop_status_command,
+)
+from loopos.cli.commands.memory_v04 import memory_compile_command
+
 __all__ = [
     "ail_command",
     "code_command",
@@ -56,6 +69,7 @@ __all__ = [
     "goal_command",
     "history_command",
     "kernel_command",
+    "lail_command",
     "mad_dog_command",
     "memory_command",
     "mode_command",
@@ -88,4 +102,14 @@ __all__ = [
     "opengod_command",
     "session_command",
     "readiness_command",
+    # v0.4
+    "imagine_command",
+    "lail_encode_command",
+    "loop_deliver_command",
+    "loop_optimize_command",
+    "loop_repair_command",
+    "loop_review_command",
+    "loop_run_command",
+    "loop_status_command",
+    "memory_compile_command",
 ]
