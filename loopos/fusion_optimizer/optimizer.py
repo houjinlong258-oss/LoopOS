@@ -96,6 +96,9 @@ class FusionOptimizer:
         opt_plan = prior.optimization_plan if prior is not None else None
 
         confidence = _confidence(len(candidates), len(findings))
+        token_cost = _estimate_plan_tokens(recommended)
+        expected_gain = _expected_quality_gain(findings)
+        utility_score = max(0.0, expected_gain - (token_cost / 10000.0))
         return FusionOptimizationResult(
             recommended_next_plan=recommended,
             alternatives=ranked[1:],
@@ -109,6 +112,9 @@ class FusionOptimizer:
             disagreements=disagreements,
             confidence=round(confidence, 4),
             mode=request.mode,
+            token_cost_estimate=token_cost,
+            expected_quality_gain=round(expected_gain, 4),
+            utility_score=round(utility_score, 4),
         )
 
     def _default_candidates(self, request: FusionOptimizationRequest) -> list[PlanCandidate]:
@@ -147,6 +153,18 @@ def _confidence(num_candidates: int, num_findings: int) -> float:
     base += min(0.3, 0.05 * num_candidates)
     base -= min(0.3, 0.05 * num_findings)
     return max(0.0, min(1.0, base))
+
+
+def _estimate_plan_tokens(plan: PlanCandidate) -> int:
+    text = " ".join([plan.title, plan.rationale, " ".join(plan.steps)])
+    return max(1, len(text) // 4)
+
+
+def _expected_quality_gain(findings: list[ReviewFinding]) -> float:
+    if not findings:
+        return 0.1
+    severity_gain = {"info": 0.01, "low": 0.03, "medium": 0.07, "high": 0.12, "critical": 0.2}
+    return min(1.0, sum(severity_gain.get(f.severity, 0.03) for f in findings))
 
 
 def _maddog_to_review_findings(mdf: MadDogFinding) -> list[ReviewFinding]:

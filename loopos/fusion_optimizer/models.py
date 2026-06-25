@@ -50,6 +50,9 @@ class FusionOptimizationResult(BaseModel):
     disagreements: list[str] = Field(default_factory=list)
     confidence: float = 0.0
     mode: FusionMode = "consensus"
+    token_cost_estimate: int = 0
+    expected_quality_gain: float = 0.0
+    utility_score: float = 0.0
 
 
 __all__ = [
