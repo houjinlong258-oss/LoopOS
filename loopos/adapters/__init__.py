@@ -31,8 +31,14 @@ from loopos.adapters.events import AgentKernelEvent, AgentKernelEventKind
 from loopos.adapters.manifest import AgentKernelAuthority, AgentKernelManifest
 from loopos.adapters.registry import AdapterRegistry, AdapterSummary
 from loopos.adapters.mock import MockAdapter
+from loopos.adapters.a2a import A2AAdapter
+from loopos.adapters.feishu import FeishuAdapter
+from loopos.adapters.mcp import McpAdapter
+from loopos.adapters.memory_os import MemoryOSAdapter
+from loopos.adapters.skill_optimizer import SkillOptimizerAdapter
 
 __all__ = [
+    "A2AAdapter",
     "AgentKernelAdapter",
     "AgentKernelCapabilities",
     "AgentKernelSession",
@@ -43,5 +49,9 @@ __all__ = [
     "AgentKernelManifest",
     "AdapterRegistry",
     "AdapterSummary",
+    "FeishuAdapter",
+    "McpAdapter",
+    "MemoryOSAdapter",
     "MockAdapter",
+    "SkillOptimizerAdapter",
 ]
