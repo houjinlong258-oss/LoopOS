@@ -1,0 +1,263 @@
+{
+  "_meta": {
+    "locale": "ru",
+    "name": "Русский",
+    "english_name": "Russian",
+    "rtl": false,
+    "version": "0.4.0",
+    "draft": true,
+    "note": "Best-effort Russian translation by a non-native speaker. PLEASE review with a native Russian speaker before shipping — many technical terms here may need correction. Status: DRAFT 2026-06-25."
+  },
+  "app": {
+    "name": "LoopOS",
+    "tagline": "Среда выполнения проектного обучения"
+  },
+  "panel": {
+    "run": {
+      "title": "цикл — запуск",
+      "run_label": "ID запуска",
+      "user_goal_label": "Цель пользователя",
+      "status_label": "Статус",
+      "iterations_label": "Итерации",
+      "delivery_label": "Поставка",
+      "known_limits_label": "Известные ограничения",
+      "inner_no_details": "нет сведений об итерации",
+      "inner_last_plan": "Последний план",
+      "inner_build": "Сборка",
+      "inner_test": "Тесты",
+      "inner_quality": "Качество",
+      "inner_convergence": "Сходимость",
+      "passed_prefix": "пройдено",
+      "failed_prefix": "провалено",
+      "fake_convergence_prefix": "ложная_сходимость"
+    },
+    "status": {
+      "title": "цикл — статус",
+      "subtitle_latest": "--последний",
+      "run_label": "ID запуска",
+      "user_goal_label": "Цель пользователя",
+      "current_status_label": "Текущий статус",
+      "current_iteration_label": "Текущая итерация",
+      "checkpoint_path_label": "Путь к контрольной точке",
+      "lail_kinds_label": "Типы LAIL",
+      "last_quality_label": "Прошлое качество",
+      "last_loss_label": "Прошлые потери",
+      "convergence_label": "Сходимость",
+      "reason_codes_label": "Коды причин",
+      "fake_convergence_label": "Ложная сходимость",
+      "blocking_findings_label": "Блокирующие находки",
+      "next_action_label": "Следующее действие",
+      "more_suffix": "ещё",
+      "fresh_note": "этот процесс — свежий интерпретатор Python, без внутрипроцессного состояния"
+    },
+    "deliver": {
+      "title": "цикл — поставка",
+      "subtitle_latest": "--последний",
+      "run_label": "ID запуска",
+      "user_goal_label": "Цель пользователя",
+      "delivery_status_label": "Статус поставки",
+      "ready_label": "Готово",
+      "why_label": "Почему",
+      "coverage_label": "Покрытие",
+      "quality_label": "Качество",
+      "convergence_label": "Сходимость",
+      "iterations_label": "Итерации",
+      "known_limits_label": "Известные ограничения",
+      "next_loop_label": "Следующий цикл",
+      "coverage_required_prefix": "требуется",
+      "coverage_satisfied_prefix": "выполнено",
+      "coverage_unsatisfied_prefix": "не выполнено"
+    },
+    "review": {
+      "title": "цикл — проверка",
+      "run_label": "ID запуска",
+      "iteration_label": "Итерация",
+      "findings_label": "Находки",
+      "mad_dog_label": "Mad-dog",
+      "no_findings": "нет находок",
+      "more_findings_suffix": "ещё находок",
+      "more_suffix": "ещё",
+      "mad_dog_heading": "Проверка Mad-dog",
+      "findings_count_suffix": "находок"
+    },
+    "repair": {
+      "title": "цикл — починка",
+      "run_label": "ID запуска",
+      "iteration_label": "Итерация",
+      "status_label": "Статус",
+      "plan_id_label": "ID плана",
+      "priority_label": "Приоритет",
+      "source_count_label": "Источников",
+      "steps_label": "Шагов",
+      "tests_to_run_label": "Тестов к запуску",
+      "expected_fix_label": "Ожидаемое исправление",
+      "no_plan_title": "цикл — починка",
+      "no_plan_status": "нет_плана_починки",
+      "no_plan_note": "для этой итерации план починки не сгенерирован",
+      "source_findings_heading": "Исходные находки",
+      "steps_heading": "Шаги",
+      "tests_to_run_heading": "Тесты к запуску",
+      "more_suffix": "ещё",
+      "no_steps": "нет шагов"
+    },
+    "optimize": {
+      "title": "цикл — оптимизация",
+      "result_id_label": "ID результата",
+      "mode_label": "Режим",
+      "confidence_label": "Уверенность",
+      "alternatives_label": "Альтернатив",
+      "findings_label": "Находок",
+      "has_repair_plan_label": "Есть план починки",
+      "has_optimization_label": "Есть план оптимизации",
+      "recommended_plan_heading": "Рекомендуемый план",
+      "rationale_heading": "Обоснование",
+      "disagreements_heading": "Разногласия",
+      "findings_heading": "Находки",
+      "source_prefix": "источник",
+      "more_suffix": "ещё",
+      "no_detail": "нет подробностей",
+      "yes": "да",
+      "no": "нет",
+      "confidence_format": "уверенность={value}"
+    },
+    "generic": {
+      "title": "цикл — результат",
+      "no_iterations": "нет итераций",
+      "no_run": "нет запуска"
+    },
+    "tasks": {
+      "list_title": "список задач",
+      "empty": "Задач нет.",
+      "empty_title": "список задач",
+      "artifacts_title": "артефакты задач"
+    },
+    "memory": {
+      "list_title": "список памяти",
+      "search_title": "поиск в памяти",
+      "review_title": "предложения памяти (ожидают)",
+      "reindex_title": "переиндексация памяти",
+      "compile_title": "компиляция памяти",
+      "compile_closeout_title": "компиляция памяти (закрытие)",
+      "propose_title": "предложение памяти",
+      "failures_title": "сбои памяти",
+      "decisions_title": "решения памяти",
+      "no_items": "Записей нет.",
+      "selected_label": "выбрано",
+      "omitted_label": "пропущено",
+      "tokens_label": "токены",
+      "role_label": "роль",
+      "more_suffix": "ещё"
+    }
+  },
+  "status": {
+    "ready_to_deliver": "готово_к_поставке",
+    "ready": "готово",
+    "ok": "ок",
+    "completed": "завершено",
+    "pass": "пройдено",
+    "running": "выполняется",
+    "active": "активно",
+    "in_progress": "в_процессе",
+    "blocked": "заблокировано",
+    "denied": "отказано",
+    "halt": "остановлено",
+    "error": "ошибка",
+    "failed": "провалено",
+    "halted": "приостановлено",
+    "budget_exhausted": "бюджет_исчерпан",
+    "no_repair_plan": "нет_плана_починки",
+    "calm": "спокойно",
+    "mood_calm": "спокойно",
+    "mood_running": "выполняется",
+    "mood_blocked": "заблокировано",
+    "mood_halted": "приостановлено"
+  },
+  "severity": {
+    "high": "высокая",
+    "critical": "критическая",
+    "blocking": "блокирующая",
+    "medium": "средняя",
+    "warning": "предупреждение",
+    "low": "низкая",
+    "info": "инфо"
+  },
+  "task_status": {
+    "open": "открыта",
+    "in_progress": "в_процессе",
+    "blocked": "заблокирована",
+    "done": "выполнена",
+    "completed": "завершена",
+    "ready": "готово",
+    "draft": "черновик"
+  },
+  "commands": {
+    "loop": {
+      "help": "Запуск / проверка / починка цикла проектного обучения",
+      "action_run_help": "Запустить новую итерацию цикла на ЦЕЛЬ.",
+      "action_status_help": "Показать последнее состояние цикла и сводку LAIL.",
+      "action_review_help": "Показать находки проверки (--mad-dog для состязательной).",
+      "action_repair_help": "Показать план починки для последней итерации.",
+      "action_optimize_help": "Запустить объединённый оптимизатор и выдать рекомендуемый план.",
+      "action_deliver_help": "Решить готово/не готово и перечислить доказательства.",
+      "json_human_flag_help": "Вывод --json (по умолчанию) или --human (Rich панель).",
+      "data_dir_help": "Каталог для запусков, контрольных точек и памяти проекта.",
+      "goal_help": "Исходная цель пользователя (будет нормализована).",
+      "max_iter_help": "Максимум итераций до принудительной сходимости.",
+      "dry_run_help": "Использовать имитационный исполнитель (без реальных сборок/тестов).",
+      "mad_dog_help": "Дополнительно запустить состязательную проверку Mad-Dog.",
+      "run_id_help": "Конкретный run_id (по умолчанию: latest).",
+      "latest_help": "Эквивалент --run-id latest."
+    },
+    "tasks": {
+      "help": "Постоянный список задач (слой координации).",
+      "action_help": "list | next | create | show | todo | done | report | patch | pr | artifacts",
+      "quick_win_help": "Отметить задачу как быструю победу (без worktree)."
+    },
+    "memory": {
+      "help": "Память проекта: list, search, propose, review, reindex, compile.",
+      "action_help": "list | search | propose | review | accept | reject | reindex | compile | failures | decisions",
+      "from_run_help": "Создать предложение памяти для указанного run_id.",
+      "role_help": "Целевая роль для compile: planner | builder | tester | reviewer | repairer | optimizer | deliverer",
+      "verbose_help": "После создания напечатать полное содержимое предложения."
+    },
+    "policy": {
+      "help": "Policy OS: list, show, check, audit, explain."
+    },
+    "locale": {
+      "help": "Показать или установить язык CLI (zh, en, ru).",
+      "set_help": "Установить язык и сохранить в ~/.loopos/config.json.",
+      "show_help": "Показать активный язык и откуда он взят.",
+      "list_help": "Список поддерживаемых языков с их родными названиями."
+    }
+  },
+  "messages": {
+    "no_run": "нет запуска",
+    "no_iterations": "нет итераций",
+    "no_repair_plan": "нет плана починки для последней итерации",
+    "persisted_locale": "Язык сохранён: {locale}",
+    "active_locale": "Активный язык: {locale} (источник: {source})",
+    "supported_locales": "Поддерживаемые языки: {locales}",
+    "config_path": "Файл конфигурации: {path}",
+    "invalid_locale": "Неверный язык: {locale}. Поддерживаются: {supported}",
+    "no_locale_set": "Язык не задан; используется English по умолчанию."
+  },
+  "reason_codes": {
+    "capability_boundary": "граница возможностей",
+    "policy": "политика",
+    "required_for": "требуется для",
+    "release_tag_human_only": "для тега релиза требуется ручное одобрение"
+  },
+  "fake_convergence": {
+    "checkpoint_laundering": "отмывание контрольных точек",
+    "unsat_criteria_hiding": "сокрытие невыполненных критериев"
+  },
+  "errors": {
+    "unknown_action": "Неизвестное действие {command}: {action}",
+    "missing_required_arg": "{command} {action} требует {arg}.",
+    "invalid_json_input": "--input должен быть JSON: {error}",
+    "invalid_json_object": "--input должен быть JSON-объектом.",
+    "task_not_found": "задача не найдена: {id}",
+    "proposal_not_found": "предложение не найдено: {id}",
+    "skill_not_found": "навык не найден: {id}"
+  }
+}

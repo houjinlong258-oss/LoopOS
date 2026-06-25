@@ -1,0 +1,262 @@
+{
+  "_meta": {
+    "locale": "zh",
+    "name": "中文",
+    "english_name": "Chinese",
+    "rtl": false,
+    "version": "0.4.0",
+    "note": "Simplified Chinese translations. Canonical keys in en.json; missing keys fall back to English."
+  },
+  "app": {
+    "name": "LoopOS",
+    "tagline": "项目训练运行时"
+  },
+  "panel": {
+    "run": {
+      "title": "循环运行",
+      "run_label": "运行ID",
+      "user_goal_label": "用户目标",
+      "status_label": "状态",
+      "iterations_label": "迭代次数",
+      "delivery_label": "交付",
+      "known_limits_label": "已知限制",
+      "inner_no_details": "无迭代详情",
+      "inner_last_plan": "最近计划",
+      "inner_build": "构建",
+      "inner_test": "测试",
+      "inner_quality": "质量",
+      "inner_convergence": "收敛",
+      "passed_prefix": "通过",
+      "failed_prefix": "失败",
+      "fake_convergence_prefix": "伪收敛"
+    },
+    "status": {
+      "title": "循环状态",
+      "subtitle_latest": "--最新",
+      "run_label": "运行ID",
+      "user_goal_label": "用户目标",
+      "current_status_label": "当前状态",
+      "current_iteration_label": "当前迭代",
+      "checkpoint_path_label": "检查点路径",
+      "lail_kinds_label": "LAIL 信号类型",
+      "last_quality_label": "上次质量",
+      "last_loss_label": "上次损失",
+      "convergence_label": "收敛",
+      "reason_codes_label": "原因代码",
+      "fake_convergence_label": "伪收敛",
+      "blocking_findings_label": "阻塞性发现",
+      "next_action_label": "建议下一步",
+      "more_suffix": "条更多",
+      "fresh_note": "本进程是全新的 Python 解释器 — 无进程内状态"
+    },
+    "deliver": {
+      "title": "循环交付",
+      "subtitle_latest": "--最新",
+      "run_label": "运行ID",
+      "user_goal_label": "用户目标",
+      "delivery_status_label": "交付状态",
+      "ready_label": "就绪",
+      "why_label": "原因",
+      "coverage_label": "覆盖",
+      "quality_label": "质量",
+      "convergence_label": "收敛",
+      "iterations_label": "迭代次数",
+      "known_limits_label": "已知限制",
+      "next_loop_label": "下一轮循环",
+      "coverage_required_prefix": "必需",
+      "coverage_satisfied_prefix": "已满足",
+      "coverage_unsatisfied_prefix": "未满足"
+    },
+    "review": {
+      "title": "循环审查",
+      "run_label": "运行ID",
+      "iteration_label": "迭代",
+      "findings_label": "发现",
+      "mad_dog_label": "狂犬审查",
+      "no_findings": "无发现",
+      "more_findings_suffix": "条更多发现",
+      "more_suffix": "条更多",
+      "mad_dog_heading": "狂犬审查",
+      "findings_count_suffix": "条发现"
+    },
+    "repair": {
+      "title": "循环修复",
+      "run_label": "运行ID",
+      "iteration_label": "迭代",
+      "status_label": "状态",
+      "plan_id_label": "计划ID",
+      "priority_label": "优先级",
+      "source_count_label": "源发现数",
+      "steps_label": "步骤数",
+      "tests_to_run_label": "待跑测试",
+      "expected_fix_label": "预期修复",
+      "no_plan_title": "循环修复",
+      "no_plan_status": "无修复计划",
+      "no_plan_note": "本迭代未生成修复计划",
+      "source_findings_heading": "源发现",
+      "steps_heading": "步骤",
+      "tests_to_run_heading": "待跑测试",
+      "more_suffix": "条更多",
+      "no_steps": "无步骤"
+    },
+    "optimize": {
+      "title": "循环优化",
+      "result_id_label": "结果ID",
+      "mode_label": "模式",
+      "confidence_label": "置信度",
+      "alternatives_label": "备选方案数",
+      "findings_label": "发现数",
+      "has_repair_plan_label": "含修复计划",
+      "has_optimization_label": "含优化计划",
+      "recommended_plan_heading": "推荐计划",
+      "rationale_heading": "理由",
+      "disagreements_heading": "分歧",
+      "findings_heading": "发现",
+      "source_prefix": "来源",
+      "more_suffix": "条更多",
+      "no_detail": "无详情",
+      "yes": "是",
+      "no": "否",
+      "confidence_format": "置信度={value}"
+    },
+    "generic": {
+      "title": "循环结果",
+      "no_iterations": "无迭代",
+      "no_run": "无运行"
+    },
+    "tasks": {
+      "list_title": "任务列表",
+      "empty": "暂无任务。",
+      "empty_title": "任务列表",
+      "artifacts_title": "任务产物"
+    },
+    "memory": {
+      "list_title": "记忆列表",
+      "search_title": "记忆搜索",
+      "review_title": "记忆提案（待审）",
+      "reindex_title": "记忆重建索引",
+      "compile_title": "记忆编译",
+      "compile_closeout_title": "记忆编译（收尾）",
+      "propose_title": "记忆提案",
+      "failures_title": "失败记忆",
+      "decisions_title": "决策记忆",
+      "no_items": "暂无记录。",
+      "selected_label": "已选用",
+      "omitted_label": "已略去",
+      "tokens_label": "令牌数",
+      "role_label": "角色",
+      "more_suffix": "条更多"
+    }
+  },
+  "status": {
+    "ready_to_deliver": "可交付",
+    "ready": "就绪",
+    "ok": "正常",
+    "completed": "已完成",
+    "pass": "通过",
+    "running": "运行中",
+    "active": "活跃",
+    "in_progress": "进行中",
+    "blocked": "已阻塞",
+    "denied": "已拒绝",
+    "halt": "已停止",
+    "error": "错误",
+    "failed": "失败",
+    "halted": "已暂停",
+    "budget_exhausted": "预算耗尽",
+    "no_repair_plan": "无修复计划",
+    "calm": "平静",
+    "mood_calm": "平静",
+    "mood_running": "运行中",
+    "mood_blocked": "已阻塞",
+    "mood_halted": "已暂停"
+  },
+  "severity": {
+    "high": "高",
+    "critical": "严重",
+    "blocking": "阻塞",
+    "medium": "中",
+    "warning": "警告",
+    "low": "低",
+    "info": "提示"
+  },
+  "task_status": {
+    "open": "待办",
+    "in_progress": "进行中",
+    "blocked": "阻塞",
+    "done": "完成",
+    "completed": "已完成",
+    "ready": "就绪",
+    "draft": "草稿"
+  },
+  "commands": {
+    "loop": {
+      "help": "运行 / 检查 / 修复 项目训练循环",
+      "action_run_help": "用 GOAL 驱动一次新的循环迭代。",
+      "action_status_help": "查看最新循环状态和 LAIL 信号汇总。",
+      "action_review_help": "查看审查发现（加 --mad-dog 可启用对抗性审查）。",
+      "action_repair_help": "展示最新一轮的修复计划。",
+      "action_optimize_help": "运行融合优化器并给出推荐的下一步计划。",
+      "action_deliver_help": "判定是否可交付，并列出证据。",
+      "json_human_flag_help": "输出 --json（默认）或 --human（Rich 面板）。",
+      "data_dir_help": "LoopOS 存放运行、检查点、项目记忆的目录。",
+      "goal_help": "原始用户目标（纯文本，内部会规范化）。",
+      "max_iter_help": "强制收敛前的最大迭代次数。",
+      "dry_run_help": "使用模拟执行器（不真实构建/测试）。",
+      "mad_dog_help": "同时运行对抗性 Mad-Dog 审查。",
+      "run_id_help": "指定 run_id（默认：latest）。",
+      "latest_help": "等价于 --run-id latest。"
+    },
+    "tasks": {
+      "help": "持久化任务列表（工作台协调层）。",
+      "action_help": "list | next | create | show | todo | done | report | patch | pr | artifacts",
+      "quick_win_help": "将任务标记为速赢（不需要 worktree）。"
+    },
+    "memory": {
+      "help": "项目记忆：list、search、propose、review、reindex、compile。",
+      "action_help": "list | search | propose | review | accept | reject | reindex | compile | failures | decisions",
+      "from_run_help": "从指定 run_id 生成记忆提案。",
+      "role_help": "compile 目标角色：planner | builder | tester | reviewer | repairer | optimizer | deliverer",
+      "verbose_help": "创建后打印完整提案内容。"
+    },
+    "policy": {
+      "help": "Policy OS：list、show、check、audit、explain。"
+    },
+    "locale": {
+      "help": "查看或设置 CLI 语言（zh、en、ru）。",
+      "set_help": "设置当前语言并持久化到 ~/.loopos/config.json。",
+      "show_help": "查看当前语言及其来源。",
+      "list_help": "列出所有支持的语言（含本地名称）。"
+    }
+  },
+  "messages": {
+    "no_run": "无运行",
+    "no_iterations": "无迭代",
+    "no_repair_plan": "最新一轮没有修复计划",
+    "persisted_locale": "语言已持久化：{locale}",
+    "active_locale": "当前语言：{locale}（来源：{source}）",
+    "supported_locales": "支持的语言：{locales}",
+    "config_path": "配置文件：{path}",
+    "invalid_locale": "无效的语言：{locale}。支持：{supported}",
+    "no_locale_set": "未设置语言，使用默认 English。"
+  },
+  "reason_codes": {
+    "capability_boundary": "能力边界",
+    "policy": "策略",
+    "required_for": "必需",
+    "release_tag_human_only": "发布标签需人工审批"
+  },
+  "fake_convergence": {
+    "checkpoint_laundering": "检查点伪造",
+    "unsat_criteria_hiding": "未满足标准被隐藏"
+  },
+  "errors": {
+    "unknown_action": "未知的 {command} 操作：{action}",
+    "missing_required_arg": "{command} {action} 需要 {arg}。",
+    "invalid_json_input": "--input 必须是 JSON：{error}",
+    "invalid_json_object": "--input 必须是一个 JSON 对象。",
+    "task_not_found": "未找到任务：{id}",
+    "proposal_not_found": "未找到提案：{id}",
+    "skill_not_found": "未找到技能：{id}"
+  }
+}

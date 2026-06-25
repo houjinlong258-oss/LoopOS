@@ -1,0 +1,262 @@
+{
+  "_meta": {
+    "locale": "en",
+    "name": "English",
+    "english_name": "English",
+    "rtl": false,
+    "version": "0.4.0",
+    "note": "Canonical English strings. All other locales mirror this schema; missing keys fall back here."
+  },
+  "app": {
+    "name": "LoopOS",
+    "tagline": "Project Training Runtime"
+  },
+  "panel": {
+    "run": {
+      "title": "loop run",
+      "run_label": "Run",
+      "user_goal_label": "User goal",
+      "status_label": "Status",
+      "iterations_label": "Iterations",
+      "delivery_label": "Delivery",
+      "known_limits_label": "Known limits",
+      "inner_no_details": "no iteration details",
+      "inner_last_plan": "Last plan",
+      "inner_build": "Build",
+      "inner_test": "Test",
+      "inner_quality": "Quality",
+      "inner_convergence": "Convergence",
+      "passed_prefix": "passed",
+      "failed_prefix": "failed",
+      "fake_convergence_prefix": "fake_convergence"
+    },
+    "status": {
+      "title": "loop status",
+      "subtitle_latest": "--latest",
+      "run_label": "Run",
+      "user_goal_label": "User goal",
+      "current_status_label": "Current status",
+      "current_iteration_label": "Current iteration",
+      "checkpoint_path_label": "Checkpoint path",
+      "lail_kinds_label": "LAIL kinds",
+      "last_quality_label": "Last quality",
+      "last_loss_label": "Last loss",
+      "convergence_label": "Convergence",
+      "reason_codes_label": "Reason codes",
+      "fake_convergence_label": "Fake-convergence",
+      "blocking_findings_label": "Blocking findings",
+      "next_action_label": "Next action",
+      "more_suffix": "more",
+      "fresh_note": "this process is a fresh Python interpreter — no in-process state"
+    },
+    "deliver": {
+      "title": "loop deliver",
+      "subtitle_latest": "--latest",
+      "run_label": "Run",
+      "user_goal_label": "User goal",
+      "delivery_status_label": "Delivery status",
+      "ready_label": "Ready",
+      "why_label": "Why",
+      "coverage_label": "Coverage",
+      "quality_label": "Quality",
+      "convergence_label": "Convergence",
+      "iterations_label": "Iterations",
+      "known_limits_label": "Known limits",
+      "next_loop_label": "Next loop",
+      "coverage_required_prefix": "required",
+      "coverage_satisfied_prefix": "satisfied",
+      "coverage_unsatisfied_prefix": "unsatisfied"
+    },
+    "review": {
+      "title": "loop review",
+      "run_label": "Run",
+      "iteration_label": "Iteration",
+      "findings_label": "Findings",
+      "mad_dog_label": "Mad-dog",
+      "no_findings": "no findings",
+      "more_findings_suffix": "more findings",
+      "more_suffix": "more",
+      "mad_dog_heading": "Mad-dog review",
+      "findings_count_suffix": "findings"
+    },
+    "repair": {
+      "title": "loop repair",
+      "run_label": "Run",
+      "iteration_label": "Iteration",
+      "status_label": "Status",
+      "plan_id_label": "Plan id",
+      "priority_label": "Priority",
+      "source_count_label": "Source count",
+      "steps_label": "Steps",
+      "tests_to_run_label": "Tests to run",
+      "expected_fix_label": "Expected fix",
+      "no_plan_title": "loop repair",
+      "no_plan_status": "no_repair_plan",
+      "no_plan_note": "no repair plan produced for this iteration",
+      "source_findings_heading": "Source findings",
+      "steps_heading": "Steps",
+      "tests_to_run_heading": "Tests to run",
+      "more_suffix": "more",
+      "no_steps": "no steps"
+    },
+    "optimize": {
+      "title": "loop optimize",
+      "result_id_label": "Result id",
+      "mode_label": "Mode",
+      "confidence_label": "Confidence",
+      "alternatives_label": "Alternatives",
+      "findings_label": "Findings",
+      "has_repair_plan_label": "Has repair plan",
+      "has_optimization_label": "Has optimization",
+      "recommended_plan_heading": "Recommended plan",
+      "rationale_heading": "Rationale",
+      "disagreements_heading": "Disagreements",
+      "findings_heading": "Findings",
+      "source_prefix": "source",
+      "more_suffix": "more",
+      "no_detail": "no detail",
+      "yes": "yes",
+      "no": "no",
+      "confidence_format": "confidence={value}"
+    },
+    "generic": {
+      "title": "loop result",
+      "no_iterations": "no iterations",
+      "no_run": "no run"
+    },
+    "tasks": {
+      "list_title": "tasks list",
+      "empty": "No tasks stored.",
+      "empty_title": "tasks list",
+      "artifacts_title": "tasks artifacts"
+    },
+    "memory": {
+      "list_title": "memory list",
+      "search_title": "memory search",
+      "review_title": "memory proposals (pending)",
+      "reindex_title": "memory reindex",
+      "compile_title": "memory compile",
+      "compile_closeout_title": "memory compile (closeout)",
+      "propose_title": "memory propose",
+      "failures_title": "memory failures",
+      "decisions_title": "memory decisions",
+      "no_items": "No items.",
+      "selected_label": "selected",
+      "omitted_label": "omitted",
+      "tokens_label": "tokens",
+      "role_label": "role",
+      "more_suffix": "more"
+    }
+  },
+  "status": {
+    "ready_to_deliver": "ready_to_deliver",
+    "ready": "ready",
+    "ok": "ok",
+    "completed": "completed",
+    "pass": "pass",
+    "running": "running",
+    "active": "active",
+    "in_progress": "in_progress",
+    "blocked": "blocked",
+    "denied": "denied",
+    "halt": "halt",
+    "error": "error",
+    "failed": "failed",
+    "halted": "halted",
+    "budget_exhausted": "budget_exhausted",
+    "no_repair_plan": "no_repair_plan",
+    "calm": "calm",
+    "mood_calm": "calm",
+    "mood_running": "running",
+    "mood_blocked": "blocked",
+    "mood_halted": "halted"
+  },
+  "severity": {
+    "high": "high",
+    "critical": "critical",
+    "blocking": "blocking",
+    "medium": "medium",
+    "warning": "warning",
+    "low": "low",
+    "info": "info"
+  },
+  "task_status": {
+    "open": "open",
+    "in_progress": "in_progress",
+    "blocked": "blocked",
+    "done": "done",
+    "completed": "completed",
+    "ready": "ready",
+    "draft": "draft"
+  },
+  "commands": {
+    "loop": {
+      "help": "Run / inspect / repair a project-training loop",
+      "action_run_help": "Drive a new loop iteration on a GOAL.",
+      "action_status_help": "Show the latest loop state and LAIL kind summary.",
+      "action_review_help": "Review findings (use --mad-dog for adversarial review).",
+      "action_repair_help": "Show the repair plan for the latest iteration.",
+      "action_optimize_help": "Run the fusion optimiser and emit a recommended next plan.",
+      "action_deliver_help": "Decide ready/not-ready and surface evidence.",
+      "json_human_flag_help": "Output --json (default) or --human (Rich panel).",
+      "data_dir_help": "Where LoopOS keeps runs, checkpoints, and project memory.",
+      "goal_help": "Raw user goal (raw text; normalised internally).",
+      "max_iter_help": "Maximum iterations before forced convergence.",
+      "dry_run_help": "Use the simulated executor (no real builds / tests).",
+      "mad_dog_help": "Also re-run the adversarial Mad-Dog review.",
+      "run_id_help": "Specific run_id (default: latest).",
+      "latest_help": "Equivalent to --run-id latest."
+    },
+    "tasks": {
+      "help": "Persistent task list (workbench coordination layer).",
+      "action_help": "list | next | create | show | todo | done | report | patch | pr | artifacts",
+      "quick_win_help": "Mark the task as a quick-win (no worktree required)."
+    },
+    "memory": {
+      "help": "Project memory: list, search, propose, review, reindex, compile.",
+      "action_help": "list | search | propose | review | accept | reject | reindex | compile | failures | decisions",
+      "from_run_help": "Build a memory proposal from a specific run_id.",
+      "role_help": "Target role for compile: planner | builder | tester | reviewer | repairer | optimizer | deliverer",
+      "verbose_help": "Print the full proposal payload after creation."
+    },
+    "policy": {
+      "help": "Policy OS: list, show, check, audit, explain."
+    },
+    "locale": {
+      "help": "Show or set the CLI locale (zh, en, ru).",
+      "set_help": "Set the active locale and persist to ~/.loopos/config.json.",
+      "show_help": "Show the active locale and where it came from.",
+      "list_help": "List all supported locales with their native names."
+    }
+  },
+  "messages": {
+    "no_run": "no run",
+    "no_iterations": "no iterations",
+    "no_repair_plan": "no repair plan for the latest iteration",
+    "persisted_locale": "Locale persisted: {locale}",
+    "active_locale": "Active locale: {locale} (source: {source})",
+    "supported_locales": "Supported locales: {locales}",
+    "config_path": "Config file: {path}",
+    "invalid_locale": "Invalid locale: {locale}. Supported: {supported}",
+    "no_locale_set": "No locale set; defaulting to English."
+  },
+  "reason_codes": {
+    "capability_boundary": "capability boundary",
+    "policy": "policy",
+    "required_for": "required for",
+    "release_tag_human_only": "release-tag human approval required"
+  },
+  "fake_convergence": {
+    "checkpoint_laundering": "checkpoint laundering",
+    "unsat_criteria_hiding": "unsatisfied criteria hidden"
+  },
+  "errors": {
+    "unknown_action": "Unknown {command} action: {action}",
+    "missing_required_arg": "{command} {action} requires {arg}.",
+    "invalid_json_input": "--input must be JSON: {error}",
+    "invalid_json_object": "--input must be a JSON object.",
+    "task_not_found": "task not found: {id}",
+    "proposal_not_found": "proposal not found: {id}",
+    "skill_not_found": "skill not found: {id}"
+  }
+}
