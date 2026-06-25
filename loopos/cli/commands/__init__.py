@@ -62,6 +62,12 @@ from loopos.cli.commands.loop import (
 )
 from loopos.cli.commands.locale import locale_command
 from loopos.cli.commands.memory_v04 import memory_compile_command
+from loopos.cli.commands.hookify import (
+    hookify_list_command,
+    hookify_enable_command,
+    hookify_disable_command,
+    hookify_test_command,
+)
 
 __all__ = [
     "ail_command",
@@ -126,4 +132,8 @@ __all__ = [
     "loop_status_command",
     "locale_command",
     "memory_compile_command",
+    "hookify_list_command",
+    "hookify_enable_command",
+    "hookify_disable_command",
+    "hookify_test_command",
 ]
