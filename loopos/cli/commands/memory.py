@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from loopos.cli.context import data_paths
+from loopos.i18n import t as _t
 from loopos.memory.repository import MemoryRepository
 from loopos.agent_language.roles import AgentRole
 from loopos.project_memory import MemoryCompiler
@@ -15,7 +16,12 @@ from loopos.project_memory import MemoryCompiler
 
 def _render_memory_panel(title: str, items: list[dict[str, Any]],
                          *, border_color: str = "cyan") -> int:
-    """Render a list of memory records as a Rich table panel."""
+    """Render a list of memory records as a Rich table panel.
+
+    ``title`` may be a raw string or a translation key (we look up
+    ``title`` first against the catalog; if it starts with ``"memory."``
+    we treat it as a key, otherwise as a literal title).
+    """
     from loopos.cli._human_styles import HAS_RICH
     if not HAS_RICH:
         print(json.dumps(items, ensure_ascii=False, indent=2))
@@ -24,10 +30,11 @@ def _render_memory_panel(title: str, items: list[dict[str, Any]],
     from rich.panel import Panel
     from rich.table import Table
     console = Console()
+    resolved_title = _t(title) if title.startswith("panel.memory.") or title.startswith("memory.") else title
     if not items:
         console.print(Panel(
-            "[dim]No items.[/dim]",
-            title=f"[bold {border_color}]{title}[/bold {border_color}]",
+            f"[dim]{_t('panel.memory.no_items')}[/dim]",
+            title=f"[bold {border_color}]{resolved_title}[/bold {border_color}]",
             border_style=border_color,
         ))
         return 0
@@ -43,15 +50,16 @@ def _render_memory_panel(title: str, items: list[dict[str, Any]],
         summary = item.get("summary") or item.get("content") or ""
         if len(summary) > 60:
             summary = summary[:57] + "..."
+        status_label = _t(f"task_status.{item.get('status', '?')}", default=str(item.get("status", "?")))
         t.add_row(
             item.get("id", "?"),
             item.get("type", "?"),
-            item.get("status", "?"),
+            status_label,
             tags,
             summary,
         )
     console.print(Panel(t,
-        title=f"[bold {border_color}]{title}[/bold {border_color}] "
+        title=f"[bold {border_color}]{resolved_title}[/bold {border_color}] "
               f"[{border_color}]{len(items)} item(s)[/{border_color}]",
         border_style=border_color))
     return 0
@@ -72,7 +80,7 @@ def _render_memory_counts_panel(counts: dict[str, int]) -> int:
     grid.add_column()
     for k, v in counts.items():
         grid.add_row(f"[bold white]{k}[/bold white]", f"[cyan]{v}[/cyan]")
-    console.print(Panel(grid, title="[bold cyan]memory reindex[/bold cyan]",
+    console.print(Panel(grid, title=f"[bold cyan]{_t('panel.memory.reindex_title')}[/bold cyan]",
                         border_style="cyan"))
     return 0
 
@@ -150,7 +158,7 @@ def memory_command(
     if action == "list":
         items = repo.list_memory(status="active")
         if human_output:
-            return _render_memory_panel("memory list",
+            return _render_memory_panel("panel.memory.list_title",
                                         [i.model_dump(mode="json") for i in items])
         if not items:
             print("No active memory.")
@@ -169,7 +177,7 @@ def memory_command(
             return 1
         items = repo.retrieve(query_text=arg, tags=arg.split(), limit=10)
         if human_output:
-            return _render_memory_panel(f"memory search [{arg}]",
+            return _render_memory_panel(f"panel.memory.search_title [{arg}]",
                                         [i.model_dump(mode="json") for i in items])
         print(
             json.dumps(
@@ -203,7 +211,7 @@ def memory_command(
                     v = json.dumps(v, ensure_ascii=False, indent=2)
                 grid.add_row(f"[bold white]{k}[/bold white]", str(v))
             console.print(Panel(grid,
-                title=f"[bold cyan]memory propose[/bold cyan] [cyan]{payload.get('id', '?')}[/cyan]",
+                title=f"[bold cyan]{_t('panel.memory.propose_title')}[/bold cyan] [cyan]{payload.get('id', '?')}[/cyan]",
                 border_style="cyan"))
             return 0
         print(f"Created proposal {proposal.id}")
@@ -213,7 +221,7 @@ def memory_command(
     if action == "review":
         proposals = repo.list_proposals(status="pending")
         if human_output:
-            return _render_memory_panel("memory proposals (pending)",
+            return _render_memory_panel("panel.memory.review_title",
                                         [p.model_dump(mode="json") for p in proposals],
                                         border_color="yellow")
         if not proposals:
@@ -283,12 +291,16 @@ def memory_command(
             grid = Table.grid(expand=True, padding=(0, 1))
             grid.add_column(width=18)
             grid.add_column()
-            grid.add_row("[bold white]role[/bold white]", f"[cyan]{payload.get('target_role', '?')}[/cyan]")
-            grid.add_row("[bold white]selected[/bold white]", f"[green]{len(payload.get('selected_memory', []))}[/green]")
-            grid.add_row("[bold white]omitted[/bold white]", f"[yellow]{len(payload.get('omitted_memory_reason', []))}[/yellow]")
-            grid.add_row("[bold white]tokens[/bold white]", f"[blue]{payload.get('estimated_tokens', 0)}/{payload.get('token_budget', 0)}[/blue]")
+            grid.add_row(f"[bold white]{_t('panel.memory.role_label')}[/bold white]",
+                         f"[cyan]{payload.get('target_role', '?')}[/cyan]")
+            grid.add_row(f"[bold white]{_t('panel.memory.selected_label')}[/bold white]",
+                         f"[green]{len(payload.get('selected_memory', []))}[/green]")
+            grid.add_row(f"[bold white]{_t('panel.memory.omitted_label')}[/bold white]",
+                         f"[yellow]{len(payload.get('omitted_memory_reason', []))}[/yellow]")
+            grid.add_row(f"[bold white]{_t('panel.memory.tokens_label')}[/bold white]",
+                         f"[blue]{payload.get('estimated_tokens', 0)}/{payload.get('token_budget', 0)}[/blue]")
             console.print(Panel(grid,
-                title="[bold cyan]memory compile[/bold cyan]",
+                title=f"[bold cyan]{_t('panel.memory.compile_title')}[/bold cyan]",
                 border_style="cyan"))
             return 0
         print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -299,7 +311,7 @@ def memory_command(
             if item.type == "failure" or "failure" in item.tags
         ]
         if human_output:
-            return _render_memory_panel("memory failures",
+            return _render_memory_panel("panel.memory.failures_title",
                                         [i.model_dump(mode="json") for i in items],
                                         border_color="red")
         print(
@@ -316,7 +328,7 @@ def memory_command(
             if item.type == "fact" and "decision" in item.tags
         ]
         if human_output:
-            return _render_memory_panel("memory decisions",
+            return _render_memory_panel("panel.memory.decisions_title",
                                         [i.model_dump(mode="json") for i in items])
         print(
             json.dumps(

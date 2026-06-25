@@ -148,6 +148,25 @@ def _fit_budget(packet: ContextPacket) -> ContextPacket:
             packet.relevant_tests.pop()
         elif packet.relevant_files:
             packet.relevant_files.pop()
+        elif packet.selected_memory:
+            omitted = list(packet.omitted_memory_reason)
+            omitted.extend(
+                f"{item.id}: omitted to satisfy token budget"
+                for item in packet.selected_memory
+            )
+            packet = packet.model_copy(
+                update={"selected_memory": [], "omitted_memory_reason": omitted}
+            )
+        elif packet.omitted_memory_reason and packet.omitted_memory_reason != [
+            "memory omitted to satisfy token budget"
+        ]:
+            packet = packet.model_copy(
+                update={"omitted_memory_reason": ["memory omitted to satisfy token budget"]}
+            )
+        elif packet.avoid_repeating:
+            packet.avoid_repeating.pop()
+        elif packet.expected_output:
+            packet = packet.model_copy(update={"expected_output": ""})
         else:
             return packet
 
