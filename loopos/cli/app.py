@@ -48,6 +48,10 @@ from loopos.cli.commands import (  # noqa: E402
     locale_command as locale_command,
     loop_status_command as loop_status_command,
     mad_dog_command as mad_dog_command,
+    hookify_list_command as hookify_list_command,
+    hookify_enable_command as hookify_enable_command,
+    hookify_disable_command as hookify_disable_command,
+    hookify_test_command as hookify_test_command,
     memory_command as memory_command,
     memory_compile_command as memory_compile_command,
     mode_command as mode_command,
@@ -671,6 +675,43 @@ if _HAS_TUI:
             locale_command(action, locale_id, json_output=json_output)
         )
 
+    # v0.4.x: hookify — user-editable policy hooks via .local.md
+    # rule files. See loopos/hookify/__init__.py.
+    @app.command("hookify", help="User-editable policy hooks (.loopos/hookify.*.local.md)")
+    def _typer_hookify(
+        action: str = typer_mod.Argument("list"),
+        name: str | None = typer_mod.Argument(None),
+        event: str = typer_mod.Option("all", "--event"),
+        data: str | None = typer_mod.Option(None, "--data"),
+        json_output: bool = typer_mod.Option(True, "--json/--human"),
+        data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+    ) -> None:
+        if action == "list":
+            raise typer_mod.Exit(
+                hookify_list_command(data_dir=data_dir, json_output=json_output)
+            )
+        if action == "enable":
+            if not name:
+                raise typer_mod.BadParameter("rule name is required for `hookify enable`")
+            raise typer_mod.Exit(
+                hookify_enable_command(name, data_dir=data_dir)
+            )
+        if action == "disable":
+            if not name:
+                raise typer_mod.BadParameter("rule name is required for `hookify disable`")
+            raise typer_mod.Exit(
+                hookify_disable_command(name, data_dir=data_dir)
+            )
+        if action == "test":
+            if not name:
+                raise typer_mod.BadParameter("rule name is required for `hookify test`")
+            raise typer_mod.Exit(
+                hookify_test_command(
+                    name, event=event, data=data, data_dir=data_dir,
+                )
+            )
+        raise typer_mod.BadParameter(f"unknown hookify action: {action}")
+
     @app.command("ail")
     def _typer_ail(
         action: str = typer_mod.Argument("validate"),
@@ -827,6 +868,12 @@ if _HAS_TUI:
         run_id: str | None = typer_mod.Option(None, "--run-id"),
         latest: bool = typer_mod.Option(False, "--latest"),
         data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+        completion_promise: str | None = typer_mod.Option(
+            None, "--completion-promise",
+            help="Literal substring: when an iteration's emitted surface "
+            "contains this string, the loop declares early success and "
+            "stops. Always bounded by --max-iterations.",
+        ),
     ) -> None:
         rid = "latest" if latest else run_id
         if action == "run":
@@ -844,6 +891,7 @@ if _HAS_TUI:
                     json_output=json_output,
                     run_id=rid,
                     data_dir=data_dir,
+                    completion_promise=completion_promise,
                 )
             )
         if action == "status":

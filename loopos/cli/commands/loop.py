@@ -105,6 +105,41 @@ def _latest_state() -> LoopState | None:
 # ---------------------------------------------------------------------------
 
 
+def _iteration_emits_promise(iteration: Any, promise: str) -> bool:
+    """Return True if the iteration's emitted surface contains ``promise``.
+
+    Mirrors ``loopos.loop_engine.loop._iteration_emits_promise``. Kept
+    here so the CLI command path can short-circuit on the promise
+    without re-importing the engine helper (which would create a
+    circular import via ``loop_engine -> quality -> loop_engine``).
+    """
+    if not promise:
+        return False
+    needle = promise.strip()
+    if not needle:
+        return False
+    candidates: list[str] = []
+    if getattr(iteration, "build_result", None) is not None:
+        candidates.append(getattr(iteration.build_result, "summary", "") or "")
+        for art in getattr(iteration.build_result, "artifacts", None) or []:
+            candidates.append(str(art))
+    if getattr(iteration, "test_result", None) is not None:
+        for s in (getattr(iteration.test_result, "failures", None) or []):
+            candidates.append(str(s))
+        for s in (getattr(iteration.test_result, "commands", None) or []):
+            candidates.append(str(s))
+        for s in (getattr(iteration.test_result, "evidence", None) or []):
+            candidates.append(str(s))
+    if getattr(iteration, "repair_plan", None) is not None:
+        candidates.append(" ".join(getattr(iteration.repair_plan, "steps", None) or []))
+    if getattr(iteration, "optimization_plan", None) is not None:
+        candidates.append(getattr(iteration.optimization_plan, "rationale", "") or "")
+        candidates.append(getattr(iteration.optimization_plan, "summary", "") or "")
+    for f in getattr(iteration, "review_findings", None) or []:
+        candidates.append(getattr(f, "claim", "") or "")
+    return any(needle in c for c in candidates)
+
+
 def _convergence_decide(
     state: LoopState, quality: Any, findings: list[Any]
 ) -> Any:
@@ -768,6 +803,7 @@ def loop_run_command(
     json_output: bool = True,
     run_id: str | None = None,
     data_dir: str | None = None,
+    completion_promise: str | None = None,
 ) -> int:
     """Drive the loop. Persists to ``<data_dir>/runs/<run_id>/``."""
     dd = Path(data_dir) if data_dir else None
@@ -826,6 +862,7 @@ def loop_run_command(
         success_criteria=success_criteria,
         max_iterations=max(1, int(max_iterations)),
         trace_id=run_id,
+        completion_promise=(completion_promise or None) or None,
     )
     lail_bus.make(
         "iteration_started", run_id=run_id, iteration_index=0,
@@ -897,9 +934,29 @@ def loop_run_command(
 
         # Convergence (set on the iteration before persisting so
         # the on-disk record includes the convergence decision).
+        # If the user supplied --completion-promise and the iteration's
+        # surface contains it, override the convergence decision with a
+        # Ralph-style early-success deliver.
         status = _convergence_decide(
             state, iteration.quality_score, iteration.review_findings,
         )
+        if (
+            state.completion_promise
+            and _iteration_emits_promise(iteration, state.completion_promise)
+        ):
+            state.completion_promise_matched_at = iteration.index
+            from loopos.loop_engine.models import ConvergenceReport as _PromiseReport
+            status = _PromiseReport(
+                status="deliver",
+                reason=(
+                    f"completion_promise {state.completion_promise!r} "
+                    f"matched at iteration {iteration.index}"
+                ),
+                satisfied_criteria=list(state.success_criteria.required_tests or []),
+                unsatisfied_criteria=[],
+                next_recommended_action=None,
+                fake_convergence=[],
+            )
         iteration.convergence = status
         lail_bus.make(
             "convergence_decided", run_id=run_id, iteration_index=iteration.index,

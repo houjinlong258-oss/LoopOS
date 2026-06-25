@@ -302,6 +302,8 @@ class LoopState(BaseModel):
     current_status: LoopStatus = "initialized"
     max_iterations: int = 3
     trace_id: str | None = None
+    completion_promise: str | None = None
+    completion_promise_matched_at: int | None = None
 
     def latest_iteration(self) -> LoopIteration | None:
         return self.iterations[-1] if self.iterations else None

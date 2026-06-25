@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 
 from loopos.cli.commands import (
@@ -30,6 +31,10 @@ from loopos.cli.commands import (
     locale_command,
     mode_command,
     models_command,
+    hookify_list_command,
+    hookify_enable_command,
+    hookify_disable_command,
+    hookify_test_command,
     nodes_command,
     policy_command,
     profile_command,
@@ -400,6 +405,20 @@ def fallback_main(argv: list[str] | None = None) -> int:
     locale_parser.add_argument("locale_id", nargs="?")
     locale_parser.add_argument("--json", dest="json_output", action="store_true")
 
+    # v0.4.x: hookify
+    hookify_parser = sub.add_parser("hookify")
+    hookify_parser.add_argument("action", nargs="?", default="list")
+    hookify_parser.add_argument("name", nargs="?")
+    hookify_parser.add_argument("--event", dest="event", default="all")
+    hookify_parser.add_argument("--data", dest="data", default=None)
+    hookify_parser.add_argument(
+        "--json", dest="json_output", action="store_true", default=True,
+    )
+    hookify_parser.add_argument(
+        "--human", dest="json_output", action="store_false",
+    )
+    hookify_parser.add_argument("--data-dir", dest="data_dir", default=".loopos")
+
     # v0.4.0: Loop Engineering commands
     loop_parser = sub.add_parser("loop")
     loop_parser.add_argument("action", nargs="?", default="run")
@@ -411,6 +430,14 @@ def fallback_main(argv: list[str] | None = None) -> int:
     loop_parser.add_argument("--no-sandbox", dest="sandbox", action="store_false")
     loop_parser.add_argument("--repo-path", dest="repo_path", default=None)
     loop_parser.add_argument("--test-command", dest="test_command", default=None)
+    loop_parser.add_argument(
+        "--completion-promise",
+        dest="completion_promise",
+        default=None,
+        help="Literal substring: when an iteration's emitted surface "
+        "contains this string, the loop declares early success and stops. "
+        "Always bounded by --max-iterations.",
+    )
     loop_parser.add_argument("--mad-dog", dest="mad_dog", action="store_true")
     loop_parser.add_argument("--json", dest="json_output", action="store_true")
     loop_parser.add_argument("--run-id", dest="run_id", default=None)
@@ -630,6 +657,34 @@ def fallback_main(argv: list[str] | None = None) -> int:
             args.locale_id,
             json_output=args.json_output,
         )
+    if args.command == "hookify":
+        if args.action == "list":
+            return hookify_list_command(
+                data_dir=args.data_dir, json_output=args.json_output,
+            )
+        if not args.name:
+            print(
+                json.dumps(
+                    {"status": "error", "error_code": "name_required",
+                     "message": f"hookify {args.action!r} requires a rule name"},
+                )
+            )
+            return 1
+        if args.action == "enable":
+            return hookify_enable_command(args.name, data_dir=args.data_dir)
+        if args.action == "disable":
+            return hookify_disable_command(args.name, data_dir=args.data_dir)
+        if args.action == "test":
+            return hookify_test_command(
+                args.name, event=args.event, data=args.data, data_dir=args.data_dir,
+            )
+        print(
+            json.dumps(
+                {"status": "error", "error_code": "unknown_action",
+                 "message": f"unknown hookify action: {args.action!r}"},
+            )
+        )
+        return 1
     if args.command == "computer":
         return computer_command(
             args.action,
@@ -804,6 +859,7 @@ def fallback_main(argv: list[str] | None = None) -> int:
                 json_output=args.json_output,
                 run_id=rid,
                 data_dir=args.data_dir,
+                completion_promise=getattr(args, "completion_promise", None),
             )
         if args.action == "status":
             return loop_status_command(

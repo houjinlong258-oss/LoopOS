@@ -64,6 +64,44 @@ from loopos.quality.scorer import QualityScorer
 ConvergenceDecider = Callable[[LoopState, QualityScore | None, list[ReviewFinding]], Any]
 
 
+def _iteration_emits_promise(iteration: TrainingIteration, promise: str) -> bool:
+    """Return True if the iteration's emitted surface contains ``promise``.
+
+    The match is a literal substring check across the iteration's
+    user-visible surface: build summary, test summary, repair plan
+    summary, optimization plan summary, and review-finding claims.
+    We deliberately do NOT match against internal ids / trace IDs —
+    those are not user-visible.
+    """
+    if not promise:
+        return False
+    needle = promise.strip()
+    if not needle:
+        return False
+    candidates: list[str] = []
+    if iteration.build_result is not None:
+        candidates.append(iteration.build_result.summary or "")
+        for art in iteration.build_result.artifacts or []:
+            candidates.append(str(art))
+    if iteration.test_result is not None:
+        # TestResult has no `summary` field; surface the structured
+        # fields the user typically reads: failures, commands, evidence.
+        for s in (iteration.test_result.failures or []):
+            candidates.append(str(s))
+        for s in (iteration.test_result.commands or []):
+            candidates.append(str(s))
+        for s in (iteration.test_result.evidence or []):
+            candidates.append(str(s))
+    if iteration.repair_plan is not None:
+        candidates.append(" ".join(iteration.repair_plan.steps or []))
+    if iteration.optimization_plan is not None:
+        candidates.append(getattr(iteration.optimization_plan, "rationale", "") or "")
+        candidates.append(getattr(iteration.optimization_plan, "summary", "") or "")
+    for f in iteration.review_findings or []:
+        candidates.append(f.claim or "")
+    return any(needle in c for c in candidates)
+
+
 class LoopEngine:
     """The v0.4.0 loop engine."""
 
@@ -106,6 +144,7 @@ class LoopEngine:
         repo_path: str | None = None,
         test_command: list[str] | None = None,
         convergence_decide: ConvergenceDecider | None = None,
+        completion_promise: str | None = None,
     ) -> LoopState:
         """Drive the loop to convergence (or budget exhaustion).
 
@@ -114,6 +153,13 @@ class LoopEngine:
         provided, the loop runs the configured ``max_iterations`` and
         leaves ``state.current_status`` to the caller (or to the
         ``loopos.quality`` layer when used together).
+
+        ``completion_promise`` is an opt-in Ralph-style short-circuit: when
+        any iteration's emitted surface (build summary, test summary,
+        review findings) contains the promise string, the loop records a
+        successful early completion and stops. The matched iteration index
+        is recorded on the state as ``completion_promise_matched_at`` so
+        the audit trail can replay when the loop declared itself done.
         """
         # 1. Understand the goal.
         original_adapters: tuple[Builder, Tester, Reviewer] | None = None
@@ -151,6 +197,7 @@ class LoopEngine:
             success_criteria=success_criteria,
             max_iterations=max(1, int(max_iterations)),
             trace_id=f"loop_{uuid4().hex[:8]}",
+            completion_promise=(completion_promise or None) or None,
         )
         self._record(LoopEvent(kind=LoopEventKind.LOOP_STARTED, trace_id=state.trace_id))
 
@@ -208,6 +255,43 @@ class LoopEngine:
                 )
                 if self.on_iteration is not None:
                     self.on_iteration(iteration)
+                # Ralph-style completion promise: if the user asked us to
+                # stop on a literal string match and the iteration's
+                # emitted surface contains it, declare early success and
+                # break out of the iteration loop. This is opt-in (only
+                # active when ``completion_promise`` was passed) and
+                # always bounded by ``max_iterations`` (the outer loop's
+                # budget gate still applies).
+                if state.completion_promise and _iteration_emits_promise(
+                    iteration, state.completion_promise
+                ):
+                    state.completion_promise_matched_at = iteration.index
+                    from loopos.loop_engine.models import ConvergenceReport as _CR
+                    iteration.convergence = _CR(
+                        status="deliver",
+                        reason=(
+                            f"completion_promise {state.completion_promise!r} "
+                            f"matched at iteration {iteration.index}"
+                        ),
+                        satisfied_criteria=list(state.success_criteria.required_tests or []),
+                        unsatisfied_criteria=[],
+                        next_recommended_action=None,
+                        fake_convergence=[],
+                    )
+                    state.current_status = "ready_to_deliver"
+                    self._record(
+                        LoopEvent(
+                            kind=LoopEventKind.CONVERGENCE_DECIDED,
+                            iteration_index=iteration.index,
+                            trace_id=state.trace_id,
+                            payload={
+                                "status": "deliver",
+                                "reason": "completion_promise",
+                            },
+                        )
+                    )
+                    self._record(LoopEvent(kind=LoopEventKind.LOOP_DELIVERED, trace_id=state.trace_id))
+                    break
                 if convergence_decide is not None:
                     status = convergence_decide(
                         state,
