@@ -101,6 +101,10 @@ class LoopEngine:
         success_criteria: SuccessCriteria | None = None,
         max_iterations: int = 3,
         dry_run: bool = True,
+        real_executor: bool = False,
+        sandbox: bool = True,
+        repo_path: str | None = None,
+        test_command: list[str] | None = None,
         convergence_decide: ConvergenceDecider | None = None,
     ) -> LoopState:
         """Drive the loop to convergence (or budget exhaustion).
@@ -112,6 +116,30 @@ class LoopEngine:
         ``loopos.quality`` layer when used together).
         """
         # 1. Understand the goal.
+        original_adapters: tuple[Builder, Tester, Reviewer] | None = None
+        if real_executor:
+            if repo_path is None:
+                raise ValueError("repo_path is required when real_executor=True")
+            from loopos.executors import (
+                ExecutionMode,
+                RealProjectBuilder,
+                RealProjectReviewer,
+                RealProjectTester,
+            )
+
+            mode = ExecutionMode(
+                dry_run=dry_run,
+                sandbox=sandbox,
+                real_executor=True,
+                allow_shell=not dry_run,
+                allow_file_write=not dry_run,
+                allow_network=False,
+                sandbox_root=repo_path if sandbox else None,
+            )
+            original_adapters = (self.builder, self.tester, self.reviewer)
+            self.builder = RealProjectBuilder(repo_path, mode=mode)
+            self.tester = RealProjectTester(repo_path, mode=mode, command=test_command)
+            self.reviewer = RealProjectReviewer()
         normalized = self.goal_engine.normalize(goal)
         if isinstance(normalized, str):  # pragma: no cover - defensive
             raise TypeError("GoalEngine.normalize must return a UserGoal")
@@ -126,81 +154,85 @@ class LoopEngine:
         )
         self._record(LoopEvent(kind=LoopEventKind.LOOP_STARTED, trace_id=state.trace_id))
 
-        for index in range(state.max_iterations):
-            state.current_status = "running"
-            iteration = self._drive_iteration(state, index, dry_run)
-            # Append FIRST so the scorer can see this iteration via
-            # state.latest_iteration() (the scorer inspects the plan
-            # to compute goal_alignment).
-            state.iterations.append(iteration)
-            iteration.quality_score = self._scorer.score(
-                state,
-                iteration.build_result,
-                iteration.test_result,
-                iteration.review_findings,
-            ) if iteration.build_result and iteration.test_result else None
-            # Populate the project-training-loop surface: loss +
-            # evaluation signals. These are the gradient that the
-            # optimizer consumes on the next iteration.
-            from loopos.quality.convergence import ConvergenceEngine
-            ce = ConvergenceEngine()
-            iteration.loss = ce.compute_loss(
-                state, iteration.quality_score, iteration.review_findings,
-            )
-            from loopos.loop_engine.models import EvaluationSignal
-            iteration.signals = [
-                EvaluationSignal(
-                    id=f"sig_{f.id}",
-                    source="mad_dog" if f.source == "mad_dog" else "reviewer",
-                    category=f.category,
-                    severity=f.severity,
-                    claim=f.claim,
-                    evidence=list(f.evidence),
-                    proposed_step=f.recommended_fix,
-                    targets_loss_dim=(
-                        "blocking_findings" if f.blocks_delivery else "unsat_required"
-                    ),
-                )
-                for f in iteration.review_findings
-            ]
-            self.checkpoint_store.save(
-                ProjectCheckpoint.from_iteration(
-                    state.goal.id,
-                    iteration,
-                    state.success_criteria,
-                )
-            )
-            self._record(
-                LoopEvent(
-                    kind=LoopEventKind.ITERATION_COMPLETED,
-                    iteration_index=iteration.index,
-                    trace_id=state.trace_id,
-                )
-            )
-            if self.on_iteration is not None:
-                self.on_iteration(iteration)
-            if convergence_decide is not None:
-                status = convergence_decide(
+        try:
+            for index in range(state.max_iterations):
+                state.current_status = "running"
+                iteration = self._drive_iteration(state, index, dry_run)
+                # Append FIRST so the scorer can see this iteration via
+                # state.latest_iteration() (the scorer inspects the plan
+                # to compute goal_alignment).
+                state.iterations.append(iteration)
+                iteration.quality_score = self._scorer.score(
                     state,
-                    iteration.quality_score,
+                    iteration.build_result,
+                    iteration.test_result,
                     iteration.review_findings,
+                ) if iteration.build_result and iteration.test_result else None
+                # Populate the project-training-loop surface: loss +
+                # evaluation signals. These are the gradient that the
+                # optimizer consumes on the next iteration.
+                from loopos.quality.convergence import ConvergenceEngine
+                ce = ConvergenceEngine()
+                iteration.loss = ce.compute_loss(
+                    state, iteration.quality_score, iteration.review_findings,
                 )
-                iteration.convergence = status
-                self._record(
-                    LoopEvent(
-                        kind=LoopEventKind.CONVERGENCE_DECIDED,
-                        iteration_index=iteration.index,
-                        trace_id=state.trace_id,
-                        payload={"status": status.status if status else "n/a"},
+                from loopos.loop_engine.models import EvaluationSignal
+                iteration.signals = [
+                    EvaluationSignal(
+                        id=f"sig_{f.id}",
+                        source="mad_dog" if f.source == "mad_dog" else "reviewer",
+                        category=f.category,
+                        severity=f.severity,
+                        claim=f.claim,
+                        evidence=list(f.evidence),
+                        proposed_step=f.recommended_fix,
+                        targets_loss_dim=(
+                            "blocking_findings" if f.blocks_delivery else "unsat_required"
+                        ),
+                    )
+                    for f in iteration.review_findings
+                ]
+                self.checkpoint_store.save(
+                    ProjectCheckpoint.from_iteration(
+                        state.goal.id,
+                        iteration,
+                        state.success_criteria,
                     )
                 )
-                if status is not None and status.status in {"deliver", "blocked", "iteration_budget_exhausted"}:
-                    state.current_status = _map_status(status.status)
-                    if status.status == "deliver":
-                        self._record(LoopEvent(kind=LoopEventKind.LOOP_DELIVERED, trace_id=state.trace_id))
-                    else:
-                        self._record(LoopEvent(kind=LoopEventKind.LOOP_HALTED, trace_id=state.trace_id))
-                    break
+                self._record(
+                    LoopEvent(
+                        kind=LoopEventKind.ITERATION_COMPLETED,
+                        iteration_index=iteration.index,
+                        trace_id=state.trace_id,
+                    )
+                )
+                if self.on_iteration is not None:
+                    self.on_iteration(iteration)
+                if convergence_decide is not None:
+                    status = convergence_decide(
+                        state,
+                        iteration.quality_score,
+                        iteration.review_findings,
+                    )
+                    iteration.convergence = status
+                    self._record(
+                        LoopEvent(
+                            kind=LoopEventKind.CONVERGENCE_DECIDED,
+                            iteration_index=iteration.index,
+                            trace_id=state.trace_id,
+                            payload={"status": status.status if status else "n/a"},
+                        )
+                    )
+                    if status is not None and status.status in {"deliver", "blocked", "iteration_budget_exhausted"}:
+                        state.current_status = _map_status(status.status)
+                        if status.status == "deliver":
+                            self._record(LoopEvent(kind=LoopEventKind.LOOP_DELIVERED, trace_id=state.trace_id))
+                        else:
+                            self._record(LoopEvent(kind=LoopEventKind.LOOP_HALTED, trace_id=state.trace_id))
+                        break
+        finally:
+            if original_adapters is not None:
+                self.builder, self.tester, self.reviewer = original_adapters
 
         if state.current_status == "running":
             # Caller did not provide a convergence decider, or no
