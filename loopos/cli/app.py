@@ -679,11 +679,6 @@ if _HAS_TUI:
     ) -> None:
         raise typer_mod.Exit(ail_command(action, file, verbose=verbose))
 
-    @app.command("lail")
-    # v0.4.0: LAIL encode is registered at the bottom of this block
-    # in the closeout section. The v0.1 stub `lail_command` was
-    # removed because it was never implemented in the v0.1 tree.
-
     @app.command("code")
     def _typer_code(
         ctx: typer_mod.Context,
