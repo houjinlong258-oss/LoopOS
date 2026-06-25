@@ -85,9 +85,11 @@ Validation status:
 - `pytest tests/e2e`: passed.
 - `ruff check .`: passed.
 - `mypy loopos tests`: passed.
+- `compileall loopos`: passed.
 - `v0.2`, `v0.3`, `v0.4`, and `v0.4-full` readiness: passed.
-- `anti_bloat_check.py`: `hard_fail_count=0`, `warning_count=10`.
+- `anti_bloat_check.py`: `hard_fail_count=0`, `warning_count=1`.
 - `rc_audit_cli_smoke.py`: passed.
 
-Do not tag until the maintainer decides how to handle the existing dirty
-worktree and commits or cleans the release candidate intentionally.
+Working tree state after closeout: clean. Release recommendation:
+`v0.4.0 full completion accepted for tagging`. Do not tag, release, or push
+tags from this closeout; tagging remains a maintainer action.
