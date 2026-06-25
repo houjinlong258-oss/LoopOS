@@ -1,123 +1,5 @@
 # LoopOS
 
-<<<<<<< HEAD
-> v0.3.0 released — Universal Agent Runtime.
-
-LoopOS is the governed runtime layer for AI agents.
-
-It does not replace coding agents. It gives them boundaries:
-policy checks, budget control, trace, replay, readiness proof,
-and safe dry-run defaults.
-
-AI agents are good at producing demos. LoopOS helps turn their work
-into auditable, reviewable, and eventually shippable systems.
-
-## 30-second mental model
-
-| You have                                          | LoopOS adds                                 |
-| ------------------------------------------------- | ------------------------------------------- |
-| An AI agent that wants to act                     | Policy OS before action                     |
-| A model call that may cost money                  | BudgetLedger                                |
-| A tool call that may change files                 | ACI / Syscall governance                    |
-| A complex failure                                 | Fusion / Mad Dog planning                   |
-| A run you need to audit                           | Trace / Replay                              |
-| A release claim                                   | Readiness checks                            |
-
-## What is LoopOS?
-
-LoopOS is not another agent. It is the **governed runtime layer**
-that AI agents run inside:
-
-- It turns agent actions into policy-checked, traceable, replayable
-  commands.
-- Every external action is a **syscall**; every syscall is policy
-  checked; every state transition is logged.
-- The default mode is **safe dry-run** — no paid provider calls,
-  no shell execution, no file mutation, no side effects.
-- Live provider calls require **explicit approval**, a **budget**,
-  and **confirmation**. Secrets are redacted from persisted state.
-- v0.3 adds the **Workbench** product surface, the **Agent Bus**,
-  the governed **Provider Runtime**, the shared **BudgetLedger**,
-  the **Fusion Verdict Orchestrator**, and the **OpenGod
-  planning-only** layer.
-- LoopOS helps move AI work from demo-like execution toward
-  auditable delivery.
-
-## Why use LoopOS?
-
-| Problem                                              | What LoopOS provides                   |
-| ---------------------------------------------------- | -------------------------------------- |
-| AI agents make unsafe tool calls                     | Policy OS                              |
-| Demos work once but are hard to maintain             | AIL / AI-ISA, Kernel Run state         |
-| Model calls can spend money invisibly                | BudgetLedger                           |
-| Multi-agent / multi-model workflows are hard to audit | Fusion / Mad Dog planning + Trace      |
-| External side effects are dangerous                  | ACI / Syscall governance               |
-| Users cannot replay what happened                    | Trace / Replay                         |
-| You cannot prove a release is healthy                | Readiness checks                       |
-
-## What v0.3 includes
-
-- Rich CLI / Workbench product surface
-- Adapter Layer and Agent Bus
-- Governed Provider Runtime (mock + OpenAI-compatible + Ollama)
-- Shared `BudgetLedger` across CLI, Workbench, and Provider Runtime
-- Loopback live-provider HTTP smoke (no paid external call)
-- Fusion Verdict Orchestration (planning-only)
-- OpenGod planning-only layer (decisions, never exec)
-- v0.3 readiness proof — 26/26 checks
-- CI / pre-commit / gitleaks secret scan
-- Architecture map / non-goals / real-vs-mock-vs-planning classification
-
-## What v0.3 does NOT include
-
-See [`docs/v0-3-non-goals.md`](docs/v0-3-non-goals.md) for the full
-list. Summary:
-
-- No OpenGod → AIL authority bridge (deferred to v0.4)
-- No production MCP Gateway (provider-agnostic stub only)
-- No full Skill Governance (memory-backed markers only)
-- No Textual / Web UI (CLI only)
-- No new paid provider CI
-- No SBOM / signed release yet
-
-## Install and first run
-
-The full Quickstart lives in [`docs/quickstart.md`](docs/quickstart.md).
-The 30-second version:
-
-```bash
-python -m pip install -e ".[workbench,dev]"
-python -m loopos.cli.app --help
-python -m loopos.cli.app readiness check --json
-python -m loopos.cli.app workbench --dry-run
-```
-
-Every command ships with safe defaults. Nothing in the Quickstart
-makes a paid API call, runs shell, or mutates the filesystem outside
-the workdir.
-
-> **Freeze notice (historical, do not modify).** v0.2.0 remains the
-> True Agent OS Kernel baseline; v0.1.0 release evidence is **FROZEN**
-> ([`docs/v0.1.0-FREEZE.md`](docs/v0.1.0-FREEZE.md)). The v0.2.0
-> source archive (`dist/LoopOS-v0.2.0-source.zip`) is cut from the
-> annotated tag `v0.2.0` on `main`. Do **not** modify the v0.1.0 tag,
-> v0.1.0 dist artifact, release notes, CI report, or any file in
-> `scripts/baselines/v0_1_0_loopos.txt`. All changes must pass
-> `python scripts/anti_bloat_check.py` before commit.
-
-## Where to read next
-
-| Document                                  | What it answers                                  |
-| ----------------------------------------- | ------------------------------------------------ |
-| [`docs/quickstart.md`](docs/quickstart.md)     | How do I install and run my first demo?     |
-| [`docs/cli-reference.md`](docs/cli-reference.md) | What does each command do, and is it safe? |
-| [`docs/deployment.md`](docs/deployment.md)     | How do I deploy this in dev / CI / prod?   |
-| [`docs/examples/`](docs/examples/)             | Scenario-based walkthroughs                 |
-| [`docs/architecture-v0-3.md`](docs/architecture-v0-3.md) | How is v0.3 wired internally?     |
-| [`docs/v0-3-non-goals.md`](docs/v0-3-non-goals.md)       | What v0.3 deliberately does NOT do |
-
-## Why LoopOS (deeper)
-=======
 > **LoopOS is a Project Training Runtime for AI agents.**
 > It continuously plans, experiments, evaluates, repairs, optimizes, and
 > repeats until the project converges toward the user's goal.
@@ -140,7 +22,6 @@ reviewer feedback become gradient signals. The Fusion Optimizer
 proposes the next best iteration. Mad Dog is the adversarial
 evaluator that prevents fake convergence. The loop checkpoints,
 evaluates, and re-trains the project — not the LLM.
->>>>>>> 13e122f1 (docs(v0.4): add project training closeout report)
 
 | ML training | LoopOS project training |
 |-------------|--------------------------|
@@ -159,18 +40,7 @@ See [`docs/project-training-loop.md`](docs/project-training-loop.md) for
 the full analogy and [`docs/core-loop.md`](docs/core-loop.md) for the
 phases.
 
-<<<<<<< HEAD
-LoopOS governs agent-generated work through:
-- **Policy OS** — structured permission decisions before every action
-- **Syscall Router** — all external actions are policy-gated syscalls
-- **Loop Convergence** — bounded deterministic scheduling with halt/replay
-- **Data Guard** — backup, shadow, and validation for database operations
-- **Maintainability Gate** — code quality governance rejecting unmaintainable patches
-- **Review Artifact** — structured review records for agent-produced changes
-- **Trace Replay** — side-effect-free reconstruction of any run
-=======
 ## Why Project Training
->>>>>>> 13e122f1 (docs(v0.4): add project training closeout report)
 
 Most AI coding agents optimize for *one* completion. Real engineering —
 and real product work — is iterative: plan, build, test, review, repair,
