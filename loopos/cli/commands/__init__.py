@@ -60,6 +60,7 @@ from loopos.cli.commands.loop import (
     loop_run_command,
     loop_status_command,
 )
+from loopos.cli.commands.locale import locale_command
 from loopos.cli.commands.memory_v04 import memory_compile_command
 
 __all__ = [
@@ -123,5 +124,6 @@ __all__ = [
     "loop_review_command",
     "loop_run_command",
     "loop_status_command",
+    "locale_command",
     "memory_compile_command",
 ]

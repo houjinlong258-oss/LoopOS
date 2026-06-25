@@ -27,6 +27,7 @@ from loopos.cli.commands import (
     loop_status_command,
     memory_command,
     memory_compile_command,
+    locale_command,
     mode_command,
     models_command,
     nodes_command,
@@ -394,7 +395,12 @@ def fallback_main(argv: list[str] | None = None) -> int:
     readiness_parser.add_argument("action", nargs="?", default="check")
     readiness_parser.add_argument("--json", dest="json_output", action="store_true")
 
-    # v0.4.0 — Loop Engineering commands
+    locale_parser = sub.add_parser("locale")
+    locale_parser.add_argument("action", nargs="?", default="show")
+    locale_parser.add_argument("locale_id", nargs="?")
+    locale_parser.add_argument("--json", dest="json_output", action="store_true")
+
+    # v0.4.0: Loop Engineering commands
     loop_parser = sub.add_parser("loop")
     loop_parser.add_argument("action", nargs="?", default="run")
     loop_parser.add_argument("goal", nargs="?")
@@ -617,6 +623,12 @@ def fallback_main(argv: list[str] | None = None) -> int:
             reason_code=args.reason_code,
             approve=args.approve,
             deny=args.deny,
+        )
+    if args.command == "locale":
+        return locale_command(
+            args.action,
+            args.locale_id,
+            json_output=args.json_output,
         )
     if args.command == "computer":
         return computer_command(
@@ -843,3 +855,4 @@ def fallback_main(argv: list[str] | None = None) -> int:
         )
     parser.print_help()
     return 0
+

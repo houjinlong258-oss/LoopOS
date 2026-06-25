@@ -3,11 +3,24 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 from typing import Any
 
 # Keep release/source commands from writing bytecode for modules imported below.
 sys.dont_write_bytecode = True
+
+# v0.4.0 closeout: resolve the CLI locale BEFORE any typer command is
+# registered, so the translated ``help=`` strings on each @app.command
+# pick up the active language at decorator time. ``--lang`` may be
+# passed as the very first CLI arg via the ``LOOPOS_LANG_PRE`` env var
+# (set by the entrypoint shim) so users can override before typer sees
+# the rest of argv.
+from loopos.i18n import init_locale as _init_locale  # noqa: E402
+
+_LANG_PRE = os.environ.get("LOOPOS_LANG_PRE") or os.environ.get("LOOPOS_LANG")
+_init_locale(flag=_LANG_PRE)
+del _LANG_PRE
 
 from loopos.cli.commands import (  # noqa: E402
     ail_command as ail_command,
@@ -32,6 +45,7 @@ from loopos.cli.commands import (  # noqa: E402
     loop_replay_command as loop_replay_command,
     loop_review_command as loop_review_command,
     loop_run_command as loop_run_command,
+    locale_command as locale_command,
     loop_status_command as loop_status_command,
     mad_dog_command as mad_dog_command,
     memory_command as memory_command,
@@ -69,6 +83,7 @@ from loopos.cli.commands.runtime import (  # noqa: E402
 )
 from loopos.cli.help_text import COMMAND_HELP as _COMMAND_HELP  # noqa: E402
 from loopos.cli.renderers import render_run as _render_run  # noqa: E402, F401
+from loopos.i18n import t as _t  # noqa: E402 - translated typer help text
 from loopos.cli.renderers import render_state as _render_state  # noqa: E402, F401
 
 
@@ -289,7 +304,7 @@ if _HAS_TUI:
             )
         )
 
-    @app.command("tasks")
+    @app.command("tasks", help=_t("commands.tasks.help"))
     def _typer_tasks(
         action: str = typer_mod.Argument("list"),
         arg: str | None = typer_mod.Argument(None),
@@ -558,7 +573,7 @@ if _HAS_TUI:
     ) -> None:
         raise typer_mod.Exit(nodes_command(action, code=code, json_output=json_output))
 
-    @app.command("memory")
+    @app.command("memory", help=_t("commands.memory.help"))
     def _typer_memory(
         action: str = typer_mod.Argument("list"),
         arg: str | None = typer_mod.Argument(None),
@@ -620,7 +635,7 @@ if _HAS_TUI:
     def _typer_config(data_dir: str = typer_mod.Option(".loopos", "--data-dir")) -> None:
         raise typer_mod.Exit(config_command(data_dir=data_dir))
 
-    @app.command("policy")
+    @app.command("policy", help=_t("commands.policy.help"))
     def _typer_policy(
         action: str = typer_mod.Argument("list"),
         policy_id: str | None = typer_mod.Argument(None),
@@ -644,6 +659,18 @@ if _HAS_TUI:
             )
         )
 
+    # v0.4.0 closeout: locale subcommand for showing / setting the
+    # active CLI language. Supports ``list`` / ``show`` / ``set <id>``.
+    @app.command("locale", help=_t("commands.locale.help"))
+    def _typer_locale(
+        action: str = typer_mod.Argument("show"),
+        locale_id: str | None = typer_mod.Argument(None),
+        json_output: bool = typer_mod.Option(False, "--json"),
+    ) -> None:
+        raise typer_mod.Exit(
+            locale_command(action, locale_id, json_output=json_output)
+        )
+
     @app.command("ail")
     def _typer_ail(
         action: str = typer_mod.Argument("validate"),
@@ -653,7 +680,7 @@ if _HAS_TUI:
         raise typer_mod.Exit(ail_command(action, file, verbose=verbose))
 
     @app.command("lail")
-    # v0.4.0 — LAIL encode is registered at the bottom of this block
+    # v0.4.0: LAIL encode is registered at the bottom of this block
     # in the closeout section. The v0.1 stub `lail_command` was
     # removed because it was never implemented in the v0.1 tree.
 
@@ -789,8 +816,8 @@ if _HAS_TUI:
     from loopos.cli.typer_v0_3 import register_v0_3_commands
     register_v0_3_commands(app, typer_mod)
 
-    # v0.4.0 — Loop Engineering commands (closeout: cross-process)
-    @app.command("loop")
+    # v0.4.0: Loop Engineering commands (closeout: cross-process)
+    @app.command("loop", help=_t("commands.loop.help"))
     def _typer_loop(
         action: str = typer_mod.Argument("run"),
         goal: str | None = typer_mod.Argument(None),
@@ -951,12 +978,43 @@ if _HAS_TUI:
 
 def main(argv: list[str] | None = None) -> int:
     _configure_utf8_streams()
+    cleaned_argv, _ = _extract_lang_flag(argv)
     if _HAS_TUI and argv is None:
         if len(sys.argv) == 1 and sys.stdin.isatty():
             return repl_command()
         app()
         return 0
-    return fallback_main(argv)
+    return fallback_main(cleaned_argv)
+
+
+def _extract_lang_flag(argv: list[str] | None = None) -> tuple[list[str] | None, str]:
+    """Strip global ``--lang`` before Typer or argparse sees it."""
+    import os
+    from loopos.i18n import init_locale
+
+    raw_argv = sys.argv[1:] if argv is None else list(argv)
+    extracted: str | None = None
+    cleaned: list[str] = []
+    i = 0
+    while i < len(raw_argv):
+        arg = raw_argv[i]
+        if arg == "--lang" and i + 1 < len(raw_argv):
+            extracted = raw_argv[i + 1]
+            i += 2
+            continue
+        if arg.startswith("--lang="):
+            extracted = arg.split("=", 1)[1]
+            i += 1
+            continue
+        cleaned.append(arg)
+        i += 1
+    locale = init_locale(flag=extracted or os.environ.get("LOOPOS_LANG_PRE"))
+    if locale:
+        os.environ["LOOPOS_LANG_PRE"] = locale
+    if argv is None:
+        sys.argv[1:] = cleaned
+        return None, locale
+    return cleaned, locale
 
 
 def _configure_utf8_streams() -> None:
@@ -971,3 +1029,4 @@ def _configure_utf8_streams() -> None:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
