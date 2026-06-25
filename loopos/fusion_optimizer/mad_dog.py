@@ -9,6 +9,27 @@ The "evidence gate" invariant:
 > A ``MadDogFinding`` with ``blocks_delivery=True`` must carry at
 > least one entry in ``evidence``. Findings without evidence are
 > downgraded to ``blocks_delivery=False``.
+
+Stage classification (v0.4.x):
+-----------------------------
+Every ``MadDogFinding`` carries a ``stage`` that tells the consumer
+how to act on it:
+
+* ``block_now``        — must block delivery right now. Equivalent
+  to ``blocks_delivery=True`` (after the evidence gate).
+* ``block_next_iter``  — must block the *next* iteration's plan
+  selection, but does NOT block current delivery. Surfaced as a
+  hard constraint on the Fusion Optimizer.
+* ``informational``    — visible to humans, audit-trail only.
+  Doesn't block anything.
+
+The stage is **auto-derived** from ``blocks_delivery`` and
+``severity`` so legacy callers that only set ``blocks_delivery``
+still produce a correct stage. The default stage-resolution rule
+(block_now when blocker; block_next_iter when medium-or-higher;
+informational otherwise) is exposed as ``resolve_stage`` so the
+Fusion Optimizer can re-classify findings without re-instantiating
+them.
 """
 
 from __future__ import annotations
@@ -47,6 +68,34 @@ MadDogCategory = Literal[
 
 MadDogSeverity = Literal["info", "low", "medium", "high", "critical"]
 
+# v0.4.x: how the consumer should treat the finding.
+MadDogStage = Literal["block_now", "block_next_iter", "informational"]
+
+
+# Severities that warrant blocking the next iteration's plan
+# selection even if the current iteration can still deliver.
+_BLOCK_NEXT_SEVERITIES: frozenset[str] = frozenset({"medium", "high", "critical"})
+
+
+def resolve_stage(blocks_delivery: bool, severity: str) -> MadDogStage:
+    """Map the (blocks_delivery, severity) pair to a MadDogStage.
+
+    Rules:
+
+    * ``blocks_delivery=True``   → ``block_now``
+    * ``blocks_delivery=False``  → ``block_next_iter`` if severity
+      is medium / high / critical, else ``informational``.
+
+    This is the single source of truth for stage resolution; the
+    ``MadDogFinding`` validator uses it so legacy and explicit
+    stage values stay in sync.
+    """
+    if blocks_delivery:
+        return "block_now"
+    if severity in _BLOCK_NEXT_SEVERITIES:
+        return "block_next_iter"
+    return "informational"
+
 
 class MadDogFinding(BaseModel):
     """A single Mad Dog quality attack finding."""
@@ -63,6 +112,14 @@ class MadDogFinding(BaseModel):
     blocks_delivery: bool = False
     affects_convergence: bool = True
     expected_quality_gain_if_fixed: float = 0.0
+    # v0.4.x: explicit stage override. ``None`` means "auto-derive
+    # from (blocks_delivery, severity)". A string means "honour
+    # this stage verbatim, even if it disagrees with the auto-rule".
+    # The after-validator writes the resolved value back to
+    # ``resolved_stage`` (a regular field) so consumers see one
+    # consistent stage and ``model_dump`` is stable.
+    stage_override: MadDogStage | None = Field(default=None, exclude=True)
+    resolved_stage: MadDogStage | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -72,11 +129,57 @@ class MadDogFinding(BaseModel):
         The evidence gate: a delivery blocker must be evidence-backed.
         Implemented in ``mode='before'`` so the constructor cannot be
         bypassed.
+
+        Also pulls the ``stage`` kwarg out of the data dict and
+        stashes it as ``stage_override`` so the after-validator can
+        honour the caller's explicit choice.
         """
         if isinstance(data, dict):
             if data.get("blocks_delivery") is True and not data.get("evidence"):
                 data = {**data, "blocks_delivery": False}
+            # ``stage`` is the public kwarg; rename to the private
+            # field that the after-validator will read.
+            if "stage" in data:
+                data["stage_override"] = data.pop("stage")
         return data
+
+    @model_validator(mode="after")
+    def _stage_consistent_with_evidence_gate(self) -> "MadDogFinding":
+        """After the evidence-gate pass, set ``resolved_stage``.
+
+        Resolution order:
+
+        1. If the caller passed an explicit ``stage`` kwarg, honour it.
+        2. Otherwise derive from ``(blocks_delivery, severity)``
+           via ``resolve_stage``.
+
+        Note: the evidence gate (mode='before') may have downgraded
+        ``blocks_delivery`` from True to False when ``evidence`` is
+        empty. The after-validator uses the *post-gate*
+        ``blocks_delivery`` so the stage is always consistent with
+        the public surface.
+        """
+        if self.stage_override is not None:
+            object.__setattr__(self, "resolved_stage", self.stage_override)
+        else:
+            object.__setattr__(
+                self, "resolved_stage",
+                resolve_stage(self.blocks_delivery, self.severity),
+            )
+        return self
+
+    @property
+    def stage(self) -> MadDogStage | None:
+        """Backward-compat alias for ``resolved_stage``.
+
+        Returns the same value as the after-validator wrote. Read-only.
+        """
+        return self.resolved_stage
+
+    @property
+    def blocks_next_iteration(self) -> bool:
+        """True when this finding must block the next iteration's plan."""
+        return self.resolved_stage == "block_next_iter"
 
 
 class MadDogReviewer:
@@ -296,4 +399,11 @@ class MadDogReviewer:
         return findings
 
 
-__all__ = ["MadDogCategory", "MadDogFinding", "MadDogReviewer", "MadDogSeverity"]
+__all__ = [
+    "MadDogCategory",
+    "MadDogFinding",
+    "MadDogReviewer",
+    "MadDogSeverity",
+    "MadDogStage",
+    "resolve_stage",
+]
