@@ -54,6 +54,7 @@ BLOCKED_DIRS: tuple[str, ...] = (
     ".venv",
     ".loopos",
     ".pytest_cache",
+    ".pytest-tmp",
     ".ruff_cache",
     ".mypy_cache",
     "__pycache__",
@@ -85,6 +86,7 @@ LOCAL_ONLY_DIRS: tuple[str, ...] = (
 
 LOCAL_ONLY_DIR_GLOBS: tuple[str, ...] = (
     ".loopos-*",
+    ".pytest-tmp*",
     "OpenHands-*",
     "langgraph-*",
     "letta-*",
@@ -94,6 +96,7 @@ LOCAL_ONLY_DIR_GLOBS: tuple[str, ...] = (
 
 BLOCKED_DIR_GLOBS: tuple[str, ...] = (
     ".loopos-*",
+    ".pytest-tmp*",
     "OpenHands-*",
     "langgraph-*",
     "letta-*",
@@ -146,6 +149,8 @@ REQUIRED_TOP_LEVEL_FILES: tuple[str, ...] = (
 )
 
 MAX_ARTIFACT_SIZE_BYTES = 20 * 1024 * 1024
+LEAKED_PATH_SCAN_LIMIT_BYTES = 1024 * 1024
+LEAKED_PATH_SCAN_CHUNK_BYTES = 64 * 1024
 _MARKDOWN_LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
 
 LEAKED_PATH_RE = re.compile(r"(?:[A-Za-z]:\\\\?LoopOS|/home/[^/\s]+/LoopOS|/Users/[^/\s]+/LoopOS)")
@@ -427,15 +432,27 @@ def _validate_readme_links(root: Path) -> list[ReleaseFinding]:
 def _scan_file_for_leaked_paths(path: Path) -> re.Match[str] | None:
     """Return the first leaked-path match in ``path``, if any.
 
-    Binary files and unreadable files are skipped silently.
+    Binary files, unreadable files, and non-regular files are skipped silently.
+    The scan is bounded so release checks cannot hang on large local artifacts.
     """
 
     try:
-        with path.open("rb") as fh:
-            head = fh.read(2048)
-        if b"\x00" in head:
+        if path.is_symlink() or not path.is_file():
             return None
-        text = path.read_text(encoding="utf-8", errors="ignore")
+        chunks: list[bytes] = []
+        remaining = LEAKED_PATH_SCAN_LIMIT_BYTES
+        with path.open("rb") as fh:
+            while remaining > 0:
+                chunk = fh.read(min(LEAKED_PATH_SCAN_CHUNK_BYTES, remaining))
+                if not chunk:
+                    break
+                if b"\x00" in chunk:
+                    return None
+                chunks.append(chunk)
+                remaining -= len(chunk)
     except OSError:
         return None
+    if not chunks:
+        return None
+    text = b"".join(chunks).decode("utf-8", errors="ignore")
     return LEAKED_PATH_RE.search(text)

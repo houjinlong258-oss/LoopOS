@@ -16,6 +16,7 @@ values so nothing renders as washed-out white.
 """
 from __future__ import annotations
 
+from collections.abc import Iterator
 from io import StringIO
 from typing import Any, cast
 
@@ -32,12 +33,20 @@ from loopos.cli.commands.loop import (
     _emit_human_run,
     _emit_human_status,
 )
+from loopos.i18n import set_locale
 
 
 # Skip the entire module when Rich is not available — the renderers
 # are best-effort in that case and we test the fallback in
 # ``test_cli_human_styles.py::TestEmitPlainDict`` instead.
 pytestmark = pytest.mark.skipif(not HAS_RICH, reason="Rich not installed")
+
+
+@pytest.fixture(autouse=True)
+def english_locale() -> Iterator[None]:
+    set_locale("en", source="test")
+    yield
+    set_locale("en", source="test")
 
 
 # ---------------------------------------------------------------------------
