@@ -9,6 +9,10 @@ v0.4.0 anti-bloat gate happy by naming the owning module in a
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from loopos.i18n import (
     _autodetect_locale,
     init_locale,
@@ -117,22 +121,22 @@ def test_read_persisted_locale_missing(
 
 
 def test_persist_locale_round_trip(
-    monkeypatch: object, tmp_path: object
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     # The full persistence chain: persist_locale writes to
     # ``_config_path()``; the next ``_read_persisted_locale`` call
     # should hand it back. We stub the config path to a temp file.
     import loopos.i18n as i18n
     fake = tmp_path / "config.json"
-    monkeypatch.setattr(i18n, "_config_path", lambda: fake)  # type: ignore[attr-defined]
+    monkeypatch.setattr(i18n, "_config_path", lambda: fake)
     assert fake == i18n.persist_locale("zh")
     assert fake.exists()
     # The persisted reader does not read from the same helper as
     # persist (it uses Path.home() directly), so we exercise the
     # helper chain via the public ``resolve_locale`` API.
-    monkeypatch.setattr(i18n, "_read_persisted_locale", lambda: "zh")  # type: ignore[attr-defined]
-    monkeypatch.setattr(i18n, "_autodetect_locale", lambda: None)  # type: ignore[attr-defined]
-    monkeypatch.delenv("LOOPOS_LANG", raising=False)  # type: ignore[attr-defined]
+    monkeypatch.setattr(i18n, "_read_persisted_locale", lambda: "zh")
+    monkeypatch.setattr(i18n, "_autodetect_locale", lambda: None)
+    monkeypatch.delenv("LOOPOS_LANG", raising=False)
     loc, src = i18n.resolve_locale()
     assert loc == "zh"
     assert src == "persisted"

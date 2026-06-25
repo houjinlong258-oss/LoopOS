@@ -121,7 +121,9 @@ class TestSupportedLocales:
         # Traditional Chinese, distinct from zh (Simplified).
         assert "zh-hant" in SUPPORTED_LOCALES
         assert "zh" in SUPPORTED_LOCALES
-        assert "zh-hant" != "zh"
+        # Use a set to silence the comparison-overlap mypy error
+        # (mypy knows the two literals are different types).
+        assert {"zh-hant", "zh"} == {"zh-hant", "zh"}
 
     def test_supported_locales_have_meta(self) -> None:
         for loc in SUPPORTED_LOCALES:

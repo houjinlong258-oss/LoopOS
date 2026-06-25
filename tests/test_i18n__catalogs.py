@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from loopos.i18n import _catalogs as catalogs
 from loopos.i18n import (
     FALLBACK_LOCALE,
@@ -53,7 +55,7 @@ def test_read_catalog_file_prefers_yaml() -> None:
 
 
 def test_persist_locale_and_config_path(
-    tmp_path: Path, monkeypatch: object
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("loopos.i18n._config_path", lambda: tmp_path / "c.json")
     target = tmp_path / "c.json"

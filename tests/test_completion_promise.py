@@ -24,11 +24,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from loopos.loop_engine.loop import _iteration_emits_promise  # noqa: E402
 from loopos.loop_engine.models import (  # noqa: E402
     BuildResult,
-    LoopIteration,
     LoopState,
     RepairPlan,
     ReviewFinding,
     TestResult,
+    TrainingIteration,
     UserGoal,
 )
 from loopos.quality.models import QualityScore  # noqa: E402
@@ -41,12 +41,17 @@ from loopos.quality.models import QualityScore  # noqa: E402
 
 def _iter_with(summary: str | None = None, test: str | None = None,
                claim: str | None = None, repair_steps: list[str] | None = None
-               ) -> LoopIteration:
+               ) -> TrainingIteration:
     """Build a synthetic iteration with optional surface strings.
 
     ``test`` populates TestResult.evidence (the closest analogue to a
     human-readable test summary in v0.4.0's TestResult model). The
     promise matcher scans evidence for substring matches.
+
+    Returns a :class:`TrainingIteration` because
+    :func:`_iteration_emits_promise` is typed to consume that
+    subclass specifically; the extra ``loss`` / ``signals`` fields
+    stay at their defaults.
     """
     build = BuildResult(
         iteration_id="it", plan_id="p",
@@ -75,7 +80,7 @@ def _iter_with(summary: str | None = None, test: str | None = None,
     plan = PlanCandidate(
         id="p", source="planner", title="t", steps=["s"],
     )
-    return LoopIteration(
+    return TrainingIteration(
         id="it", index=1, goal_id="g",
         plan=plan, build_result=build, test_result=test_res,
         review_findings=findings, repair_plan=repair,

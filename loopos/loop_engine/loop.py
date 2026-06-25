@@ -64,7 +64,7 @@ from loopos.quality.scorer import QualityScorer
 ConvergenceDecider = Callable[[LoopState, QualityScore | None, list[ReviewFinding]], Any]
 
 
-def _iteration_emits_promise(iteration: TrainingIteration, promise: str) -> bool:
+def _iteration_emits_promise(iteration: TrainingIteration, promise: str | None) -> bool:
     """Return True if the iteration's emitted surface contains ``promise``.
 
     The match is a literal substring check across the iteration's
@@ -72,6 +72,12 @@ def _iteration_emits_promise(iteration: TrainingIteration, promise: str) -> bool
     summary, optimization plan summary, and review-finding claims.
     We deliberately do NOT match against internal ids / trace IDs —
     those are not user-visible.
+
+    ``promise`` is typed ``str | None`` because the loop engine
+    passes ``state.completion_promise`` directly, which is optional;
+    a falsy ``promise`` (``""``, ``None``, whitespace-only) always
+    returns ``False`` so the loop does not short-circuit on a
+    misconfigured CLI.
     """
     if not promise:
         return False

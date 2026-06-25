@@ -221,10 +221,19 @@ class TestFromItem:
         # promote it via ``from_item`` using a synthetic kind name to
         # verify the fallback path. We use the model_construct escape
         # hatch to bypass pydantic's literal validation for the
-        # ``not_a_real_kind`` test case.
+        # ``not_a_real_kind`` test case; the ``type=`` kwarg is
+        # widened via an explicit ``cast`` to satisfy mypy because
+        # pydantic's ``model_construct`` accepts any string here at
+        # runtime, even though the field is typed as a closed
+        # Literal.
+        from typing import cast, Literal
         item = ProjectMemoryItem.model_construct(
             id="pmem_orphan",
-            type="not_a_real_kind",  # bypasses literal validation
+            type=cast(
+                "Literal['working', 'objective', 'decision', 'failure',"
+                " 'test', 'code_map', 'procedure', 'agent', 'delivery']",
+                "not_a_real_kind",
+            ),
             content="orphan",
             source="legacy",
             confidence=1.0,

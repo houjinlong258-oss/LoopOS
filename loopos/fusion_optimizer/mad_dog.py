@@ -112,13 +112,12 @@ class MadDogFinding(BaseModel):
     blocks_delivery: bool = False
     affects_convergence: bool = True
     expected_quality_gain_if_fixed: float = 0.0
-    # v0.4.x: explicit stage override. ``None`` means "auto-derive
-    # from (blocks_delivery, severity)". A string means "honour
-    # this stage verbatim, even if it disagrees with the auto-rule".
-    # The after-validator writes the resolved value back to
-    # ``resolved_stage`` (a regular field) so consumers see one
-    # consistent stage and ``model_dump`` is stable.
-    stage_override: MadDogStage | None = Field(default=None, exclude=True)
+    # v0.4.x: the effective stage for this finding. The caller may
+    # pass an explicit value; otherwise it is auto-derived from
+    # ``(blocks_delivery, severity)`` via :func:`resolve_stage` in
+    # the after-validator. Excluded from ``model_dump`` because it
+    # is fully derivable from the other fields.
+    stage: MadDogStage | None = Field(default=None, exclude=True)
     resolved_stage: MadDogStage | None = None
 
     @model_validator(mode="before")
@@ -129,29 +128,25 @@ class MadDogFinding(BaseModel):
         The evidence gate: a delivery blocker must be evidence-backed.
         Implemented in ``mode='before'`` so the constructor cannot be
         bypassed.
-
-        Also pulls the ``stage`` kwarg out of the data dict and
-        stashes it as ``stage_override`` so the after-validator can
-        honour the caller's explicit choice.
         """
         if isinstance(data, dict):
             if data.get("blocks_delivery") is True and not data.get("evidence"):
                 data = {**data, "blocks_delivery": False}
-            # ``stage`` is the public kwarg; rename to the private
-            # field that the after-validator will read.
-            if "stage" in data:
-                data["stage_override"] = data.pop("stage")
         return data
 
     @model_validator(mode="after")
     def _stage_consistent_with_evidence_gate(self) -> "MadDogFinding":
-        """After the evidence-gate pass, set ``resolved_stage``.
+        """After the evidence-gate pass, populate ``stage``.
 
         Resolution order:
 
-        1. If the caller passed an explicit ``stage`` kwarg, honour it.
+        1. If the caller passed an explicit ``stage`` value, honour it.
         2. Otherwise derive from ``(blocks_delivery, severity)``
-           via ``resolve_stage``.
+           via :func:`resolve_stage`.
+
+        Both ``stage`` and ``resolved_stage`` are then set to the
+        same value so callers reading either field get a consistent
+        answer.
 
         Note: the evidence gate (mode='before') may have downgraded
         ``blocks_delivery`` from True to False when ``evidence`` is
@@ -159,27 +154,16 @@ class MadDogFinding(BaseModel):
         ``blocks_delivery`` so the stage is always consistent with
         the public surface.
         """
-        if self.stage_override is not None:
-            object.__setattr__(self, "resolved_stage", self.stage_override)
-        else:
-            object.__setattr__(
-                self, "resolved_stage",
-                resolve_stage(self.blocks_delivery, self.severity),
-            )
+        if self.stage is None:
+            derived = resolve_stage(self.blocks_delivery, self.severity)
+            object.__setattr__(self, "stage", derived)
+        object.__setattr__(self, "resolved_stage", self.stage)
         return self
-
-    @property
-    def stage(self) -> MadDogStage | None:
-        """Backward-compat alias for ``resolved_stage``.
-
-        Returns the same value as the after-validator wrote. Read-only.
-        """
-        return self.resolved_stage
 
     @property
     def blocks_next_iteration(self) -> bool:
         """True when this finding must block the next iteration's plan."""
-        return self.resolved_stage == "block_next_iter"
+        return self.stage == "block_next_iter"
 
 
 class MadDogReviewer:
