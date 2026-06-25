@@ -28,6 +28,7 @@ _KEY_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"sk-[A-Za-z0-9_\-]{8,}"),
     re.compile(r"Bearer\s+[A-Za-z0-9_\-\.]{8,}", re.IGNORECASE),
     re.compile(r"(?i)(api[_-]?key\s*[=:]\s*)[A-Za-z0-9_\-\.]{8,}"),
+    re.compile(r"(?i)((?:token|password|secret)\s*[=:]\s*)[A-Za-z0-9_\-\.]{4,}"),
 )
 
 
@@ -47,7 +48,7 @@ def redact_secrets(text: str) -> str:
             redacted = redacted.replace(value, _REDACTION)
     # Then redact by shape.
     for pattern in _KEY_PATTERNS:
-        if pattern.pattern.startswith("(?i)(api"):
+        if pattern.pattern.startswith("(?i)("):
             redacted = pattern.sub(r"\1" + _REDACTION, redacted)
         else:
             redacted = pattern.sub(_REDACTION, redacted)

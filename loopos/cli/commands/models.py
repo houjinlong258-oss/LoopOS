@@ -40,6 +40,17 @@ def providers_command(
         else:
             print(f"{assignment.role}: {assignment.provider_id} ({assignment.reason_code})")
         return 0
+    if action == "smoke":
+        provider = value or "mock"
+        payload = {
+            "status": "ok" if provider == "mock" else "blocked",
+            "provider": provider,
+            "live_provider_calls_allowed": False,
+            "reason_codes": [] if provider == "mock" else ["live_provider_requires_explicit_flag"],
+            "content": "[mock] provider smoke completed" if provider == "mock" else "",
+        }
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0 if provider == "mock" else 4
     print(f"Unknown providers action: {action}", file=sys.stderr)
     return 1
 
