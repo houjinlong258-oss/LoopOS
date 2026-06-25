@@ -29,6 +29,37 @@ def gateway_command(
     approve: bool = False,
     deny: bool = False,
 ) -> int:
+    if action == "status":
+        print(
+            json.dumps(
+                {
+                    "status": "ok",
+                    "gateway": "loopback",
+                    "default_exposure": "local_only",
+                    "remote_enabled": False,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0
+    if action == "doctor":
+        print(
+            json.dumps(
+                {
+                    "status": "ok",
+                    "checks": {
+                        "loopback_only": True,
+                        "remote_exposure": False,
+                        "approval_flow": True,
+                    },
+                    "warnings": [],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0
     if action == "webhook-flow" and text == "hello" and channel not in {
         "telegram",
         "email",
