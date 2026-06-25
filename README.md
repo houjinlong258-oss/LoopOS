@@ -198,8 +198,17 @@ python -m pip install -e ".[dev]"
 python -m loopos.cli.app loop run "Build a provider runtime and harden it until tests pass" \
     --max-iterations 3 --json
 
+# Drive a real sandboxed temp/local repo executor
+python -m loopos.cli.app loop run "Fix failing tests" \
+    --real-executor --no-dry-run --sandbox --repo-path ./some-temp-repo --json
+
 # Inspect the current state
 python -m loopos.cli.app loop status --json
+
+# Replay and inspect evidence without re-running side effects
+python -m loopos.cli.app loop replay --latest --json
+python -m loopos.cli.app loop diff --latest --json
+python -m loopos.cli.app loop artifacts --latest --json
 
 # Free-form creative brainstorm (no side effects, no policy blocks)
 python -m loopos.cli.app imagine "Design three better ways to implement Fusion Optimizer" --json
@@ -209,6 +218,14 @@ python -m loopos.cli.app loop optimize --json
 
 # Mad Dog quality attack
 python -m loopos.cli.app loop review --mad-dog --json
+
+# Computer Control defaults to fake/dry-run unless explicitly allowed
+python -m loopos.cli.app computer run "Observe fake desktop and verify target" --dry-run --json
+python -m loopos.cli.app computer replay --latest --json
+
+# Token and tool-surface economy
+python -m loopos.cli.app token report --latest --json
+python -m loopos.cli.app tools search "run tests" --json
 
 # Final delivery candidate
 python -m loopos.cli.app loop deliver --json

@@ -12,7 +12,7 @@ delivered the cross-process, persistent, auditable training
 system. This audit verifies the closeout and clears the path to
 RC.
 
-The audit was run with the working tree at `D:\LoopOS` after
+The audit was run from a local LoopOS checkout after
 the closeout's 56 working-tree changes. The audit:
 
 1. Builds a clean 9-commit topology from the 56 changes
