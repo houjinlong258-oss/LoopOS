@@ -5,9 +5,85 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 from loopos.cli.context import data_paths
 from loopos.tasks import TaskArtifactStore, TaskRecord, TaskStore
+
+
+def _render_task_list_human(tasks: list[Any]) -> int:
+    """Render a task list as a Rich panel.
+
+    Falls back to a flat text printout when Rich is unavailable so
+    ``tasks --human`` still produces a readable result in CI / minimal envs.
+    """
+    from loopos.cli._human_styles import HAS_RICH
+    if not HAS_RICH:
+        if not tasks:
+            print("No tasks stored.")
+            return 0
+        for task in tasks:
+            marker = " quick-win" if task.quick_win else ""
+            print(f"{task.id} [{task.status}] {task.title}{marker}")
+        return 0
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    console = Console()
+    if not tasks:
+        console.print(Panel(
+            "[dim]No tasks stored.[/dim]",
+            title="[bold cyan]tasks list[/bold cyan] [dim]empty[/dim]",
+            border_style="cyan",
+        ))
+        return 0
+    table = Table(box=None, padding=(0, 1), show_header=True, header_style="bold cyan")
+    table.add_column("id", style="cyan")
+    table.add_column("status")
+    table.add_column("title", style="white")
+    table.add_column("type", style="dim")
+    for task in tasks:
+        status = task.status
+        status_color = {
+            "open": "yellow", "in_progress": "cyan", "blocked": "red",
+            "done": "green", "completed": "green",
+        }.get(status, "white")
+        marker = " [green](quick-win)[/green]" if task.quick_win else ""
+        table.add_row(
+            task.id, f"[{status_color}]{status}[/{status_color}]",
+            task.title + marker, task.type or "?",
+        )
+    console.print(Panel(table, title="[bold cyan]tasks list[/bold cyan] "
+                                      f"[cyan]{len(tasks)} item(s)[/cyan]",
+                          border_style="cyan"))
+    return 0
+
+
+def _render_task_detail_human(payload: dict[str, Any]) -> int:
+    """Render a single task dict as a Rich panel."""
+    from loopos.cli._human_styles import HAS_RICH
+    if not HAS_RICH:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
+    console = Console()
+    grid = Table.grid(expand=True, padding=(0, 1))
+    grid.add_column(width=14)
+    grid.add_column()
+    rows = [(k, str(v)) for k, v in payload.items()
+            if not isinstance(v, (dict, list))]
+    for k, v in rows:
+        grid.add_row(f"[bold white]{k}[/bold white]", v)
+    todos = payload.get("todos") or []
+    if todos:
+        todo_lines = "\n".join(f"  - {t}" for t in todos)
+        grid.add_row("[bold white]todos[/bold white]", Text.from_markup(todo_lines))
+    console.print(Panel(grid, title=f"[bold cyan]{payload.get('id', '?')}[/bold cyan]",
+                        border_style="cyan"))
+    return 0
 
 
 def tasks_command(
@@ -17,6 +93,7 @@ def tasks_command(
     data_dir: str | Path = ".loopos",
     quick_win: bool = False,
     json_output: bool = False,
+    human_output: bool = False,
     goal: str | None = None,
     task_type: str = "coordination",
     text: str | None = None,
@@ -28,8 +105,14 @@ def tasks_command(
     paths = data_paths(data_dir)
     store = TaskStore(paths["tasks"])
     artifacts = TaskArtifactStore(paths["task_artifacts"])
+    # Convenience: ``tasks --human`` flips json_output off so the
+    # legacy ``--json/--human`` typer flag wiring behaves as expected.
+    if human_output:
+        json_output = False
     if action == "list":
         tasks = store.list()
+        if human_output:
+            return _render_task_list_human(tasks)
         if json_output:
             print(
                 json.dumps(
@@ -50,7 +133,10 @@ def tasks_command(
         if next_task is None:
             print("No matching task.")
             return 0
-        print(next_task.model_dump_json(indent=2))
+        payload = next_task.model_dump(mode="json")
+        if human_output:
+            return _render_task_detail_human(payload)
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
     if action == "create":
         if not arg:
@@ -69,7 +155,10 @@ def tasks_command(
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 1
-        print(task.model_dump_json(indent=2))
+        payload = task.model_dump(mode="json")
+        if human_output:
+            return _render_task_detail_human(payload)
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
     if action == "show":
         if not arg:
@@ -80,7 +169,10 @@ def tasks_command(
         except KeyError as exc:
             print(str(exc), file=sys.stderr)
             return 1
-        print(task.model_dump_json(indent=2))
+        payload = task.model_dump(mode="json")
+        if human_output:
+            return _render_task_detail_human(payload)
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
     if action == "todo":
         if not arg or not text:
@@ -91,7 +183,10 @@ def tasks_command(
         except KeyError as exc:
             print(str(exc), file=sys.stderr)
             return 1
-        print(task.model_dump_json(indent=2))
+        payload = task.model_dump(mode="json")
+        if human_output:
+            return _render_task_detail_human(payload)
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
     if action == "done":
         if not arg or not text:
@@ -102,7 +197,10 @@ def tasks_command(
         except KeyError as exc:
             print(str(exc), file=sys.stderr)
             return 1
-        print(task.model_dump_json(indent=2))
+        payload = task.model_dump(mode="json")
+        if human_output:
+            return _render_task_detail_human(payload)
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
     if action in {"report", "patch", "pr"}:
         if not arg or not content:
@@ -120,10 +218,37 @@ def tasks_command(
         except (KeyError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             return 1
-        print(artifact.model_dump_json(indent=2))
+        payload = artifact.model_dump(mode="json")
+        if human_output:
+            return _render_task_detail_human(payload)
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
     if action == "artifacts":
         rows = artifacts.list(task_id=arg)
+        if human_output:
+            from loopos.cli._human_styles import HAS_RICH
+            if not HAS_RICH:
+                print(json.dumps([r.model_dump(mode="json") for r in rows],
+                                 ensure_ascii=False, indent=2))
+                return 0
+            from rich.console import Console
+            from rich.panel import Panel
+            from rich.table import Table as _Tbl
+            console = Console()
+            t = _Tbl(box=None, padding=(0, 1), show_header=True,
+                     header_style="bold cyan")
+            t.add_column("id", style="cyan")
+            t.add_column("type")
+            t.add_column("title", style="white")
+            t.add_column("status", style="green")
+            for r in rows:
+                t.add_row(r.id, str(r.type), r.title,
+                          f"[green]{r.status}[/green]" if r.status == "ready"
+                          else f"[dim]{r.status}[/dim]")
+            console.print(Panel(t,
+                title=f"[bold cyan]tasks artifacts[/bold cyan] [cyan]{len(rows)} item(s)[/cyan]",
+                border_style="cyan"))
+            return 0
         print(
             json.dumps(
                 [item.model_dump(mode="json") for item in rows],

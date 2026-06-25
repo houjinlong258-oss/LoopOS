@@ -289,6 +289,7 @@ if _HAS_TUI:
         data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
         quick_win: bool = typer_mod.Option(False, "--quick-win"),
         json_output: bool = typer_mod.Option(False, "--json"),
+        human_output: bool = typer_mod.Option(False, "--human"),
         goal: str | None = typer_mod.Option(None, "--goal"),
         task_type: str = typer_mod.Option("coordination", "--type"),
         text: str | None = typer_mod.Option(None, "--text"),
@@ -304,6 +305,7 @@ if _HAS_TUI:
                 data_dir=data_dir,
                 quick_win=quick_win,
                 json_output=json_output,
+                human_output=human_output,
                 goal=goal,
                 task_type=task_type,
                 text=text,
@@ -537,6 +539,7 @@ if _HAS_TUI:
                 data_dir=data_dir,
                 verbose=verbose,
                 role=role,
+                human_output=not json_output,
             )
         )
 

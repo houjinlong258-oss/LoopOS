@@ -5,11 +5,76 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 from loopos.cli.context import data_paths
 from loopos.memory.repository import MemoryRepository
 from loopos.agent_language.roles import AgentRole
 from loopos.project_memory import MemoryCompiler
+
+
+def _render_memory_panel(title: str, items: list[dict[str, Any]],
+                         *, border_color: str = "cyan") -> int:
+    """Render a list of memory records as a Rich table panel."""
+    from loopos.cli._human_styles import HAS_RICH
+    if not HAS_RICH:
+        print(json.dumps(items, ensure_ascii=False, indent=2))
+        return 0
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    console = Console()
+    if not items:
+        console.print(Panel(
+            "[dim]No items.[/dim]",
+            title=f"[bold {border_color}]{title}[/bold {border_color}]",
+            border_style=border_color,
+        ))
+        return 0
+    t = Table(box=None, padding=(0, 1), show_header=True,
+              header_style="bold cyan")
+    t.add_column("id", style="cyan")
+    t.add_column("type")
+    t.add_column("status", style="green")
+    t.add_column("tags", style="dim")
+    t.add_column("summary", style="white")
+    for item in items:
+        tags = ",".join(item.get("tags") or []) or "-"
+        summary = item.get("summary") or item.get("content") or ""
+        if len(summary) > 60:
+            summary = summary[:57] + "..."
+        t.add_row(
+            item.get("id", "?"),
+            item.get("type", "?"),
+            item.get("status", "?"),
+            tags,
+            summary,
+        )
+    console.print(Panel(t,
+        title=f"[bold {border_color}]{title}[/bold {border_color}] "
+              f"[{border_color}]{len(items)} item(s)[/{border_color}]",
+        border_style=border_color))
+    return 0
+
+
+def _render_memory_counts_panel(counts: dict[str, int]) -> int:
+    """Render a reindex counts payload as a 2-column grid panel."""
+    from loopos.cli._human_styles import HAS_RICH
+    if not HAS_RICH:
+        print(json.dumps(counts, ensure_ascii=False, indent=2))
+        return 0
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    console = Console()
+    grid = Table.grid(expand=True, padding=(0, 1))
+    grid.add_column(width=24)
+    grid.add_column()
+    for k, v in counts.items():
+        grid.add_row(f"[bold white]{k}[/bold white]", f"[cyan]{v}[/cyan]")
+    console.print(Panel(grid, title="[bold cyan]memory reindex[/bold cyan]",
+                        border_style="cyan"))
+    return 0
 
 
 def skills_command(
@@ -79,10 +144,14 @@ def memory_command(
     data_dir: str | Path = ".loopos",
     verbose: bool = False,
     role: str | None = None,
+    human_output: bool = False,
 ) -> int:
     repo = MemoryRepository(data_paths(data_dir)["base"])
     if action == "list":
         items = repo.list_memory(status="active")
+        if human_output:
+            return _render_memory_panel("memory list",
+                                        [i.model_dump(mode="json") for i in items])
         if not items:
             print("No active memory.")
             return 0
@@ -99,6 +168,9 @@ def memory_command(
             print("Search query is required.", file=sys.stderr)
             return 1
         items = repo.retrieve(query_text=arg, tags=arg.split(), limit=10)
+        if human_output:
+            return _render_memory_panel(f"memory search [{arg}]",
+                                        [i.model_dump(mode="json") for i in items])
         print(
             json.dumps(
                 [item.model_dump(mode="json") for item in items],
@@ -113,12 +185,37 @@ def memory_command(
             return 1
         proposal = repo.proposal_for_run(from_run)
         repo.propose(proposal)
+        if human_output:
+            payload = proposal.model_dump(mode="json")
+            from loopos.cli._human_styles import HAS_RICH
+            if not HAS_RICH:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+                return 0
+            from rich.console import Console
+            from rich.panel import Panel
+            from rich.table import Table
+            console = Console()
+            grid = Table.grid(expand=True, padding=(0, 1))
+            grid.add_column(width=14)
+            grid.add_column()
+            for k, v in payload.items():
+                if isinstance(v, (dict, list)):
+                    v = json.dumps(v, ensure_ascii=False, indent=2)
+                grid.add_row(f"[bold white]{k}[/bold white]", str(v))
+            console.print(Panel(grid,
+                title=f"[bold cyan]memory propose[/bold cyan] [cyan]{payload.get('id', '?')}[/cyan]",
+                border_style="cyan"))
+            return 0
         print(f"Created proposal {proposal.id}")
         if verbose:
             print(proposal.model_dump_json(indent=2))
         return 0
     if action == "review":
         proposals = repo.list_proposals(status="pending")
+        if human_output:
+            return _render_memory_panel("memory proposals (pending)",
+                                        [p.model_dump(mode="json") for p in proposals],
+                                        border_color="yellow")
         if not proposals:
             print("No pending memory proposals.")
             return 0
@@ -143,10 +240,26 @@ def memory_command(
         except KeyError as exc:
             print(str(exc), file=sys.stderr)
             return 1
+        if human_output:
+            from loopos.cli._human_styles import HAS_RICH
+            if not HAS_RICH:
+                print(f"{proposal.status}: {proposal.id}")
+                return 0
+            from rich.console import Console
+            from rich.panel import Panel
+            console = Console()
+            color = "green" if proposal.status == "accepted" else "red"
+            console.print(Panel(
+                f"[bold {color}]{proposal.status}[/bold {color}]  [cyan]{proposal.id}[/cyan]",
+                title=f"[bold {color}]memory {action}[/bold {color}]",
+                border_style=color))
+            return 0
         print(f"{proposal.status}: {proposal.id}")
         return 0
     if action == "reindex":
         counts = repo.reindex()
+        if human_output:
+            return _render_memory_counts_panel(counts)
         print(json.dumps(counts, ensure_ascii=False, indent=2))
         return 0
     if action == "compile":
@@ -157,13 +270,38 @@ def memory_command(
             current_gap="no persisted project-memory gap supplied",
             token_budget=900,
         )
-        print(json.dumps(packet.model_dump(mode="json"), ensure_ascii=False, indent=2))
+        payload = packet.model_dump(mode="json")
+        if human_output:
+            from loopos.cli._human_styles import HAS_RICH
+            if not HAS_RICH:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+                return 0
+            from rich.console import Console
+            from rich.panel import Panel
+            from rich.table import Table
+            console = Console()
+            grid = Table.grid(expand=True, padding=(0, 1))
+            grid.add_column(width=18)
+            grid.add_column()
+            grid.add_row("[bold white]role[/bold white]", f"[cyan]{payload.get('target_role', '?')}[/cyan]")
+            grid.add_row("[bold white]selected[/bold white]", f"[green]{len(payload.get('selected_memory', []))}[/green]")
+            grid.add_row("[bold white]omitted[/bold white]", f"[yellow]{len(payload.get('omitted_memory_reason', []))}[/yellow]")
+            grid.add_row("[bold white]tokens[/bold white]", f"[blue]{payload.get('estimated_tokens', 0)}/{payload.get('token_budget', 0)}[/blue]")
+            console.print(Panel(grid,
+                title="[bold cyan]memory compile[/bold cyan]",
+                border_style="cyan"))
+            return 0
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
     if action == "failures":
         items = [
             item for item in repo.list_memory(status="active")
             if item.type == "failure" or "failure" in item.tags
         ]
+        if human_output:
+            return _render_memory_panel("memory failures",
+                                        [i.model_dump(mode="json") for i in items],
+                                        border_color="red")
         print(
             json.dumps(
                 [item.model_dump(mode="json") for item in items],
@@ -177,6 +315,9 @@ def memory_command(
             item for item in repo.list_memory(status="active")
             if item.type == "fact" and "decision" in item.tags
         ]
+        if human_output:
+            return _render_memory_panel("memory decisions",
+                                        [i.model_dump(mode="json") for i in items])
         print(
             json.dumps(
                 [item.model_dump(mode="json") for item in items],

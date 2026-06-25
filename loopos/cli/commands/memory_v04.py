@@ -99,11 +99,59 @@ def memory_compile_command(
         sys.stdout.write(json.dumps(packet.model_dump(mode="json"), indent=2, default=str))
         sys.stdout.write("\n")
     else:
-        sys.stdout.write(
-            f"role={packet.target_role} | selected={len(packet.selected_memory)} "
-            f"| omitted={len(packet.omitted_memory_reason)} "
-            f"| tokens={packet.estimated_tokens}/{packet.token_budget}\n"
-        )
+        # ``--human`` panel: cyan grid summarising role / selected /
+        # omitted / tokens, with the selected items table on the side.
+        from loopos.cli._human_styles import HAS_RICH
+        if not HAS_RICH:
+            sys.stdout.write(
+                f"role={packet.target_role} | selected={len(packet.selected_memory)} "
+                f"| omitted={len(packet.omitted_memory_reason)} "
+                f"| tokens={packet.estimated_tokens}/{packet.token_budget}\n"
+            )
+            return 0
+        from rich.console import Console
+        from rich.panel import Panel
+        from rich.table import Table
+        console = Console()
+        grid = Table.grid(expand=True, padding=(0, 1))
+        grid.add_column(width=18)
+        grid.add_column()
+        grid.add_row("[bold white]role[/bold white]", f"[cyan]{packet.target_role}[/cyan]")
+        grid.add_row("[bold white]selected[/bold white]", f"[green]{len(packet.selected_memory)}[/green]")
+        grid.add_row("[bold white]omitted[/bold white]", f"[yellow]{len(packet.omitted_memory_reason)}[/yellow]")
+        grid.add_row("[bold white]tokens[/bold white]", f"[blue]{packet.estimated_tokens}/{packet.token_budget}[/blue]")
+        # Optional: list selected memory ids under the grid.
+        if packet.selected_memory:
+            def _summary(m: Any) -> str:
+                # ProjectMemoryItem / DecisionMemory / FailureMemory
+                # don't all expose a ``summary`` field; fall back to
+                # content / fact / statement / expected_improvement.
+                return (
+                    getattr(m, "summary", None)
+                    or getattr(m, "content", None)
+                    or getattr(m, "fact", None)
+                    or getattr(m, "statement", None)
+                    or getattr(m, "expected_improvement", None)
+                    or ""
+                )
+            inner = "\n".join(
+                f"  - [cyan]{getattr(m, 'id', '?')}[/cyan] [dim]{getattr(m, 'type', '?')}[/dim] "
+                f"{_summary(m)[:60]}"
+                for m in packet.selected_memory[:8]
+            )
+            if len(packet.selected_memory) > 8:
+                inner += f"\n  [dim](+{len(packet.selected_memory) - 8} more)[/dim]"
+            console.print(Panel(
+                grid,
+                title="[bold cyan]memory compile (closeout)[/bold cyan]",
+                border_style="cyan",
+                subtitle=inner,
+                subtitle_align="left",
+            ))
+            return 0
+        console.print(Panel(grid,
+            title="[bold cyan]memory compile (closeout)[/bold cyan]",
+            border_style="cyan"))
     return 0
 
 
