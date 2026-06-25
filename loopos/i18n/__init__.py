@@ -38,7 +38,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -74,7 +74,7 @@ def _read_catalog_file(locale: str) -> dict[str, Any]:
         return {}
     try:
         with path.open("r", encoding="utf-8") as handle:
-            return json.loads(handle.read())
+            return cast(dict[str, Any], json.loads(handle.read()))
     except (OSError, json.JSONDecodeError):  # pragma: no cover - defensive
         return {}
 

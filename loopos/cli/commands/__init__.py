@@ -31,6 +31,9 @@ from loopos.cli.commands.runtime import (
 from loopos.cli.commands.tasks import tasks_command
 from loopos.cli.commands.triggers import triggers_command
 from loopos.cli.commands.worktrees import worktrees_command
+from loopos.computer_control import computer_command
+from loopos.nodes.cli import nodes_command
+from loopos.token_economy import token_command
 
 # v0.3 commands.
 from loopos.cli.commands.workbench import workbench_command
@@ -47,9 +50,12 @@ from loopos.cli.commands.readiness import readiness_command
 from loopos.cli.commands.imagine import imagine_command
 from loopos.cli.commands.lail import lail_encode_command
 from loopos.cli.commands.loop import (
+    loop_artifacts_command,
     loop_deliver_command,
+    loop_diff_command,
     loop_optimize_command,
     loop_repair_command,
+    loop_replay_command,
     loop_review_command,
     loop_run_command,
     loop_status_command,
@@ -60,6 +66,7 @@ __all__ = [
     "ail_command",
     "code_command",
     "config_command",
+    "computer_command",
     "db_command",
     "distill_command",
     "files_command",
@@ -74,6 +81,7 @@ __all__ = [
     "memory_command",
     "mode_command",
     "models_command",
+    "nodes_command",
     "parse_goal_options",
     "policy_command",
     "profile_command",
@@ -90,6 +98,7 @@ __all__ = [
     "status_command",
     "index_command",
     "tasks_command",
+    "token_command",
     "tools_command",
     "trace_command",
     "triggers_command",
@@ -105,9 +114,12 @@ __all__ = [
     # v0.4
     "imagine_command",
     "lail_encode_command",
+    "loop_artifacts_command",
     "loop_deliver_command",
+    "loop_diff_command",
     "loop_optimize_command",
     "loop_repair_command",
+    "loop_replay_command",
     "loop_review_command",
     "loop_run_command",
     "loop_status_command",

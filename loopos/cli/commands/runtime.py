@@ -249,8 +249,20 @@ def replay_command(
 
 
 def tools_command(
-    action: str = "list", *, workspace: str | Path = ".", json_output: bool = False
+    action: str = "list",
+    query: str | None = None,
+    *,
+    workspace: str | Path = ".",
+    json_output: bool = False,
 ) -> int:
+    if action == "search":
+        from loopos.tools import tools_catalog_command
+
+        return tools_catalog_command(action, query, json_output=json_output)
+    if action == "catalog":
+        from loopos.tools import tools_catalog_command
+
+        return tools_catalog_command("list", query, json_output=json_output)
     if action != "list":
         print(f"Unknown tools action: {action}", file=sys.stderr)
         return 1

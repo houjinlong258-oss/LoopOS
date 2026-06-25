@@ -13,6 +13,7 @@ from loopos.cli.commands import (  # noqa: E402
     ail_command as ail_command,
     code_command as code_command,
     config_command as config_command,
+    computer_command as computer_command,
     db_command as db_command,
     distill_command as distill_command,
     files_command as files_command,
@@ -23,9 +24,12 @@ from loopos.cli.commands import (  # noqa: E402
     imagine_command as imagine_command,
     kernel_command as kernel_command,
     lail_encode_command as lail_encode_command,
+    loop_artifacts_command as loop_artifacts_command,
     loop_deliver_command as loop_deliver_command,
+    loop_diff_command as loop_diff_command,
     loop_optimize_command as loop_optimize_command,
     loop_repair_command as loop_repair_command,
+    loop_replay_command as loop_replay_command,
     loop_review_command as loop_review_command,
     loop_run_command as loop_run_command,
     loop_status_command as loop_status_command,
@@ -34,6 +38,7 @@ from loopos.cli.commands import (  # noqa: E402
     memory_compile_command as memory_compile_command,
     mode_command as mode_command,
     models_command as models_command,
+    nodes_command as nodes_command,
     parse_goal_options as _parse_goal_options,  # noqa: F401 - compatibility export
     policy_command as policy_command,
     profile_command as profile_command,
@@ -45,6 +50,7 @@ from loopos.cli.commands import (  # noqa: E402
     search_command as search_command,
     index_command as index_command,
     tasks_command as tasks_command,
+    token_command as token_command,
     triggers_command as triggers_command,
     worktrees_command as worktrees_command,
 )
@@ -225,11 +231,12 @@ if _HAS_TUI:
     @app.command("tools")
     def _typer_tools(
         action: str = typer_mod.Argument("list"),
+        query: str | None = typer_mod.Argument(None),
         workspace: str = typer_mod.Option(".", "--workspace"),
         json_output: bool = typer_mod.Option(False, "--json"),
     ) -> None:
         raise typer_mod.Exit(
-            tools_command(action, workspace=workspace, json_output=json_output)
+            tools_command(action, query, workspace=workspace, json_output=json_output)
         )
 
     @app.command("goal")
@@ -451,9 +458,19 @@ if _HAS_TUI:
     def _typer_providers(
         action: str = typer_mod.Argument("list"),
         value: str | None = typer_mod.Argument(None),
+        provider_id: str | None = typer_mod.Option(None, "--provider"),
         json_output: bool = typer_mod.Option(False, "--json"),
     ) -> None:
-        raise typer_mod.Exit(providers_command(action, value, json_output=json_output))
+        raise typer_mod.Exit(providers_command(action, value or provider_id, json_output=json_output))
+
+    @app.command("provider")
+    def _typer_provider_alias(
+        action: str = typer_mod.Argument("list"),
+        value: str | None = typer_mod.Argument(None),
+        provider_id: str | None = typer_mod.Option(None, "--provider"),
+        json_output: bool = typer_mod.Option(False, "--json"),
+    ) -> None:
+        raise typer_mod.Exit(providers_command(action, value or provider_id, json_output=json_output))
 
     @app.command("models")
     def _typer_models(
@@ -493,6 +510,53 @@ if _HAS_TUI:
                 deny=deny,
             )
         )
+
+    @app.command("computer")
+    def _typer_computer(
+        action: str = typer_mod.Argument("run"),
+        task: str | None = typer_mod.Argument(None),
+        backend: str = typer_mod.Option("fake", "--backend"),
+        allow_computer_control: bool = typer_mod.Option(False, "--allow-computer-control"),
+        approve_each_action: bool = typer_mod.Option(False, "--approve-each-action"),
+        sandbox: bool = typer_mod.Option(False, "--sandbox"),
+        dry_run: bool = typer_mod.Option(True, "--dry-run/--no-dry-run"),
+        latest: bool = typer_mod.Option(False, "--latest"),
+        data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+        json_output: bool = typer_mod.Option(True, "--json/--human"),
+    ) -> None:
+        raise typer_mod.Exit(
+            computer_command(
+                action,
+                task,
+                backend=backend,
+                allow_computer_control=allow_computer_control,
+                approve_each_action=approve_each_action,
+                sandbox=sandbox,
+                dry_run=dry_run,
+                latest=latest,
+                data_dir=data_dir,
+                json_output=json_output,
+            )
+        )
+
+    @app.command("token")
+    def _typer_token(
+        action: str = typer_mod.Argument("report"),
+        latest: bool = typer_mod.Option(False, "--latest"),
+        data_dir: str = typer_mod.Option(".loopos", "--data-dir"),
+        json_output: bool = typer_mod.Option(True, "--json/--human"),
+    ) -> None:
+        raise typer_mod.Exit(
+            token_command(action, latest=latest, data_dir=data_dir, json_output=json_output)
+        )
+
+    @app.command("nodes")
+    def _typer_nodes(
+        action: str = typer_mod.Argument("list"),
+        code: str | None = typer_mod.Option(None, "--code"),
+        json_output: bool = typer_mod.Option(True, "--json/--human"),
+    ) -> None:
+        raise typer_mod.Exit(nodes_command(action, code=code, json_output=json_output))
 
     @app.command("memory")
     def _typer_memory(
@@ -732,6 +796,10 @@ if _HAS_TUI:
         goal: str | None = typer_mod.Argument(None),
         max_iterations: int = typer_mod.Option(3, "--max-iterations"),
         dry_run: bool = typer_mod.Option(True, "--dry-run/--no-dry-run"),
+        real_executor: bool = typer_mod.Option(False, "--real-executor"),
+        sandbox: bool = typer_mod.Option(True, "--sandbox/--no-sandbox"),
+        repo_path: str | None = typer_mod.Option(None, "--repo-path"),
+        test_command: str | None = typer_mod.Option(None, "--test-command"),
         mad_dog: bool = typer_mod.Option(False, "--mad-dog"),
         json_output: bool = typer_mod.Option(True, "--json/--human"),
         run_id: str | None = typer_mod.Option(None, "--run-id"),
@@ -747,6 +815,10 @@ if _HAS_TUI:
                     goal=goal,
                     max_iterations=max_iterations,
                     dry_run=dry_run,
+                    real_executor=real_executor,
+                    sandbox=sandbox,
+                    repo_path=repo_path,
+                    test_command=test_command,
                     json_output=json_output,
                     run_id=rid,
                     data_dir=data_dir,
@@ -780,6 +852,24 @@ if _HAS_TUI:
         if action == "deliver":
             raise typer_mod.Exit(
                 loop_deliver_command(
+                    run_id=rid, json_output=json_output, data_dir=data_dir,
+                )
+            )
+        if action == "replay":
+            raise typer_mod.Exit(
+                loop_replay_command(
+                    run_id=rid, json_output=json_output, data_dir=data_dir,
+                )
+            )
+        if action == "diff":
+            raise typer_mod.Exit(
+                loop_diff_command(
+                    run_id=rid, json_output=json_output, data_dir=data_dir,
+                )
+            )
+        if action == "artifacts":
+            raise typer_mod.Exit(
+                loop_artifacts_command(
                     run_id=rid, json_output=json_output, data_dir=data_dir,
                 )
             )

@@ -17,7 +17,7 @@ values so nothing renders as washed-out white.
 from __future__ import annotations
 
 from io import StringIO
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -83,12 +83,12 @@ def _capture_console(width: int = 120) -> tuple[Any, StringIO]:
 
 def _rendered_html(console: Any) -> str:
     """Return the recorded HTML (with inline color spans) for assertion."""
-    return console.export_html(inline_styles=True)
+    return cast(str, console.export_html(inline_styles=True))
 
 
 def _rendered_text(console: Any) -> str:
     """Return plain recorded text — safe for markup-leak assertions."""
-    return console.export_text()
+    return cast(str, console.export_text())
 
 
 def _no_markup_leak(text: str) -> None:
@@ -525,7 +525,7 @@ class TestEmitHumanDispatch:
             _emit_human(obj)
         finally:
             loop_mod.Console = original
-        return con.export_text()
+        return cast(str, con.export_text())
 
     def test_routes_run_shape_to_run_renderer(self) -> None:
         text = self._dispatch(_RUN_OBJ_READY)

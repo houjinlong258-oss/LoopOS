@@ -20,6 +20,7 @@ but it is no longer the source of truth. The source of truth is
 from __future__ import annotations
 
 import json
+import shlex
 import sys
 from pathlib import Path
 from typing import Any
@@ -60,13 +61,15 @@ from loopos.quality import (
 )
 
 try:
-    from rich.console import Console, Group
+    from rich.console import Console as _RichConsole, Group
     from rich.panel import Panel
     from rich.table import Table
     from rich.text import Text
     from rich.box import ROUNDED
+    Console: Any = _RichConsole
     _HAS_RICH = True
 except ImportError:  # pragma: no cover - exercised in dependency-light envs
+    Console = None
     _HAS_RICH = False
 
 # v0.4.0 closeout: shared --human mode utilities (mood→color, mascot,
@@ -79,6 +82,7 @@ from loopos.cli._human_styles import (
     mood_for_obj,
     xiao_huanli,
 )
+from loopos.i18n import t as _t  # noqa: E402 - i18n helper for panel labels
 
 
 # The in-process holder is kept for back-compat / debugging; it
@@ -231,20 +235,22 @@ def _emit_human_run(obj: dict[str, Any], console: Any) -> int:
     # Plain values (user_goal, Iterations, Known limits) get cyan/blue so
     # they don't render as washed-out white next to the mood-coloured fields.
     rows: list[tuple[str, str]] = [
-        ("Run",          f"[cyan]{obj.get('run_id', '?')}[/cyan]"),
-        ("Status",       f"[{mood_color}]{obj.get('current_status', '?')}[/{mood_color}]"),
-        ("Iterations",   f"[blue]{len(obj.get('iterations', []))}[/blue]"),
+        (_t("panel.run.run_label"),      f"[cyan]{obj.get('run_id', '?')}[/cyan]"),
+        (_t("panel.run.status_label"),   f"[{mood_color}]{_t('status.' + str(obj.get('current_status', '?')).lower(), default=str(obj.get('current_status', '?')))}[/{mood_color}]"),
+        (_t("panel.run.iterations_label"), f"[blue]{len(obj.get('iterations', []))}[/blue]"),
     ]
     if obj.get("user_goal"):
-        rows.insert(1, ("User goal", f"[cyan]{obj['user_goal']}[/cyan]"))
+        rows.insert(1, (_t("panel.run.user_goal_label"), f"[cyan]{obj['user_goal']}[/cyan]"))
     delivery = obj.get("delivery") or {}
     if delivery:
-        rows.append(("Delivery", f"[{mood_color}]{delivery.get('status', '?')}[/{mood_color}]"))
+        ds = str(delivery.get("status", "?")).lower()
+        ds_t = _t("status." + ds, default=delivery.get("status", "?"))
+        rows.append((_t("panel.run.delivery_label"), f"[{mood_color}]{ds_t}[/{mood_color}]"))
         if delivery.get("known_limitations"):
             limits = ", ".join(
                 f"[yellow]{x}[/yellow]" for x in delivery["known_limitations"]
             )
-            rows.append(("Known limits", limits))
+            rows.append((_t("panel.run.known_limits_label"), limits))
 
     for k, v in rows:
         grid.add_row(f"[bold white]{k}[/bold white]", v)
@@ -254,42 +260,50 @@ def _emit_human_run(obj: dict[str, Any], console: Any) -> int:
     if last.get("plan"):
         plan = last["plan"]
         inner_rows.append(
-            f"[bold]Last plan[/bold]: [cyan]{plan.get('title', '?')}[/cyan] "
-            f"(source=[magenta]{plan.get('source', '?')}[/magenta])"
+            f"[bold]{_t('panel.run.inner_last_plan')}[/bold]: [cyan]{plan.get('title', '?')}[/cyan] "
+            f"({_t('panel.optimize.source_prefix')}=[magenta]{plan.get('source', '?')}[/magenta])"
         )
     if last.get("build_result"):
         b = last["build_result"]
+        bs = str(b.get("status", "?")).lower()
+        bs_t = _t("status." + bs, default=b.get("status", "?"))
         inner_rows.append(
-            f"[bold]Build[/bold]: [{mood_color}]{b.get('status', '?')}[/{mood_color}] "
-            f"source=[dim]{b.get('source', '?')}[/dim]"
+            f"[bold]{_t('panel.run.inner_build')}[/bold]: [{mood_color}]{bs_t}[/{mood_color}] "
+            f"{_t('panel.optimize.source_prefix')}=[dim]{b.get('source', '?')}[/dim]"
         )
     if last.get("test_result"):
-        t = last["test_result"]
-        passed = int(t.get("passed", 0))
-        failed = int(t.get("failed", 0))
+        tr = last["test_result"]
+        passed = int(tr.get("passed", 0))
+        failed = int(tr.get("failed", 0))
         passed_str = f"[green]{passed}[/green]" if passed else f"[dim]{passed}[/dim]"
         failed_str = f"[red]{failed}[/red]" if failed else f"[dim]{failed}[/dim]"
+        ts = str(tr.get("status", "?")).lower()
+        ts_t = _t("status." + ts, default=tr.get("status", "?"))
         inner_rows.append(
-            f"[bold]Test[/bold]: [{mood_color}]{t.get('status', '?')}[/{mood_color}] "
-            f"passed={passed_str} failed={failed_str}"
+            f"[bold]{_t('panel.run.inner_test')}[/bold]: [{mood_color}]{ts_t}[/{mood_color}] "
+            f"{_t('panel.run.passed_prefix')}={passed_str} {_t('panel.run.failed_prefix')}={failed_str}"
         )
     if last.get("quality_score"):
         q = last["quality_score"]
         inner_rows.append(
-            f"[bold]Quality[/bold]: [green]{q.get('overall', '?')}[/green]"
+            f"[bold]{_t('panel.run.inner_quality')}[/bold]: [green]{q.get('overall', '?')}[/green]"
         )
     if last.get("convergence"):
         c = last["convergence"]
         fake_n = len(c.get("fake_convergence") or [])
         fake_str = f"[red]{fake_n}[/red]" if fake_n else "[dim]0[/dim]"
+        cs = str(c.get("status", "?")).lower()
+        cs_t = _t("status." + cs, default=c.get("status", "?"))
         inner_rows.append(
-            f"[bold]Convergence[/bold]: [cyan]{c.get('status', '?')}[/cyan]"
-            f"  fake_convergence={fake_str}"
+            f"[bold]{_t('panel.run.inner_convergence')}[/bold]: [cyan]{cs_t}[/cyan]"
+            f"  {_t('panel.run.fake_convergence_prefix')}={fake_str}"
         )
-    inner = "\n".join(inner_rows) if inner_rows else "[dim]no iteration details[/dim]"
+    inner = "\n".join(inner_rows) if inner_rows else f"[dim]{_t('panel.run.inner_no_details')}[/dim]"
 
     body = Group(cat, Text(""), grid, Text(""), Text.from_markup(inner))
-    title = f"[bold {mood_color}]loop run · {obj.get('run_id', '?')}[/bold {mood_color}] [{mood_color}]{obj.get('current_status', '?')}[/{mood_color}]"
+    title = (f"[bold {mood_color}]{_t('panel.run.title')}[/bold {mood_color}] "
+             f"[{mood_color}]· {obj.get('run_id', '?')} {_t('panel.run.status_label')}: "
+             f"{_t('status.' + str(obj.get('current_status', '?')).lower(), default=str(obj.get('current_status', '?')))}[/{mood_color}]")
     console.print(Panel(body, title=title, border_style=mood_color, box=box))
     return 0
 
@@ -305,39 +319,41 @@ def _emit_human_status(obj: dict[str, Any], console: Any) -> int:
     grid.add_column(width=18)
     grid.add_column()
     rows: list[tuple[str, str]] = [
-        ("Run",               f"[cyan]{obj.get('run_id', '?')}[/cyan]"),
-        ("User goal",         f"[cyan]{obj.get('user_goal', '?')}[/cyan]"),
-        ("Current status",    f"[{mood_color}]{obj.get('current_status', '?')}[/{mood_color}]"),
-        ("Current iteration", f"[blue]{obj.get('current_iteration', '?')}[/blue]"),
-        ("Checkpoint path",   f"[cyan]{obj.get('checkpoint_path', '?')}[/cyan]"),
+        (_t("panel.status.run_label"),              f"[cyan]{obj.get('run_id', '?')}[/cyan]"),
+        (_t("panel.status.user_goal_label"),        f"[cyan]{obj.get('user_goal', '?')}[/cyan]"),
+        (_t("panel.status.current_status_label"),
+         f"[{mood_color}]{_t('status.' + str(obj.get('current_status', '?')).lower(), default=str(obj.get('current_status', '?')))}[/{mood_color}]"),
+        (_t("panel.status.current_iteration_label"), f"[blue]{obj.get('current_iteration', '?')}[/blue]"),
+        (_t("panel.status.checkpoint_path_label"),  f"[cyan]{obj.get('checkpoint_path', '?')}[/cyan]"),
     ]
     if obj.get("lail_kind_summary"):
         kinds = obj["lail_kind_summary"]
-        rows.append(("LAIL kinds",
+        rows.append((_t("panel.status.lail_kinds_label"),
                      "  ".join(f"[cyan]{k}[/cyan]=[magenta]{v}[/magenta]" for k, v in kinds.items())))
     if obj.get("last_quality_score") or obj.get("quality_score"):
         q = obj.get("last_quality_score") or obj.get("quality_score") or {}
-        rows.append(("Last quality",
+        rows.append((_t("panel.status.last_quality_label"),
                      f"overall=[green]{q.get('overall', '?')}[/green] "
                      f"goal=[green]{q.get('goal_alignment', '?')}[/green] "
                      f"test=[green]{q.get('test_health', '?')}[/green] "
                      f"delivery=[green]{q.get('delivery_readiness', '?')}[/green]"))
     if obj.get("last_loss") or obj.get("loss"):
         loss = obj.get("last_loss") or obj.get("loss") or {}
-        rows.append(("Last loss",
+        rows.append((_t("panel.status.last_loss_label"),
                      f"total=[yellow]{loss.get('total', '?')}[/yellow] "
                      f"unsat=[yellow]{loss.get('unsat_required', '?')}[/yellow] "
                      f"blocking=[yellow]{loss.get('blocking_findings', '?')}[/yellow]"))
     if obj.get("convergence"):
         c = obj["convergence"]
-        rows.append(("Convergence",
-                     f"status=[cyan]{c.get('status', '?')}[/cyan] "
+        cs = str(c.get("status", "?")).lower()
+        rows.append((_t("panel.status.convergence_label"),
+                     f"status=[cyan]{_t('status.' + cs, default=c.get('status', '?'))}[/cyan] "
                      f"fake=[{mood_color}]{len(c.get('fake_convergence') or [])}[/{mood_color}]"))
     # v0.4.0 closeout: surface reason_codes / fake_convergence_findings as
     # visible diagnostic rows (previously only available in JSON).
     if obj.get("reason_codes"):
         codes = ", ".join(f"[red]{c}[/red]" for c in obj["reason_codes"])
-        rows.append(("Reason codes", codes))
+        rows.append((_t("panel.status.reason_codes_label"), codes))
     if obj.get("fake_convergence_findings"):
         # fake-convergence findings are blocking diagnostic signals.
         findings = obj["fake_convergence_findings"]
@@ -345,25 +361,27 @@ def _emit_human_status(obj: dict[str, Any], console: Any) -> int:
             preview = findings[:3]
             lines = "  ".join(f"[red]{f}[/red]" for f in preview)
             if len(findings) > 3:
-                lines += f"  [dim](+{len(findings) - 3} more)[/dim]"
-            rows.append(("Fake-convergence", lines))
+                lines += f"  [dim](+{len(findings) - 3} {_t('panel.status.more_suffix')})[/dim]"
+            rows.append((_t("panel.status.fake_convergence_label"), lines))
     if obj.get("blocking_findings"):
         bf = obj["blocking_findings"]
         if isinstance(bf, list) and bf:
             preview = bf[:3]
             lines = "  ".join(f"[red]{f}[/red]" for f in preview)
             if len(bf) > 3:
-                lines += f"  [dim](+{len(bf) - 3} more)[/dim]"
-            rows.append(("Blocking findings", lines))
+                lines += f"  [dim](+{len(bf) - 3} {_t('panel.status.more_suffix')})[/dim]"
+            rows.append((_t("panel.status.blocking_findings_label"), lines))
     if obj.get("next_recommended_action"):
-        rows.append(("Next action", f"[cyan]{obj['next_recommended_action']}[/cyan]"))
+        rows.append((_t("panel.status.next_action_label"),
+                     f"[cyan]{obj['next_recommended_action']}[/cyan]"))
 
     for k, v in rows:
         grid.add_row(f"[bold white]{k}[/bold white]", v)
 
-    note = "[dim]this process is a fresh Python interpreter — no in-process state[/dim]"
+    note = f"[dim]{_t('panel.status.fresh_note')}[/dim]"
     body = Group(cat, Text(""), grid, Text(""), Text.from_markup(note))
-    title = f"[bold {mood_color}]loop status --latest[/bold {mood_color}] [{mood_color}]{obj.get('current_status', '?')}[/{mood_color}]"
+    title = (f"[bold {mood_color}]{_t('panel.status.title')} {_t('panel.status.subtitle_latest')}[/bold {mood_color}] "
+             f"[{mood_color}]{_t('status.' + str(obj.get('current_status', '?')).lower(), default=str(obj.get('current_status', '?')))}[/{mood_color}]")
     console.print(Panel(body, title=title, border_style=mood_color, box=box))
     return 0
 
@@ -380,38 +398,44 @@ def _emit_human_deliver(obj: dict[str, Any], console: Any) -> int:
     grid.add_column(width=18)
     grid.add_column()
     rows: list[tuple[str, str]] = [
-        ("Run",            f"[cyan]{obj.get('run_id', '?')}[/cyan]"),
-        ("User goal",      f"[cyan]{obj.get('user_goal', '?')}[/cyan]"),
-        ("Delivery status", f"[{mood_color}]{obj.get('delivery_status', '?')}[/{mood_color}]"),
-        ("Ready",          f"[{mood_color}]{obj.get('ready', '?')}[/{mood_color}]"),
-        ("Why",            f"[cyan]{obj.get('why', '?') or '?'}[/cyan]"),
+        (_t("panel.deliver.run_label"),         f"[cyan]{obj.get('run_id', '?')}[/cyan]"),
+        (_t("panel.deliver.user_goal_label"),   f"[cyan]{obj.get('user_goal', '?')}[/cyan]"),
+        (_t("panel.deliver.delivery_status_label"),
+         f"[{mood_color}]{_t('status.' + str(obj.get('delivery_status', '?')).lower(), default=str(obj.get('delivery_status', '?')))}[/{mood_color}]"),
+        (_t("panel.deliver.ready_label"),       f"[{mood_color}]{obj.get('ready', '?')}[/{mood_color}]"),
+        (_t("panel.deliver.why_label"),         f"[cyan]{obj.get('why', '?') or '?'}[/cyan]"),
     ]
     cov = obj.get("success_criteria_coverage") or {}
     if cov:
-        rows.append(("Coverage",
-                     f"required=[magenta]{cov.get('required', 0)}[/magenta] "
-                     f"satisfied=[green]{cov.get('satisfied', 0)}[/green] "
-                     f"unsatisfied=[red]{cov.get('unsatisfied', 0)}[/red]"))
+        rows.append((_t("panel.deliver.coverage_label"),
+                     f"{_t('panel.deliver.coverage_required_prefix')}=[magenta]{cov.get('required', 0)}[/magenta] "
+                     f"{_t('panel.deliver.coverage_satisfied_prefix')}=[green]{cov.get('satisfied', 0)}[/green] "
+                     f"{_t('panel.deliver.coverage_unsatisfied_prefix')}=[red]{cov.get('unsatisfied', 0)}[/red]"))
     if obj.get("quality_score"):
         q = obj["quality_score"]
-        rows.append(("Quality",
+        rows.append((_t("panel.deliver.quality_label"),
                      f"overall=[green]{q.get('overall', '?')}[/green] "
                      f"goal=[green]{q.get('goal_alignment', '?')}[/green] "
                      f"test=[green]{q.get('test_health', '?')}[/green]"))
     if obj.get("convergence_status"):
-        rows.append(("Convergence", f"[cyan]{obj['convergence_status']}[/cyan]"))
+        cs = str(obj["convergence_status"]).lower()
+        rows.append((_t("panel.deliver.convergence_label"),
+                     f"[cyan]{_t('status.' + cs, default=obj['convergence_status'])}[/cyan]"))
     if obj.get("iterations") is not None:
-        rows.append(("Iterations", f"[blue]{obj['iterations']}[/blue]"))
+        rows.append((_t("panel.deliver.iterations_label"), f"[blue]{obj['iterations']}[/blue]"))
     if obj.get("known_limitations"):
-        rows.append(("Known limits", "  ".join(f"[yellow]{x}[/yellow]" for x in obj["known_limitations"])))
+        rows.append((_t("panel.deliver.known_limits_label"),
+                     "  ".join(f"[yellow]{x}[/yellow]" for x in obj["known_limitations"])))
     if obj.get("recommended_next_loop"):
-        rows.append(("Next loop", f"[cyan]{obj['recommended_next_loop']}[/cyan]"))
+        rows.append((_t("panel.deliver.next_loop_label"),
+                     f"[cyan]{obj['recommended_next_loop']}[/cyan]"))
 
     for k, v in rows:
         grid.add_row(f"[bold white]{k}[/bold white]", v)
 
     body = Group(cat, Text(""), grid)
-    title = f"[bold {mood_color}]loop deliver --latest[/bold {mood_color}] [{mood_color}]{obj.get('delivery_status', '?')}[/{mood_color}]"
+    title = (f"[bold {mood_color}]{_t('panel.deliver.title')} {_t('panel.deliver.subtitle_latest')}[/bold {mood_color}] "
+             f"[{mood_color}]{_t('status.' + str(obj.get('delivery_status', '?')).lower(), default=str(obj.get('delivery_status', '?')))}[/{mood_color}]")
     console.print(Panel(body, title=title, border_style=mood_color, box=box))
     return 0
 
@@ -446,10 +470,10 @@ def _emit_human_review(obj: dict[str, Any], console: Any) -> int:
     grid.add_column(width=18)
     grid.add_column()
     rows: list[tuple[str, str]] = [
-        ("Run",       f"[cyan]{obj.get('run_id', '?')}[/cyan]"),
-        ("Iteration", f"[blue]{obj.get('iteration', '?')}[/blue]"),
-        ("Findings",  f"[{mood_color}]{len(findings)}[/{mood_color}]"),
-        ("Mad-dog",   f"[{mood_color}]{len(mad_dog)}[/{mood_color}]"),
+        (_t("panel.review.run_label"),       f"[cyan]{obj.get('run_id', '?')}[/cyan]"),
+        (_t("panel.review.iteration_label"), f"[blue]{obj.get('iteration', '?')}[/blue]"),
+        (_t("panel.review.findings_label"),  f"[{mood_color}]{len(findings)}[/{mood_color}]"),
+        (_t("panel.review.mad_dog_label"),   f"[{mood_color}]{len(mad_dog)}[/{mood_color}]"),
     ]
     for k, v in rows:
         grid.add_row(f"[bold white]{k}[/bold white]", v)
@@ -463,18 +487,19 @@ def _emit_human_review(obj: dict[str, Any], console: Any) -> int:
         sev_color = {"high": "red", "critical": "red", "blocking": "red",
                      "medium": "yellow", "warning": "yellow",
                      "low": "blue"}.get(sev, "cyan")
+        sev_label = _t(f"severity.{sev}", default=sev)
         target = f.get("target") or f.get("id") or "?"
         msg = f.get("message") or f.get("summary") or ""
         finding_lines.append(
-            f"  - [{sev_color}]{sev}[/{sev_color}] [cyan]{target}[/cyan] {msg}"
+            f"  - [{sev_color}]{sev_label}[/{sev_color}] [cyan]{target}[/cyan] {msg}"
         )
     if len(findings) > 8:
-        finding_lines.append(f"  [dim](+{len(findings) - 8} more findings)[/dim]")
+        finding_lines.append(f"  [dim](+{len(findings) - 8} {_t('panel.review.more_findings_suffix')})[/dim]")
     if not finding_lines:
-        finding_lines.append("  [dim]no findings[/dim]")
+        finding_lines.append(f"  [dim]{_t('panel.review.no_findings')}[/dim]")
 
     if mad_dog:
-        finding_lines.append("[bold]Mad-dog review[/bold]")
+        finding_lines.append(f"[bold]{_t('panel.review.mad_dog_heading')}[/bold]")
         for m in mad_dog[:5]:
             if not isinstance(m, dict):
                 finding_lines.append(f"  - [dim]{m}[/dim]")
@@ -482,16 +507,18 @@ def _emit_human_review(obj: dict[str, Any], console: Any) -> int:
             cat_m = m.get("category") or m.get("kind") or "?"
             sev = str(m.get("severity") or "info").lower()
             sev_color = {"high": "red", "critical": "red"}.get(sev, "yellow")
+            sev_label = _t(f"severity.{sev}", default=sev)
             msg = m.get("message") or m.get("summary") or ""
             finding_lines.append(
-                f"  - [{sev_color}]{sev}[/{sev_color}] [magenta]{cat_m}[/magenta] {msg}"
+                f"  - [{sev_color}]{sev_label}[/{sev_color}] [magenta]{cat_m}[/magenta] {msg}"
             )
         if len(mad_dog) > 5:
-            finding_lines.append(f"  [dim](+{len(mad_dog) - 5} more)[/dim]")
+            finding_lines.append(f"  [dim](+{len(mad_dog) - 5} {_t('panel.review.more_suffix')})[/dim]")
 
     inner = "\n".join(finding_lines)
     body = Group(cat, Text(""), grid, Text(""), Text.from_markup(inner))
-    title = f"[bold {mood_color}]loop review[/bold {mood_color}] [{mood_color}]{len(findings)} findings[/{mood_color}]"
+    title = (f"[bold {mood_color}]{_t('panel.review.title')}[/bold {mood_color}] "
+             f"[{mood_color}]{len(findings)} {_t('panel.review.findings_count_suffix')}[/{mood_color}]")
     console.print(Panel(body, title=title, border_style=mood_color, box=box))
     return 0
 
@@ -511,15 +538,15 @@ def _emit_human_repair(obj: dict[str, Any], console: Any) -> int:
         grid.add_column(width=18)
         grid.add_column()
         rows = [
-            ("Run",       f"[cyan]{obj.get('run_id', '?')}[/cyan]"),
-            ("Iteration", f"[blue]{obj.get('iteration', '?')}[/blue]"),
-            ("Status",    "[yellow]no_repair_plan[/yellow]"),
+            (_t("panel.repair.run_label"),       f"[cyan]{obj.get('run_id', '?')}[/cyan]"),
+            (_t("panel.repair.iteration_label"), f"[blue]{obj.get('iteration', '?')}[/blue]"),
+            (_t("panel.repair.status_label"),    f"[yellow]{_t('status.' + _t('status.no_repair_plan'))}[/yellow]"),
         ]
         for k, v in rows:
             grid.add_row(f"[bold white]{k}[/bold white]", v)
         body = Group(cat, Text(""), grid, Text(""),
-                     Text.from_markup("[dim]no repair plan produced for this iteration[/dim]"))
-        title = "[bold yellow]loop repair[/bold yellow] [yellow]no plan[/yellow]"
+                     Text.from_markup(f"[dim]{_t('panel.repair.no_plan_note')}[/dim]"))
+        title = f"[bold {mood_color}]{_t('panel.repair.no_plan_title')}[/bold {mood_color}] [yellow]{_t('panel.repair.no_plan_status')}[/yellow]"
         console.print(Panel(body, title=title, border_style=mood_color, box=box))
         return 0
 
@@ -533,39 +560,40 @@ def _emit_human_repair(obj: dict[str, Any], console: Any) -> int:
     grid.add_column(width=18)
     grid.add_column()
     rows = [
-        ("Plan id",      f"[cyan]{obj.get('id', '?')}[/cyan]"),
-        ("Priority",     f"[{mood_color}]{priority}[/{mood_color}]"),
-        ("Source count", f"[blue]{len(obj.get('source_findings') or [])}[/blue]"),
-        ("Steps",        f"[blue]{len(obj.get('steps') or [])}[/blue]"),
-        ("Tests to run", f"[blue]{len(obj.get('tests_to_run') or [])}[/blue]"),
+        (_t("panel.repair.plan_id_label"),      f"[cyan]{obj.get('id', '?')}[/cyan]"),
+        (_t("panel.repair.priority_label"),     f"[{mood_color}]{priority}[/{mood_color}]"),
+        (_t("panel.repair.source_count_label"), f"[blue]{len(obj.get('source_findings') or [])}[/blue]"),
+        (_t("panel.repair.steps_label"),        f"[blue]{len(obj.get('steps') or [])}[/blue]"),
+        (_t("panel.repair.tests_to_run_label"), f"[blue]{len(obj.get('tests_to_run') or [])}[/blue]"),
     ]
     if obj.get("expected_fix"):
-        rows.append(("Expected fix", f"[cyan]{obj['expected_fix']}[/cyan]"))
+        rows.append((_t("panel.repair.expected_fix_label"), f"[cyan]{obj['expected_fix']}[/cyan]"))
     for k, v in rows:
         grid.add_row(f"[bold white]{k}[/bold white]", v)
 
     inner_lines: list[str] = []
     if obj.get("source_findings"):
-        inner_lines.append("[bold]Source findings[/bold]")
+        inner_lines.append(f"[bold]{_t('panel.repair.source_findings_heading')}[/bold]")
         for s in obj["source_findings"][:5]:
             inner_lines.append(f"  - [red]{s}[/red]")
         if len(obj["source_findings"]) > 5:
-            inner_lines.append(f"  [dim](+{len(obj['source_findings']) - 5} more)[/dim]")
+            inner_lines.append(f"  [dim](+{len(obj['source_findings']) - 5} {_t('panel.repair.more_suffix')})[/dim]")
     if obj.get("steps"):
-        inner_lines.append("[bold]Steps[/bold]")
+        inner_lines.append(f"[bold]{_t('panel.repair.steps_heading')}[/bold]")
         for i, s in enumerate(obj["steps"][:8], 1):
             inner_lines.append(f"  [blue]{i}.[/blue] {s}")
         if len(obj["steps"]) > 8:
-            inner_lines.append(f"  [dim](+{len(obj['steps']) - 8} more)[/dim]")
+            inner_lines.append(f"  [dim](+{len(obj['steps']) - 8} {_t('panel.repair.more_suffix')})[/dim]")
     if obj.get("tests_to_run"):
-        inner_lines.append("[bold]Tests to run[/bold]")
+        inner_lines.append(f"[bold]{_t('panel.repair.tests_to_run_heading')}[/bold]")
         for t in obj["tests_to_run"][:8]:
             inner_lines.append(f"  - [magenta]{t}[/magenta]")
         if len(obj["tests_to_run"]) > 8:
-            inner_lines.append(f"  [dim](+{len(obj['tests_to_run']) - 8} more)[/dim]")
-    inner = "\n".join(inner_lines) if inner_lines else "[dim]no steps[/dim]"
+            inner_lines.append(f"  [dim](+{len(obj['tests_to_run']) - 8} {_t('panel.repair.more_suffix')})[/dim]")
+    inner = "\n".join(inner_lines) if inner_lines else f"[dim]{_t('panel.repair.no_steps')}[/dim]"
     body = Group(cat, Text(""), grid, Text(""), Text.from_markup(inner))
-    title = f"[bold {mood_color}]loop repair[/bold {mood_color}] [{mood_color}]{priority}[/{mood_color}]"
+    title = (f"[bold {mood_color}]{_t('panel.repair.title')}[/bold {mood_color}] "
+             f"[{mood_color}]{priority}[/{mood_color}]")
     console.print(Panel(body, title=title, border_style=mood_color, box=box))
     return 0
 
@@ -587,18 +615,22 @@ def _emit_human_optimize(obj: dict[str, Any], console: Any) -> int:
     grid.add_column(width=18)
     grid.add_column()
     rows = [
-        ("Result id",    f"[cyan]{obj.get('id', '?')}[/cyan]"),
-        ("Mode",         f"[cyan]{obj.get('mode', '?')}[/cyan]"),
-        ("Confidence",   (f"[green]{confidence:.2f}[/green]" if confidence >= 0.75
+        (_t("panel.optimize.result_id_label"),    f"[cyan]{obj.get('id', '?')}[/cyan]"),
+        (_t("panel.optimize.mode_label"),         f"[cyan]{obj.get('mode', '?')}[/cyan]"),
+        (_t("panel.optimize.confidence_label"),   (f"[green]{confidence:.2f}[/green]" if confidence >= 0.75
                            else f"[yellow]{confidence:.2f}[/yellow]" if confidence >= 0.5
                            else f"[red]{confidence:.2f}[/red]")),
-        ("Alternatives", f"[blue]{len(obj.get('alternatives') or [])}[/blue]"),
-        ("Findings",     f"[{mood_color}]{len(obj.get('review_findings') or [])}[/{mood_color}]"),
+        (_t("panel.optimize.alternatives_label"), f"[blue]{len(obj.get('alternatives') or [])}[/blue]"),
+        (_t("panel.optimize.findings_label"),     f"[{mood_color}]{len(obj.get('review_findings') or [])}[/{mood_color}]"),
     ]
     has_repair = obj.get("repair_plan") is not None
     has_opt = obj.get("optimization_plan") is not None
-    rows.append(("Has repair plan",   "[green]yes[/green]" if has_repair else "[dim]no[/dim]"))
-    rows.append(("Has optimization",  "[green]yes[/green]" if has_opt   else "[dim]no[/dim]"))
+    yes_t = _t("panel.optimize.yes")
+    no_t = _t("panel.optimize.no")
+    rows.append((_t("panel.optimize.has_repair_plan_label"),
+                 f"[green]{yes_t}[/green]" if has_repair else f"[dim]{no_t}[/dim]"))
+    rows.append((_t("panel.optimize.has_optimization_label"),
+                 f"[green]{yes_t}[/green]" if has_opt else f"[dim]{no_t}[/dim]"))
     for k, v in rows:
         grid.add_row(f"[bold white]{k}[/bold white]", v)
 
@@ -608,34 +640,36 @@ def _emit_human_optimize(obj: dict[str, Any], console: Any) -> int:
         title_p = plan.get("title") or "?"
         source_p = plan.get("source") or "?"
         inner_lines.append(
-            f"[bold]Recommended plan[/bold]: [cyan]{title_p}[/cyan] "
-            f"(source=[magenta]{source_p}[/magenta])"
+            f"[bold]{_t('panel.optimize.recommended_plan_heading')}[/bold]: "
+            f"[cyan]{title_p}[/cyan] "
+            f"({_t('panel.optimize.source_prefix')}=[magenta]{source_p}[/magenta])"
         )
     if obj.get("rationale"):
-        inner_lines.append(f"[bold]Rationale[/bold]: [cyan]{obj['rationale']}[/cyan]")
+        inner_lines.append(f"[bold]{_t('panel.optimize.rationale_heading')}[/bold]: [cyan]{obj['rationale']}[/cyan]")
     if obj.get("disagreements"):
-        inner_lines.append("[bold]Disagreements[/bold]")
+        inner_lines.append(f"[bold]{_t('panel.optimize.disagreements_heading')}[/bold]")
         for d in obj["disagreements"][:5]:
             inner_lines.append(f"  - [yellow]{d}[/yellow]")
     if obj.get("review_findings"):
-        inner_lines.append("[bold]Findings[/bold]")
+        inner_lines.append(f"[bold]{_t('panel.optimize.findings_heading')}[/bold]")
         for f in obj["review_findings"][:5]:
             if not isinstance(f, dict):
                 inner_lines.append(f"  - [red]{f}[/red]")
                 continue
             sev = str(f.get("severity") or "info").lower()
             sev_color = {"high": "red", "critical": "red"}.get(sev, "yellow")
+            sev_label = _t(f"severity.{sev}", default=sev)
             msg = f.get("message") or f.get("summary") or str(f)
             target = f.get("target") or "?"
             inner_lines.append(
-                f"  - [{sev_color}]{sev}[/{sev_color}] [cyan]{target}[/cyan] {msg}"
+                f"  - [{sev_color}]{sev_label}[/{sev_color}] [cyan]{target}[/cyan] {msg}"
             )
         if len(obj["review_findings"]) > 5:
-            inner_lines.append(f"  [dim](+{len(obj['review_findings']) - 5} more)[/dim]")
-    inner = "\n".join(inner_lines) if inner_lines else "[dim]no detail[/dim]"
+            inner_lines.append(f"  [dim](+{len(obj['review_findings']) - 5} {_t('panel.optimize.more_suffix')})[/dim]")
+    inner = "\n".join(inner_lines) if inner_lines else f"[dim]{_t('panel.optimize.no_detail')}[/dim]"
     body = Group(cat, Text(""), grid, Text(""), Text.from_markup(inner))
-    title = (f"[bold {mood_color}]loop optimize[/bold {mood_color}] "
-             f"[{mood_color}]confidence={confidence:.2f}[/{mood_color}]")
+    title = (f"[bold {mood_color}]{_t('panel.optimize.title')}[/bold {mood_color}] "
+             f"[{mood_color}]{_t('panel.optimize.confidence_format', value=f'{confidence:.2f}')}[/{mood_color}]")
     console.print(Panel(body, title=title, border_style=mood_color, box=box))
     return 0
 
@@ -662,7 +696,7 @@ def _emit_human_generic(obj: dict[str, Any], console: Any) -> int:
             v = json.dumps(v, default=str, indent=2)
         grid.add_row(f"[bold white]{k}[/bold white]", str(v))
     body = Group(cat, Text(""), grid)
-    title = f"[bold {mood_color}]loop result[/bold {mood_color}] [{mood_color}]{mood}[/{mood_color}]"
+    title = f"[bold {mood_color}]{_t('panel.generic.title')}[/bold {mood_color}] [{mood_color}]{_t(f'status.mood_{mood}', default=mood)}[/{mood_color}]"
     console.print(Panel(body, title=title, border_style=mood_color, box=box))
     return 0
 
@@ -727,12 +761,25 @@ def loop_run_command(
     goal: str,
     max_iterations: int = 3,
     dry_run: bool = True,
+    real_executor: bool = False,
+    sandbox: bool = True,
+    repo_path: str | None = None,
+    test_command: str | None = None,
     json_output: bool = True,
     run_id: str | None = None,
     data_dir: str | None = None,
 ) -> int:
     """Drive the loop. Persists to ``<data_dir>/runs/<run_id>/``."""
     dd = Path(data_dir) if data_dir else None
+    if real_executor and repo_path is None:
+        return _emit(
+            {
+                "status": "error",
+                "error_code": "repo_path_required",
+                "message": "--repo-path is required with --real-executor",
+            },
+            json_output,
+        )
 
     if run_id is None:
         run_id, _ = init_run(None, data_dir=dd)
@@ -743,6 +790,27 @@ def loop_run_command(
         run_id, _ = init_run(run_id, data_dir=dd)
 
     engine = LoopEngine()
+    if real_executor and repo_path is not None:
+        from loopos.executors import (
+            ExecutionMode,
+            RealProjectBuilder,
+            RealProjectReviewer,
+            RealProjectTester,
+        )
+
+        command = shlex.split(test_command) if test_command else None
+        mode = ExecutionMode(
+            dry_run=dry_run,
+            sandbox=sandbox,
+            real_executor=True,
+            allow_shell=not dry_run,
+            allow_file_write=not dry_run,
+            allow_network=False,
+            sandbox_root=repo_path if sandbox else None,
+        )
+        engine.builder = RealProjectBuilder(repo_path, mode=mode)
+        engine.tester = RealProjectTester(repo_path, mode=mode, command=command)
+        engine.reviewer = RealProjectReviewer()
     lail_bus = LailSignalBus()
     memory_packets: list[Any] = []
 
@@ -880,10 +948,84 @@ def loop_run_command(
         "run_id": run_id,
         "data_dir": str(dd or checkpoint_store.default_data_dir()),
         "current_status": state.current_status,
+        "real_executor": real_executor,
+        "repo_path": repo_path,
         "iterations": [_dump_iteration(it) for it in state.iterations],
         "delivery": cand.model_dump(mode="json"),
     }
     return _emit(out, json_output)
+
+
+def loop_replay_command(
+    run_id: str | None = None,
+    json_output: bool = True,
+    data_dir: str | None = None,
+) -> int:
+    """Replay a loop run from disk without re-executing side effects."""
+    dd = Path(data_dir) if data_dir else None
+    rid = _select_run_id(run_id, dd)
+    if rid is None:
+        return _emit({"status": "no_run"}, json_output)
+    iterations = read_iterations(rid, dd)
+    return _emit(
+        {
+            "run_id": rid,
+            "status": "replayed",
+            "iterations_replayed": len(iterations),
+            "side_effects_reexecuted": 0,
+            "iterations": iterations,
+        },
+        json_output,
+    )
+
+
+def loop_diff_command(
+    run_id: str | None = None,
+    json_output: bool = True,
+    data_dir: str | None = None,
+) -> int:
+    """Show changed files recorded by a loop run."""
+    dd = Path(data_dir) if data_dir else None
+    rid = _select_run_id(run_id, dd)
+    if rid is None:
+        return _emit({"status": "no_run"}, json_output)
+    changed: list[str] = []
+    summaries: list[str] = []
+    for item in read_iterations(rid, dd):
+        build = item.get("build_result") or {}
+        for file_path in build.get("changed_files") or []:
+            if file_path not in changed:
+                changed.append(file_path)
+        if build.get("summary"):
+            summaries.append(str(build["summary"]))
+    return _emit(
+        {
+            "run_id": rid,
+            "status": "ok",
+            "changed_files": changed,
+            "diff_summary": "\n".join(summaries),
+        },
+        json_output,
+    )
+
+
+def loop_artifacts_command(
+    run_id: str | None = None,
+    json_output: bool = True,
+    data_dir: str | None = None,
+) -> int:
+    """List artifact references recorded by a loop run."""
+    dd = Path(data_dir) if data_dir else None
+    rid = _select_run_id(run_id, dd)
+    if rid is None:
+        return _emit({"status": "no_run"}, json_output)
+    artifacts: list[str] = []
+    for item in read_iterations(rid, dd):
+        build = item.get("build_result") or {}
+        tests = item.get("test_result") or {}
+        artifacts.extend(str(x) for x in build.get("artifacts") or [])
+        artifacts.extend(str(x) for x in tests.get("evidence") or [])
+    return _emit({"run_id": rid, "status": "ok", "artifacts": artifacts}, json_output)
 
 
 # ---------------------------------------------------------------------------
@@ -1099,9 +1241,13 @@ def _recommended_next_loop(state: Any, candidate: Any, convergence: Any, fake: l
 
 
 __all__ = [
+    "Console",
+    "loop_artifacts_command",
     "loop_deliver_command",
+    "loop_diff_command",
     "loop_optimize_command",
     "loop_repair_command",
+    "loop_replay_command",
     "loop_review_command",
     "loop_run_command",
     "loop_status_command",

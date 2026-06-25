@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from loopos.cli.context import data_paths
+from loopos.i18n import t as _t
 from loopos.tasks import TaskArtifactStore, TaskRecord, TaskStore
 
 
@@ -32,8 +33,8 @@ def _render_task_list_human(tasks: list[Any]) -> int:
     console = Console()
     if not tasks:
         console.print(Panel(
-            "[dim]No tasks stored.[/dim]",
-            title="[bold cyan]tasks list[/bold cyan] [dim]empty[/dim]",
+            f"[dim]{_t('panel.tasks.empty')}[/dim]",
+            title=f"[bold cyan]{_t('panel.tasks.list_title')}[/bold cyan] [dim]empty[/dim]",
             border_style="cyan",
         ))
         return 0
@@ -48,12 +49,13 @@ def _render_task_list_human(tasks: list[Any]) -> int:
             "open": "yellow", "in_progress": "cyan", "blocked": "red",
             "done": "green", "completed": "green",
         }.get(status, "white")
+        status_label = _t(f"task_status.{status}", default=status)
         marker = " [green](quick-win)[/green]" if task.quick_win else ""
         table.add_row(
-            task.id, f"[{status_color}]{status}[/{status_color}]",
+            task.id, f"[{status_color}]{status_label}[/{status_color}]",
             task.title + marker, task.type or "?",
         )
-    console.print(Panel(table, title="[bold cyan]tasks list[/bold cyan] "
+    console.print(Panel(table, title=f"[bold cyan]{_t('panel.tasks.list_title')}[/bold cyan] "
                                       f"[cyan]{len(tasks)} item(s)[/cyan]",
                           border_style="cyan"))
     return 0
@@ -246,7 +248,7 @@ def tasks_command(
                           f"[green]{r.status}[/green]" if r.status == "ready"
                           else f"[dim]{r.status}[/dim]")
             console.print(Panel(t,
-                title=f"[bold cyan]tasks artifacts[/bold cyan] [cyan]{len(rows)} item(s)[/cyan]",
+                title=f"[bold cyan]{_t('panel.tasks.artifacts_title')}[/bold cyan] [cyan]{len(rows)} item(s)[/cyan]",
                 border_style="cyan"))
             return 0
         print(
@@ -259,3 +261,6 @@ def tasks_command(
         return 0
     print(f"Unknown tasks action: {action}", file=sys.stderr)
     return 1
+
+
+__all__ = ["TaskArtifactStore", "TaskRecord", "TaskStore", "tasks_command"]

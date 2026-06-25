@@ -8,6 +8,7 @@ import sys
 from loopos.cli.commands import (
     ail_command,
     config_command,
+    computer_command,
     db_command,
     files_command,
     gateway_command,
@@ -15,9 +16,12 @@ from loopos.cli.commands import (
     history_command,
     imagine_command,
     lail_encode_command,
+    loop_artifacts_command,
     loop_deliver_command,
+    loop_diff_command,
     loop_optimize_command,
     loop_repair_command,
+    loop_replay_command,
     loop_review_command,
     loop_run_command,
     loop_status_command,
@@ -25,6 +29,7 @@ from loopos.cli.commands import (
     memory_compile_command,
     mode_command,
     models_command,
+    nodes_command,
     policy_command,
     profile_command,
     providers_command,
@@ -39,6 +44,7 @@ from loopos.cli.commands import (
     skills_command,
     status_command,
     tasks_command,
+    token_command,
     tools_command,
     trace_command,
     triggers_command,
@@ -115,6 +121,7 @@ def fallback_main(argv: list[str] | None = None) -> int:
 
     tools_parser = sub.add_parser("tools")
     tools_parser.add_argument("action", nargs="?", default="list")
+    tools_parser.add_argument("query", nargs="?")
     tools_parser.add_argument("--workspace", default=".")
     tools_parser.add_argument("--json", dest="json_output", action="store_true")
 
@@ -217,7 +224,14 @@ def fallback_main(argv: list[str] | None = None) -> int:
     providers_parser = sub.add_parser("providers")
     providers_parser.add_argument("action", nargs="?", default="list")
     providers_parser.add_argument("value", nargs="?")
+    providers_parser.add_argument("--provider", dest="provider_id")
     providers_parser.add_argument("--json", dest="json_output", action="store_true")
+
+    provider_parser = sub.add_parser("provider")
+    provider_parser.add_argument("action", nargs="?", default="list")
+    provider_parser.add_argument("value", nargs="?")
+    provider_parser.add_argument("--provider", dest="provider_id")
+    provider_parser.add_argument("--json", dest="json_output", action="store_true")
 
     models_parser = sub.add_parser("models")
     models_parser.add_argument("action", nargs="?", default="route")
@@ -236,6 +250,30 @@ def fallback_main(argv: list[str] | None = None) -> int:
     gateway_parser.add_argument("--reason-code")
     gateway_parser.add_argument("--approve", action="store_true")
     gateway_parser.add_argument("--deny", action="store_true")
+
+    computer_parser = sub.add_parser("computer")
+    computer_parser.add_argument("action", nargs="?", default="run")
+    computer_parser.add_argument("task", nargs="?")
+    computer_parser.add_argument("--backend", default="fake")
+    computer_parser.add_argument("--allow-computer-control", action="store_true")
+    computer_parser.add_argument("--approve-each-action", action="store_true")
+    computer_parser.add_argument("--sandbox", action="store_true")
+    computer_parser.add_argument("--dry-run", dest="dry_run", action="store_true", default=True)
+    computer_parser.add_argument("--no-dry-run", dest="dry_run", action="store_false")
+    computer_parser.add_argument("--latest", action="store_true")
+    computer_parser.add_argument("--data-dir", default=".loopos")
+    computer_parser.add_argument("--json", dest="json_output", action="store_true")
+
+    token_parser = sub.add_parser("token")
+    token_parser.add_argument("action", nargs="?", default="report")
+    token_parser.add_argument("--latest", action="store_true")
+    token_parser.add_argument("--data-dir", default=".loopos")
+    token_parser.add_argument("--json", dest="json_output", action="store_true")
+
+    nodes_parser = sub.add_parser("nodes")
+    nodes_parser.add_argument("action", nargs="?", default="list")
+    nodes_parser.add_argument("--code")
+    nodes_parser.add_argument("--json", dest="json_output", action="store_true")
 
     memory_parser = sub.add_parser("memory")
     memory_parser.add_argument("action", nargs="?", default="list")
@@ -362,6 +400,11 @@ def fallback_main(argv: list[str] | None = None) -> int:
     loop_parser.add_argument("goal", nargs="?")
     loop_parser.add_argument("--max-iterations", type=int, default=3)
     loop_parser.add_argument("--dry-run", dest="dry_run", action="store_true")
+    loop_parser.add_argument("--real-executor", dest="real_executor", action="store_true")
+    loop_parser.add_argument("--sandbox", dest="sandbox", action="store_true", default=True)
+    loop_parser.add_argument("--no-sandbox", dest="sandbox", action="store_false")
+    loop_parser.add_argument("--repo-path", dest="repo_path", default=None)
+    loop_parser.add_argument("--test-command", dest="test_command", default=None)
     loop_parser.add_argument("--mad-dog", dest="mad_dog", action="store_true")
     loop_parser.add_argument("--json", dest="json_output", action="store_true")
     loop_parser.add_argument("--run-id", dest="run_id", default=None)
@@ -449,6 +492,7 @@ def fallback_main(argv: list[str] | None = None) -> int:
     if args.command == "tools":
         return tools_command(
             args.action,
+            args.query,
             workspace=args.workspace,
             json_output=args.json_output,
         )
@@ -551,7 +595,9 @@ def fallback_main(argv: list[str] | None = None) -> int:
             human_output=args.human_output,
         )
     if args.command == "providers":
-        return providers_command(args.action, args.value, json_output=args.json_output)
+        return providers_command(args.action, args.value or args.provider_id, json_output=args.json_output)
+    if args.command == "provider":
+        return providers_command(args.action, args.value or args.provider_id, json_output=args.json_output)
     if args.command == "models":
         return models_command(
             args.action,
@@ -572,6 +618,28 @@ def fallback_main(argv: list[str] | None = None) -> int:
             approve=args.approve,
             deny=args.deny,
         )
+    if args.command == "computer":
+        return computer_command(
+            args.action,
+            args.task,
+            backend=args.backend,
+            allow_computer_control=args.allow_computer_control,
+            approve_each_action=args.approve_each_action,
+            sandbox=args.sandbox,
+            dry_run=args.dry_run,
+            latest=args.latest,
+            data_dir=args.data_dir,
+            json_output=args.json_output,
+        )
+    if args.command == "token":
+        return token_command(
+            args.action,
+            latest=args.latest,
+            data_dir=args.data_dir,
+            json_output=args.json_output,
+        )
+    if args.command == "nodes":
+        return nodes_command(args.action, code=args.code, json_output=args.json_output)
     if args.command == "memory":
         # v0.4.0 closeout: `memory compile` is the new command.
         # v0.1 `memory <action> <arg>` is preserved for back-compat.
@@ -717,6 +785,10 @@ def fallback_main(argv: list[str] | None = None) -> int:
                 goal=args.goal,
                 max_iterations=args.max_iterations,
                 dry_run=args.dry_run,
+                real_executor=args.real_executor,
+                sandbox=args.sandbox,
+                repo_path=args.repo_path,
+                test_command=args.test_command,
                 json_output=args.json_output,
                 run_id=rid,
                 data_dir=args.data_dir,
@@ -743,6 +815,21 @@ def fallback_main(argv: list[str] | None = None) -> int:
             )
         if args.action == "deliver":
             return loop_deliver_command(
+                run_id=rid, json_output=args.json_output,
+                data_dir=args.data_dir,
+            )
+        if args.action == "replay":
+            return loop_replay_command(
+                run_id=rid, json_output=args.json_output,
+                data_dir=args.data_dir,
+            )
+        if args.action == "diff":
+            return loop_diff_command(
+                run_id=rid, json_output=args.json_output,
+                data_dir=args.data_dir,
+            )
+        if args.action == "artifacts":
+            return loop_artifacts_command(
                 run_id=rid, json_output=args.json_output,
                 data_dir=args.data_dir,
             )
