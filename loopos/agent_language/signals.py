@@ -26,6 +26,10 @@ class SignalType(str, Enum):
     DELIVERY_CANDIDATE = "delivery.candidate"
     MEMORY_CONTEXT_COMPILED = "memory.context_compiled"
     COMMUNICATION_ROUTED = "communication.routed"
+    COMPUTER_OBSERVED = "computer.observed"
+    COMPUTER_ACTION_PLANNED = "computer.action_planned"
+    COMPUTER_ACTION_EXECUTED = "computer.action_executed"
+    TOKEN_BUDGET_RECORDED = "token.budget_recorded"
 
 
 class RoleSubscription(BaseModel):
@@ -68,6 +72,21 @@ DEFAULT_SUBSCRIPTIONS: tuple[RoleSubscription, ...] = (
         signal_type=SignalType.FAKE_CONVERGENCE_DETECTED,
         recipients=[AgentRole.LOOP_CONTROLLER, AgentRole.DELIVERY_EVALUATOR],
         reason="Fake convergence changes loop control and delivery readiness.",
+    ),
+    RoleSubscription(
+        signal_type=SignalType.COMPUTER_OBSERVED,
+        recipients=[AgentRole.VISUAL_TESTER, AgentRole.UI_REVIEWER],
+        reason="Visual tester and UI reviewer consume screen observations.",
+    ),
+    RoleSubscription(
+        signal_type=SignalType.COMPUTER_ACTION_EXECUTED,
+        recipients=[AgentRole.LOOP_CONTROLLER, AgentRole.REVIEWER],
+        reason="Executed UI actions feed audit and review.",
+    ),
+    RoleSubscription(
+        signal_type=SignalType.TOKEN_BUDGET_RECORDED,
+        recipients=[AgentRole.LOOP_CONTROLLER, AgentRole.OPTIMIZER],
+        reason="Token budget signals affect loop control and next-plan optimization.",
     ),
 )
 

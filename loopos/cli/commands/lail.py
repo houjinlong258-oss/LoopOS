@@ -27,6 +27,11 @@ _LAIL_KINDS = {
     "delivery_emitted",
     "checkpoint_saved",
     "memory_packet_compiled",
+    "computer_observed",
+    "computer_action_planned",
+    "computer_action_executed",
+    "computer_action_blocked",
+    "token_budget_recorded",
 }
 
 
@@ -112,4 +117,3 @@ def lail_command(
 
 
 __all__ = ["lail_command", "lail_encode_command"]
-

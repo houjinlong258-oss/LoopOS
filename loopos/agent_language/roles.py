@@ -16,6 +16,9 @@ class AgentRole(str, Enum):
     MAD_DOG = "mad_dog"
     DELIVERY_EVALUATOR = "delivery_evaluator"
     MEMORY_COMPILER = "memory_compiler"
+    COMPUTER_OPERATOR = "computer_operator"
+    VISUAL_TESTER = "visual_tester"
+    UI_REVIEWER = "ui_reviewer"
 
 
 ALL_AGENT_ROLES: tuple[AgentRole, ...] = tuple(AgentRole)
