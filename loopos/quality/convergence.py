@@ -509,6 +509,7 @@ def _category_to_loss_dim(category: str) -> str:
         "release_gap": "blocking_findings",
         "token_waste": "no_improvement",
         "communication_noise": "no_improvement",
+        "visual_verification_gap": "blocking_findings",
         "security_risk": "blocking_findings",
     }
     return mapping.get(category, "unsat_required")

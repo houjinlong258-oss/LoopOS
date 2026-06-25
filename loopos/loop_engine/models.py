@@ -187,6 +187,7 @@ ReviewCategory = Literal[
     "release_gap",
     "token_waste",
     "communication_noise",
+    "visual_verification_gap",
     "security_risk",
 ]
 
@@ -205,6 +206,7 @@ REVIEW_CATEGORIES: tuple[ReviewCategory, ...] = (
     "release_gap",
     "token_waste",
     "communication_noise",
+    "visual_verification_gap",
     "security_risk",
 )
 

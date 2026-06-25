@@ -41,6 +41,7 @@ MadDogCategory = Literal[
     "release_gap",
     "token_waste",
     "communication_noise",
+    "visual_verification_gap",
     "security_risk",
 ]
 
@@ -246,6 +247,22 @@ class MadDogReviewer:
                 blocks_delivery=False,
                 expected_quality_gain_if_fixed=0.1,
             ))
+
+        # visual_verification_gap
+        goal_or_plan = " ".join([state.goal.raw_goal, plan.title, " ".join(plan.steps)]).lower()
+        if any(term in goal_or_plan for term in {"ui", "browser", "screen", "visual", "desktop"}):
+            has_visual_evidence = bool(tests and any("screenshot" in e or "visual" in e for e in tests.evidence))
+            if not has_visual_evidence:
+                findings.append(MadDogFinding(
+                    category="visual_verification_gap",
+                    severity="medium",
+                    claim="UI/browser/visual work has no visual verification evidence.",
+                    attack="Mad Dog attacks visual completion claims without screen evidence.",
+                    evidence=["goal_or_plan references visual surface", "no screenshot/visual evidence"],
+                    required_fix="Capture a redacted screenshot or visual verification signal.",
+                    blocks_delivery=False,
+                    expected_quality_gain_if_fixed=0.1,
+                ))
 
         # token_waste
         if len(plan.steps) > 8:
