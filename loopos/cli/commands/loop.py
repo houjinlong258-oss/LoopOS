@@ -69,6 +69,17 @@ try:
 except ImportError:  # pragma: no cover - exercised in dependency-light envs
     _HAS_RICH = False
 
+# v0.4.0 closeout: shared --human mode utilities (mood→color, mascot,
+# plain-text fallback, kv helpers). See loopos/cli/_human_styles.py.
+from loopos.cli._human_styles import (
+    HAS_RICH as _STYLES_HAS_RICH,  # noqa: F401 - re-export for back-compat
+    MOOD_COLOR,
+    emit_plain_dict,
+    mood_box,
+    mood_for_obj,
+    xiao_huanli,
+)
+
 
 # The in-process holder is kept for back-compat / debugging; it
 # is no longer the source of truth.
@@ -135,13 +146,7 @@ def _emit_human(obj: Any) -> int:
     right panel. Unknown shapes fall back to a generic key-value panel.
     """
     if not _HAS_RICH:
-        # Plain fallback: same flat key:value behaviour the v0.4 closeout shipped.
-        if isinstance(obj, dict):
-            for k, v in obj.items():
-                sys.stdout.write(f"{k}: {v}\n")
-        else:
-            sys.stdout.write(str(obj) + "\n")
-        return 0
+        return emit_plain_dict(obj)
 
     console = Console()
 
@@ -175,73 +180,74 @@ def _emit_human(obj: Any) -> int:
     if "delivery_status" in obj or "success_criteria_coverage" in obj or "why" in obj:
         return _emit_human_deliver(obj, console)
 
+    # Shape: loop review output (has 'findings' or 'mad_dog_findings')
+    if "findings" in obj or "mad_dog_findings" in obj:
+        return _emit_human_review(obj, console)
+
+    # Shape: loop repair output (RepairPlan or 'no_repair_plan' status)
+    if "steps" in obj and ("source_findings" in obj or "priority" in obj):
+        return _emit_human_repair(obj, console)
+    if obj.get("status") == "no_repair_plan":
+        return _emit_human_repair(obj, console)
+
+    # Shape: loop optimize output (FusionOptimizationResult dict)
+    if "recommended_next_plan" in obj or "rationale" in obj:
+        return _emit_human_optimize(obj, console)
+
     # Generic: flat key-value panel
     return _emit_human_generic(obj, console)
 
 
-def _xiao_huanli(mood: str) -> Text:
+def _xiao_huanli(mood: str) -> Any:
     """Compact Xiao Huanli (the raccoon mascot) for ``--human`` panels.
 
     4 lines, ASCII-compatible. Mood: calm / running / blocked / halted.
+    Delegates to :func:`loopos.cli._human_styles.xiao_huanli` so all
+    --human panels share one canonical face.
     """
-    if mood == "running":
-        lines = ["   /\\_/\\  ", "  (^  ^) ", "   (v) »»", "   ||||  "]
-        return Text("\n".join(lines), style="cyan")
-    if mood == "blocked":
-        lines = ["   /\\_/\\  ", "  (>  <) ", "   (X)   ", "   ||||  "]
-        return Text("\n".join(lines), style="red")
-    if mood == "halted":
-        lines = ["   /\\_/\\  ", "  (T  T) ", "   (o)   ", "   ||||  "]
-        return Text("\n".join(lines), style="yellow")
-    lines = ["   /\\_/\\  ", "  (o  o) ", "   (v)   ", "   ||||  "]
-    return Text("\n".join(lines), style="green")
+    return xiao_huanli(mood)
 
 
 def _mood_for_obj(obj: dict[str, Any]) -> str:
-    """Pick a mood based on the v0.4 result object's status field."""
-    status = (obj.get("current_status") or obj.get("status") or
-              obj.get("delivery_status") or "")
-    s = str(status).lower()
-    if s in {"ready_to_deliver", "ready", "ok", "completed", "pass"}:
-        return "calm"
-    if s in {"running", "active", "in_progress"}:
-        return "running"
-    if s in {"blocked", "denied", "halt", "error", "failed"}:
-        return "blocked"
-    if s in {"halted", "budget_exhausted"}:
-        return "halted"
-    if obj.get("fake_convergence") or obj.get("fake_convergence_findings"):
-        return "blocked"
-    return "calm"
+    """Pick a mood based on the v0.4 result object's status field.
+
+    Delegates to :func:`loopos.cli._human_styles.mood_for_obj`.
+    """
+    return mood_for_obj(obj)
 
 
 def _emit_human_run(obj: dict[str, Any], console: Any) -> int:
     """Render a ``loop run`` result as a Rich panel."""
     mood = _mood_for_obj(obj)
     cat = _xiao_huanli(mood)
-    mood_color = {"calm": "green", "running": "cyan", "blocked": "red", "halted": "yellow"}[mood]
+    mood_color = MOOD_COLOR[mood]
+    box = mood_box(mood)
 
     grid = Table.grid(expand=True, padding=(0, 1))
-    grid.add_column(width=10)
+    grid.add_column(width=12)
     grid.add_column()
 
-    rows = [
-        ("Run",          obj.get("run_id", "?")),
+    # Run id and run_id get cyan; status/delivery get mood_color.
+    # Plain values (user_goal, Iterations, Known limits) get cyan/blue so
+    # they don't render as washed-out white next to the mood-coloured fields.
+    rows: list[tuple[str, str]] = [
+        ("Run",          f"[cyan]{obj.get('run_id', '?')}[/cyan]"),
         ("Status",       f"[{mood_color}]{obj.get('current_status', '?')}[/{mood_color}]"),
-        ("Iterations",   str(len(obj.get("iterations", [])))),
+        ("Iterations",   f"[blue]{len(obj.get('iterations', []))}[/blue]"),
     ]
-    # The user goal lives on the loop state (not the run-output dict);
-    # when present we surface it. Otherwise we fall through silently.
     if obj.get("user_goal"):
-        rows.insert(1, ("User goal", str(obj["user_goal"])))
+        rows.insert(1, ("User goal", f"[cyan]{obj['user_goal']}[/cyan]"))
     delivery = obj.get("delivery") or {}
     if delivery:
         rows.append(("Delivery", f"[{mood_color}]{delivery.get('status', '?')}[/{mood_color}]"))
         if delivery.get("known_limitations"):
-            rows.append(("Known limits", ", ".join(delivery["known_limitations"])))
+            limits = ", ".join(
+                f"[yellow]{x}[/yellow]" for x in delivery["known_limitations"]
+            )
+            rows.append(("Known limits", limits))
 
     for k, v in rows:
-        grid.add_row(f"[bold white]{k}[/bold white]", str(v))
+        grid.add_row(f"[bold white]{k}[/bold white]", v)
 
     last = (obj.get("iterations") or [{}])[-1]
     inner_rows: list[str] = []
@@ -259,9 +265,13 @@ def _emit_human_run(obj: dict[str, Any], console: Any) -> int:
         )
     if last.get("test_result"):
         t = last["test_result"]
+        passed = int(t.get("passed", 0))
+        failed = int(t.get("failed", 0))
+        passed_str = f"[green]{passed}[/green]" if passed else f"[dim]{passed}[/dim]"
+        failed_str = f"[red]{failed}[/red]" if failed else f"[dim]{failed}[/dim]"
         inner_rows.append(
             f"[bold]Test[/bold]: [{mood_color}]{t.get('status', '?')}[/{mood_color}] "
-            f"passed={t.get('passed', 0)} failed={t.get('failed', 0)}"
+            f"passed={passed_str} failed={failed_str}"
         )
     if last.get("quality_score"):
         q = last["quality_score"]
@@ -270,15 +280,17 @@ def _emit_human_run(obj: dict[str, Any], console: Any) -> int:
         )
     if last.get("convergence"):
         c = last["convergence"]
+        fake_n = len(c.get("fake_convergence") or [])
+        fake_str = f"[red]{fake_n}[/red]" if fake_n else "[dim]0[/dim]"
         inner_rows.append(
             f"[bold]Convergence[/bold]: [cyan]{c.get('status', '?')}[/cyan]"
-            f"  fake_convergence={len(c.get('fake_convergence') or [])}"
+            f"  fake_convergence={fake_str}"
         )
     inner = "\n".join(inner_rows) if inner_rows else "[dim]no iteration details[/dim]"
 
-    body = Group(cat, Text(""), grid, Text(""), Text(inner, style="white"))
+    body = Group(cat, Text(""), grid, Text(""), Text.from_markup(inner))
     title = f"[bold {mood_color}]loop run · {obj.get('run_id', '?')}[/bold {mood_color}] [{mood_color}]{obj.get('current_status', '?')}[/{mood_color}]"
-    console.print(Panel(body, title=title, border_style=mood_color, box=ROUNDED))
+    console.print(Panel(body, title=title, border_style=mood_color, box=box))
     return 0
 
 
@@ -286,17 +298,18 @@ def _emit_human_status(obj: dict[str, Any], console: Any) -> int:
     """Render a ``loop status`` result as a Rich panel."""
     mood = _mood_for_obj(obj)
     cat = _xiao_huanli(mood)
-    mood_color = {"calm": "green", "running": "cyan", "blocked": "red", "halted": "yellow"}[mood]
+    mood_color = MOOD_COLOR[mood]
+    box = mood_box(mood)
 
     grid = Table.grid(expand=True, padding=(0, 1))
     grid.add_column(width=18)
     grid.add_column()
-    rows = [
-        ("Run",               obj.get("run_id", "?")),
-        ("User goal",         obj.get("user_goal", "?")),
+    rows: list[tuple[str, str]] = [
+        ("Run",               f"[cyan]{obj.get('run_id', '?')}[/cyan]"),
+        ("User goal",         f"[cyan]{obj.get('user_goal', '?')}[/cyan]"),
         ("Current status",    f"[{mood_color}]{obj.get('current_status', '?')}[/{mood_color}]"),
-        ("Current iteration", str(obj.get("current_iteration", "?"))),
-        ("Checkpoint path",   obj.get("checkpoint_path", "?")),
+        ("Current iteration", f"[blue]{obj.get('current_iteration', '?')}[/blue]"),
+        ("Checkpoint path",   f"[cyan]{obj.get('checkpoint_path', '?')}[/cyan]"),
     ]
     if obj.get("lail_kind_summary"):
         kinds = obj["lail_kind_summary"]
@@ -320,16 +333,38 @@ def _emit_human_status(obj: dict[str, Any], console: Any) -> int:
         rows.append(("Convergence",
                      f"status=[cyan]{c.get('status', '?')}[/cyan] "
                      f"fake=[{mood_color}]{len(c.get('fake_convergence') or [])}[/{mood_color}]"))
+    # v0.4.0 closeout: surface reason_codes / fake_convergence_findings as
+    # visible diagnostic rows (previously only available in JSON).
+    if obj.get("reason_codes"):
+        codes = ", ".join(f"[red]{c}[/red]" for c in obj["reason_codes"])
+        rows.append(("Reason codes", codes))
+    if obj.get("fake_convergence_findings"):
+        # fake-convergence findings are blocking diagnostic signals.
+        findings = obj["fake_convergence_findings"]
+        if isinstance(findings, list) and findings:
+            preview = findings[:3]
+            lines = "  ".join(f"[red]{f}[/red]" for f in preview)
+            if len(findings) > 3:
+                lines += f"  [dim](+{len(findings) - 3} more)[/dim]"
+            rows.append(("Fake-convergence", lines))
+    if obj.get("blocking_findings"):
+        bf = obj["blocking_findings"]
+        if isinstance(bf, list) and bf:
+            preview = bf[:3]
+            lines = "  ".join(f"[red]{f}[/red]" for f in preview)
+            if len(bf) > 3:
+                lines += f"  [dim](+{len(bf) - 3} more)[/dim]"
+            rows.append(("Blocking findings", lines))
     if obj.get("next_recommended_action"):
         rows.append(("Next action", f"[cyan]{obj['next_recommended_action']}[/cyan]"))
 
     for k, v in rows:
-        grid.add_row(f"[bold white]{k}[/bold white]", str(v))
+        grid.add_row(f"[bold white]{k}[/bold white]", v)
 
     note = "[dim]this process is a fresh Python interpreter — no in-process state[/dim]"
-    body = Group(cat, Text(""), grid, Text(""), Text(note))
+    body = Group(cat, Text(""), grid, Text(""), Text.from_markup(note))
     title = f"[bold {mood_color}]loop status --latest[/bold {mood_color}] [{mood_color}]{obj.get('current_status', '?')}[/{mood_color}]"
-    console.print(Panel(body, title=title, border_style=mood_color, box=ROUNDED))
+    console.print(Panel(body, title=title, border_style=mood_color, box=box))
     return 0
 
 
@@ -338,17 +373,18 @@ def _emit_human_deliver(obj: dict[str, Any], console: Any) -> int:
     ready = bool(obj.get("ready"))
     mood = "calm" if ready else ("blocked" if obj.get("fake_convergence_findings") else "halted")
     cat = _xiao_huanli(mood)
-    mood_color = "green" if ready else ("red" if mood == "blocked" else "yellow")
+    mood_color = MOOD_COLOR[mood]
+    box = mood_box(mood)
 
     grid = Table.grid(expand=True, padding=(0, 1))
     grid.add_column(width=18)
     grid.add_column()
-    rows = [
-        ("Run",            obj.get("run_id", "?")),
-        ("User goal",      obj.get("user_goal", "?")),
+    rows: list[tuple[str, str]] = [
+        ("Run",            f"[cyan]{obj.get('run_id', '?')}[/cyan]"),
+        ("User goal",      f"[cyan]{obj.get('user_goal', '?')}[/cyan]"),
         ("Delivery status", f"[{mood_color}]{obj.get('delivery_status', '?')}[/{mood_color}]"),
         ("Ready",          f"[{mood_color}]{obj.get('ready', '?')}[/{mood_color}]"),
-        ("Why",            str(obj.get("why", "?") or "?")),
+        ("Why",            f"[cyan]{obj.get('why', '?') or '?'}[/cyan]"),
     ]
     cov = obj.get("success_criteria_coverage") or {}
     if cov:
@@ -365,34 +401,269 @@ def _emit_human_deliver(obj: dict[str, Any], console: Any) -> int:
     if obj.get("convergence_status"):
         rows.append(("Convergence", f"[cyan]{obj['convergence_status']}[/cyan]"))
     if obj.get("iterations") is not None:
-        rows.append(("Iterations", str(obj["iterations"])))
+        rows.append(("Iterations", f"[blue]{obj['iterations']}[/blue]"))
     if obj.get("known_limitations"):
         rows.append(("Known limits", "  ".join(f"[yellow]{x}[/yellow]" for x in obj["known_limitations"])))
     if obj.get("recommended_next_loop"):
         rows.append(("Next loop", f"[cyan]{obj['recommended_next_loop']}[/cyan]"))
 
     for k, v in rows:
-        grid.add_row(f"[bold white]{k}[/bold white]", str(v))
+        grid.add_row(f"[bold white]{k}[/bold white]", v)
 
     body = Group(cat, Text(""), grid)
     title = f"[bold {mood_color}]loop deliver --latest[/bold {mood_color}] [{mood_color}]{obj.get('delivery_status', '?')}[/{mood_color}]"
-    console.print(Panel(body, title=title, border_style=mood_color, box=ROUNDED))
+    console.print(Panel(body, title=title, border_style=mood_color, box=box))
+    return 0
+
+
+def _emit_human_review(obj: dict[str, Any], console: Any) -> int:
+    """Render a ``loop review`` result as a Rich panel.
+
+    Shape::
+
+        {
+          "run_id": str,
+          "iteration": int | None,
+          "findings": list[dict],       # review findings
+          "mad_dog_findings": list | None,  # optional mad-dog findings
+        }
+    """
+    findings = obj.get("findings") or []
+    mad_dog = obj.get("mad_dog_findings") or []
+    has_blocking = any(
+        isinstance(f, dict) and (
+            f.get("severity") in {"high", "critical", "blocking"}
+            or f.get("blocking") is True
+        )
+        for f in (findings + mad_dog)
+    )
+    mood = "blocked" if has_blocking else ("calm" if not findings else "halted")
+    cat = _xiao_huanli(mood)
+    mood_color = MOOD_COLOR[mood]
+    box = mood_box(mood)
+
+    grid = Table.grid(expand=True, padding=(0, 1))
+    grid.add_column(width=18)
+    grid.add_column()
+    rows: list[tuple[str, str]] = [
+        ("Run",       f"[cyan]{obj.get('run_id', '?')}[/cyan]"),
+        ("Iteration", f"[blue]{obj.get('iteration', '?')}[/blue]"),
+        ("Findings",  f"[{mood_color}]{len(findings)}[/{mood_color}]"),
+        ("Mad-dog",   f"[{mood_color}]{len(mad_dog)}[/{mood_color}]"),
+    ]
+    for k, v in rows:
+        grid.add_row(f"[bold white]{k}[/bold white]", v)
+
+    finding_lines: list[str] = []
+    for f in findings[:8]:
+        if not isinstance(f, dict):
+            finding_lines.append(f"  - [dim]{f}[/dim]")
+            continue
+        sev = str(f.get("severity") or "info").lower()
+        sev_color = {"high": "red", "critical": "red", "blocking": "red",
+                     "medium": "yellow", "warning": "yellow",
+                     "low": "blue"}.get(sev, "cyan")
+        target = f.get("target") or f.get("id") or "?"
+        msg = f.get("message") or f.get("summary") or ""
+        finding_lines.append(
+            f"  - [{sev_color}]{sev}[/{sev_color}] [cyan]{target}[/cyan] {msg}"
+        )
+    if len(findings) > 8:
+        finding_lines.append(f"  [dim](+{len(findings) - 8} more findings)[/dim]")
+    if not finding_lines:
+        finding_lines.append("  [dim]no findings[/dim]")
+
+    if mad_dog:
+        finding_lines.append("[bold]Mad-dog review[/bold]")
+        for m in mad_dog[:5]:
+            if not isinstance(m, dict):
+                finding_lines.append(f"  - [dim]{m}[/dim]")
+                continue
+            cat_m = m.get("category") or m.get("kind") or "?"
+            sev = str(m.get("severity") or "info").lower()
+            sev_color = {"high": "red", "critical": "red"}.get(sev, "yellow")
+            msg = m.get("message") or m.get("summary") or ""
+            finding_lines.append(
+                f"  - [{sev_color}]{sev}[/{sev_color}] [magenta]{cat_m}[/magenta] {msg}"
+            )
+        if len(mad_dog) > 5:
+            finding_lines.append(f"  [dim](+{len(mad_dog) - 5} more)[/dim]")
+
+    inner = "\n".join(finding_lines)
+    body = Group(cat, Text(""), grid, Text(""), Text.from_markup(inner))
+    title = f"[bold {mood_color}]loop review[/bold {mood_color}] [{mood_color}]{len(findings)} findings[/{mood_color}]"
+    console.print(Panel(body, title=title, border_style=mood_color, box=box))
+    return 0
+
+
+def _emit_human_repair(obj: dict[str, Any], console: Any) -> int:
+    """Render a ``loop repair`` result.
+
+    Two shapes arrive here:
+      * ``{"status": "no_repair_plan", ...}`` — there's no plan to show.
+      * ``RepairPlan`` dict with ``steps`` / ``source_findings`` / ``priority``.
+    """
+    if obj.get("status") == "no_repair_plan":
+        cat = _xiao_huanli("halted")
+        mood_color = MOOD_COLOR["halted"]
+        box = mood_box("halted")
+        grid = Table.grid(expand=True, padding=(0, 1))
+        grid.add_column(width=18)
+        grid.add_column()
+        rows = [
+            ("Run",       f"[cyan]{obj.get('run_id', '?')}[/cyan]"),
+            ("Iteration", f"[blue]{obj.get('iteration', '?')}[/blue]"),
+            ("Status",    "[yellow]no_repair_plan[/yellow]"),
+        ]
+        for k, v in rows:
+            grid.add_row(f"[bold white]{k}[/bold white]", v)
+        body = Group(cat, Text(""), grid, Text(""),
+                     Text.from_markup("[dim]no repair plan produced for this iteration[/dim]"))
+        title = "[bold yellow]loop repair[/bold yellow] [yellow]no plan[/yellow]"
+        console.print(Panel(body, title=title, border_style=mood_color, box=box))
+        return 0
+
+    priority = str(obj.get("priority", "medium")).lower()
+    mood = "blocked" if priority in {"high", "critical"} else "halted"
+    cat = _xiao_huanli(mood)
+    mood_color = MOOD_COLOR[mood]
+    box = mood_box(mood)
+
+    grid = Table.grid(expand=True, padding=(0, 1))
+    grid.add_column(width=18)
+    grid.add_column()
+    rows = [
+        ("Plan id",      f"[cyan]{obj.get('id', '?')}[/cyan]"),
+        ("Priority",     f"[{mood_color}]{priority}[/{mood_color}]"),
+        ("Source count", f"[blue]{len(obj.get('source_findings') or [])}[/blue]"),
+        ("Steps",        f"[blue]{len(obj.get('steps') or [])}[/blue]"),
+        ("Tests to run", f"[blue]{len(obj.get('tests_to_run') or [])}[/blue]"),
+    ]
+    if obj.get("expected_fix"):
+        rows.append(("Expected fix", f"[cyan]{obj['expected_fix']}[/cyan]"))
+    for k, v in rows:
+        grid.add_row(f"[bold white]{k}[/bold white]", v)
+
+    inner_lines: list[str] = []
+    if obj.get("source_findings"):
+        inner_lines.append("[bold]Source findings[/bold]")
+        for s in obj["source_findings"][:5]:
+            inner_lines.append(f"  - [red]{s}[/red]")
+        if len(obj["source_findings"]) > 5:
+            inner_lines.append(f"  [dim](+{len(obj['source_findings']) - 5} more)[/dim]")
+    if obj.get("steps"):
+        inner_lines.append("[bold]Steps[/bold]")
+        for i, s in enumerate(obj["steps"][:8], 1):
+            inner_lines.append(f"  [blue]{i}.[/blue] {s}")
+        if len(obj["steps"]) > 8:
+            inner_lines.append(f"  [dim](+{len(obj['steps']) - 8} more)[/dim]")
+    if obj.get("tests_to_run"):
+        inner_lines.append("[bold]Tests to run[/bold]")
+        for t in obj["tests_to_run"][:8]:
+            inner_lines.append(f"  - [magenta]{t}[/magenta]")
+        if len(obj["tests_to_run"]) > 8:
+            inner_lines.append(f"  [dim](+{len(obj['tests_to_run']) - 8} more)[/dim]")
+    inner = "\n".join(inner_lines) if inner_lines else "[dim]no steps[/dim]"
+    body = Group(cat, Text(""), grid, Text(""), Text.from_markup(inner))
+    title = f"[bold {mood_color}]loop repair[/bold {mood_color}] [{mood_color}]{priority}[/{mood_color}]"
+    console.print(Panel(body, title=title, border_style=mood_color, box=box))
+    return 0
+
+
+def _emit_human_optimize(obj: dict[str, Any], console: Any) -> int:
+    """Render a ``loop optimize`` result (FusionOptimizationResult dict)."""
+    confidence = float(obj.get("confidence", 0.0))
+    if confidence >= 0.75:
+        mood = "calm"
+    elif confidence >= 0.5:
+        mood = "running"
+    else:
+        mood = "halted"
+    cat = _xiao_huanli(mood)
+    mood_color = MOOD_COLOR[mood]
+    box = mood_box(mood)
+
+    grid = Table.grid(expand=True, padding=(0, 1))
+    grid.add_column(width=18)
+    grid.add_column()
+    rows = [
+        ("Result id",    f"[cyan]{obj.get('id', '?')}[/cyan]"),
+        ("Mode",         f"[cyan]{obj.get('mode', '?')}[/cyan]"),
+        ("Confidence",   (f"[green]{confidence:.2f}[/green]" if confidence >= 0.75
+                           else f"[yellow]{confidence:.2f}[/yellow]" if confidence >= 0.5
+                           else f"[red]{confidence:.2f}[/red]")),
+        ("Alternatives", f"[blue]{len(obj.get('alternatives') or [])}[/blue]"),
+        ("Findings",     f"[{mood_color}]{len(obj.get('review_findings') or [])}[/{mood_color}]"),
+    ]
+    has_repair = obj.get("repair_plan") is not None
+    has_opt = obj.get("optimization_plan") is not None
+    rows.append(("Has repair plan",   "[green]yes[/green]" if has_repair else "[dim]no[/dim]"))
+    rows.append(("Has optimization",  "[green]yes[/green]" if has_opt   else "[dim]no[/dim]"))
+    for k, v in rows:
+        grid.add_row(f"[bold white]{k}[/bold white]", v)
+
+    inner_lines: list[str] = []
+    plan = obj.get("recommended_next_plan") or {}
+    if plan:
+        title_p = plan.get("title") or "?"
+        source_p = plan.get("source") or "?"
+        inner_lines.append(
+            f"[bold]Recommended plan[/bold]: [cyan]{title_p}[/cyan] "
+            f"(source=[magenta]{source_p}[/magenta])"
+        )
+    if obj.get("rationale"):
+        inner_lines.append(f"[bold]Rationale[/bold]: [cyan]{obj['rationale']}[/cyan]")
+    if obj.get("disagreements"):
+        inner_lines.append("[bold]Disagreements[/bold]")
+        for d in obj["disagreements"][:5]:
+            inner_lines.append(f"  - [yellow]{d}[/yellow]")
+    if obj.get("review_findings"):
+        inner_lines.append("[bold]Findings[/bold]")
+        for f in obj["review_findings"][:5]:
+            if not isinstance(f, dict):
+                inner_lines.append(f"  - [red]{f}[/red]")
+                continue
+            sev = str(f.get("severity") or "info").lower()
+            sev_color = {"high": "red", "critical": "red"}.get(sev, "yellow")
+            msg = f.get("message") or f.get("summary") or str(f)
+            target = f.get("target") or "?"
+            inner_lines.append(
+                f"  - [{sev_color}]{sev}[/{sev_color}] [cyan]{target}[/cyan] {msg}"
+            )
+        if len(obj["review_findings"]) > 5:
+            inner_lines.append(f"  [dim](+{len(obj['review_findings']) - 5} more)[/dim]")
+    inner = "\n".join(inner_lines) if inner_lines else "[dim]no detail[/dim]"
+    body = Group(cat, Text(""), grid, Text(""), Text.from_markup(inner))
+    title = (f"[bold {mood_color}]loop optimize[/bold {mood_color}] "
+             f"[{mood_color}]confidence={confidence:.2f}[/{mood_color}]")
+    console.print(Panel(body, title=title, border_style=mood_color, box=box))
     return 0
 
 
 def _emit_human_generic(obj: dict[str, Any], console: Any) -> int:
-    """Render any unknown dict as a flat key-value panel."""
-    cat = _xiao_huanli("calm")
+    """Render any unknown dict as a flat key-value panel.
+
+    v0.4.0 closeout: previously hardcoded a ``"loop ok"`` title with a
+    green border for *every* unmatched payload — including blocked /
+    halted results — which was misleading. We now derive a mood + title
+    from the payload's status fields so unknown shapes still get an
+    honest read-out.
+    """
+    mood = _mood_for_obj(obj)
+    cat = _xiao_huanli(mood)
+    mood_color = MOOD_COLOR[mood]
+    box = mood_box(mood)
+
     grid = Table.grid(expand=True, padding=(0, 1))
-    grid.add_column(width=20)
+    grid.add_column(width=22)
     grid.add_column()
     for k, v in obj.items():
         if isinstance(v, (dict, list)):
             v = json.dumps(v, default=str, indent=2)
         grid.add_row(f"[bold white]{k}[/bold white]", str(v))
     body = Group(cat, Text(""), grid)
-    title = "[bold green]loop[/bold green] [green]ok[/green]"
-    console.print(Panel(body, title=title, border_style="green", box=ROUNDED))
+    title = f"[bold {mood_color}]loop result[/bold {mood_color}] [{mood_color}]{mood}[/{mood_color}]"
+    console.print(Panel(body, title=title, border_style=mood_color, box=box))
     return 0
 
 
