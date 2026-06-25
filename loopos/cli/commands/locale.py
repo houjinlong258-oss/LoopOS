@@ -11,10 +11,10 @@ from loopos.i18n import (
     active_source,
     get_locale,
     init_locale,
-    normalize_locale,
     persist_locale,
     supported_locales,
     t,
+    validate_locale,
 )
 
 
@@ -97,8 +97,8 @@ def locale_command(
                 + "\n"
             )
             return 2
-        norm = normalize_locale(locale_id)
-        if norm not in SUPPORTED_LOCALES:
+        norm = validate_locale(locale_id)
+        if norm is None:
             sys.stderr.write(
                 t(
                     "messages.invalid_locale",

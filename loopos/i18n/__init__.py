@@ -1,6 +1,9 @@
 """LoopOS internationalisation layer.
 
 v0.4.0 closeout: full CLI localisation across zh / en / ru.
+v0.4.x: added 13 more locales via YAML stub catalogs
+(af, de, es, fr, ga, hu, it, ja, ko, pt, tr, uk, zh-hant) — all
+flagged ``draft=true`` pending native-speaker review.
 
 ## Public surface
 
@@ -20,323 +23,161 @@ v0.4.0 closeout: full CLI localisation across zh / en / ru.
 
 ## Translation tables
 
-JSON files live alongside this module:
+Catalogs live alongside this module in either JSON or YAML format.
+The loader prefers YAML (because YAML is easier to maintain by
+hand) and falls back to JSON for the existing zh / en / ru
+catalogs.
 
-* :file:`en.json` — canonical (English).
-* :file:`zh.json` — Simplified Chinese.
-* :file:`ru.json` — Russian (best-effort draft; needs native review).
+* :file:`en.json` — canonical (English, JSON for backward compat).
+* :file:`zh.json` — Simplified Chinese (JSON).
+* :file:`ru.json` — Russian best-effort draft (JSON, ``draft=true``).
+* :file:`af.yaml` / :file:`de.yaml` / :file:`es.yaml` /
+  :file:`fr.yaml` / :file:`ga.yaml` / :file:`hu.yaml` /
+  :file:`it.yaml` / :file:`ja.yaml` / :file:`ko.yaml` /
+  :file:`pt.yaml` / :file:`tr.yaml` / :file:`uk.yaml` /
+  :file:`zh-hant.yaml` — 13 best-effort draft YAML stubs.
 
 If a key is missing in the active locale we fall back to English; if
 English also lacks the key we return the key verbatim. This makes
 i18n strictly additive: shipping a new string in code without
 registering it across all locales degrades to English, never to a
 crash.
+
+## Module layout
+
+This module is kept small (<300 LOC) per the v0.4.0 closeout
+anti-bloat rule. The YAML parser and the catalog loader are split
+into focused submodules:
+
+* :mod:`loopos.i18n._yaml` — hand-rolled YAML parser (no PyYAML dep).
+* :mod:`loopos.i18n._catalogs` — catalog loading + alias table.
+* :mod:`loopos.i18n._resolution` — locale resolution + init.
 """
 from __future__ import annotations
 
-import json
-import os
-import sys
-from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
+from loopos.i18n._catalogs import (
+    FALLBACK_LOCALE,
+    PACKAGE_DIR,
+    SUPPORTED_LOCALES,
+    _clear_catalog_cache,
+    _config_path,
+    _read_catalog_file,
+    load_catalog,
+    persist_locale,
+    supported_locales,
+)
+from loopos.i18n._resolution import (
+    _autodetect_locale,
+    _read_persisted_locale,
+    init_locale,
+    normalize_locale,
+    resolve_locale,
+    validate_locale,
+)
+from loopos.i18n._yaml import parse_simple_yaml
 
-FALLBACK_LOCALE = "en"
-PACKAGE_DIR = Path(__file__).resolve().parent
-
-# Friendly aliases users may type on the CLI (e.g. ``loopos locale set
-# Chinese``). All map to one of the canonical locales below.
-_LOCALE_ALIASES: dict[str, str] = {
-    "zh": "zh", "zh-cn": "zh", "zh_cn": "zh", "zh-hans": "zh",
-    "chinese": "zh", "中文": "zh", "汉语": "zh", "简体中文": "zh",
-    "en": "en", "en-us": "en", "en_us": "en", "english": "en",
-    "ru": "ru", "ru-ru": "ru", "ru_ru": "ru", "russian": "ru",
-    "русский": "ru", "по-русски": "ru",
-}
-
-SUPPORTED_LOCALES: tuple[str, ...] = ("zh", "en", "ru")
-
-# Cache of loaded catalogs (locale -> dict). Populated lazily.
-_CATALOGS: dict[str, dict[str, Any]] = {}
-
-
-# ---------------------------------------------------------------------------
-# Catalog loading
-# ---------------------------------------------------------------------------
-
-
-def _read_catalog_file(locale: str) -> dict[str, Any]:
-    path = PACKAGE_DIR / f"{locale}.json"
-    if not path.exists():
-        return {}
-    try:
-        with path.open("r", encoding="utf-8") as handle:
-            return cast(dict[str, Any], json.loads(handle.read()))
-    except (OSError, json.JSONDecodeError):  # pragma: no cover - defensive
-        return {}
-
-
-def load_catalog(locale: str) -> dict[str, Any]:
-    """Return the raw translation table for ``locale`` (cached)."""
-    if locale not in _CATALOGS:
-        _CATALOGS[locale] = _read_catalog_file(locale)
-    return _CATALOGS[locale]
-
-
-def supported_locales() -> list[dict[str, str]]:
-    """Return ``[{id, name, english_name, draft}, ...]`` for ``loopos
-    locale list`` and similar introspection."""
-    out: list[dict[str, str]] = []
-    for loc in SUPPORTED_LOCALES:
-        catalog = load_catalog(loc)
-        meta = catalog.get("_meta", {}) if isinstance(catalog, dict) else {}
-        out.append({
-            "id": loc,
-            "name": str(meta.get("name", loc)),
-            "english_name": str(meta.get("english_name", loc)),
-            "draft": "true" if meta.get("draft") else "",
-        })
-    return out
-
-
-# ---------------------------------------------------------------------------
-# Locale resolution
-# ---------------------------------------------------------------------------
-
-
-def normalize_locale(raw: str) -> str:
-    """Normalise a free-form locale string to one of the supported
-    locales. Returns the input unchanged if nothing matches so callers
-    can decide what to do with unknown locales.
-    """
-    if not raw:
-        return ""
-    s = raw.strip().lower().replace("_", "-")
-    # Direct hit.
-    if s in SUPPORTED_LOCALES:
-        return s
-    # First segment of BCP-47 style: zh-Hans → zh.
-    if "-" in s:
-        head = s.split("-", 1)[0]
-        if head in SUPPORTED_LOCALES:
-            return head
-    # Friendly alias.
-    return _LOCALE_ALIASES.get(s, s)
-
-
-def _config_path() -> Path:
-    """``~/.loopos/config.json`` (created on demand by ``locale set``)."""
-    return Path.home() / ".loopos" / "config.json"
-
-
-def _read_persisted_locale() -> str:
-    path = _config_path()
-    if not path.exists():
-        return ""
-    try:
-        with path.open("r", encoding="utf-8") as handle:
-            data = json.loads(handle.read())
-    except (OSError, json.JSONDecodeError):
-        return ""
-    if isinstance(data, dict):
-        value = data.get("locale", "")
-        if isinstance(value, str):
-            return value
-    return ""
-
-
-def _autodetect_locale() -> str:
-    """Best-effort detection from the system / shell environment.
-
-    Order on Linux / macOS:
-        1. ``LANGUAGE`` (colon-separated, first match wins)
-        2. ``LANG`` / ``LC_ALL``
-
-    On Windows we additionally consult the user's UI language via
-    ``kernel32.GetUserDefaultUILanguage``. Returns ``""`` when nothing
-    matches.
-    """
-    candidates: list[str] = []
-    lang = os.environ.get("LANG", "")
-    lc_all = os.environ.get("LC_ALL", "")
-    language = os.environ.get("LANGUAGE", "")
-    if language:
-        candidates.extend(language.split(":"))
-    if lc_all:
-        candidates.append(lc_all)
-    if lang:
-        candidates.append(lang)
-    if sys.platform == "win32":
-        try:
-            import ctypes
-            lcid = ctypes.windll.kernel32.GetUserDefaultUILanguage()
-            # 0x0409 = en-US, 0x0804 = zh-CN, 0x0419 = ru-RU
-            lcid_to_locale = {
-                0x0409: "en", 0x0809: "en", 0x0c09: "en", 0x1009: "en",
-                0x040C: "en", 0x080C: "en",
-                0x0404: "zh", 0x0804: "zh", 0x0c04: "zh", 0x1004: "zh",
-                0x0419: "ru", 0x0819: "ru",
-            }
-            mapped = lcid_to_locale.get(lcid)
-            if mapped:
-                candidates.append(mapped)
-        except (OSError, AttributeError):
-            pass
-    for raw in candidates:
-        norm = normalize_locale(raw)
-        if norm in SUPPORTED_LOCALES:
-            return norm
-    return ""
-
-
-def resolve_locale(*, flag: str | None = None) -> tuple[str, str]:
-    """Walk the priority list and return ``(locale, source)``.
-
-    Sources in priority order:
-        1. ``--lang`` CLI flag (passed via ``flag=``).
-        2. ``LOOPOS_LANG`` environment variable.
-        3. ``~/.loopos/config.json`` (persisted by ``loopos locale set``).
-        4. System auto-detect (LANG / LANGUAGE / Windows UI lang).
-        5. :data:`FALLBACK_LOCALE` (``"en"``).
-    """
-    candidates: list[tuple[str, str]] = [
-        ("--lang flag", flag or ""),
-        ("LOOPOS_LANG env", os.environ.get("LOOPOS_LANG", "")),
-        ("~/.loopos/config.json", _read_persisted_locale()),
-        ("system locale", _autodetect_locale()),
-    ]
-    for source, raw in candidates:
-        norm = normalize_locale(raw) if raw else ""
-        if norm in SUPPORTED_LOCALES:
-            return norm, source
-    return FALLBACK_LOCALE, "fallback"
-
-
-# ---------------------------------------------------------------------------
-# Module-level active state
-# ---------------------------------------------------------------------------
-
-_ACTIVE_LOCALE: str = FALLBACK_LOCALE
-_ACTIVE_SOURCE: str = "default"
-
-
-def get_locale() -> str:
-    return _ACTIVE_LOCALE
-
-
-def active_source() -> str:
-    return _ACTIVE_SOURCE
-
-
-def set_locale(locale: str, *, source: str = "manual") -> None:
-    """Override the active locale (used by the ``locale`` subcommand
-    and tests). Unknown locales are coerced to English.
-    """
-    global _ACTIVE_LOCALE, _ACTIVE_SOURCE
-    norm = normalize_locale(locale)
-    _ACTIVE_LOCALE = norm if norm in SUPPORTED_LOCALES else FALLBACK_LOCALE
-    _ACTIVE_SOURCE = source
-
-
-def init_locale(*, flag: str | None = None) -> str:
-    """Resolve + apply the locale for this process. Idempotent; safe
-    to call from ``app.main`` at startup.
-    """
-    locale, source = resolve_locale(flag=flag)
-    set_locale(locale, source=source)
-    return locale
-
-
-# ---------------------------------------------------------------------------
-# Persistence (used by ``loopos locale set``)
-# ---------------------------------------------------------------------------
-
-
-def persist_locale(locale: str) -> Path:
-    """Write ``locale`` to ``~/.loopos/config.json``. Returns the
-    config path. Creates parent directories as needed.
-    """
-    path = _config_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    existing: dict[str, Any] = {}
-    if path.exists():
-        try:
-            with path.open("r", encoding="utf-8") as handle:
-                parsed = json.loads(handle.read())
-                if isinstance(parsed, dict):
-                    existing = parsed
-        except (OSError, json.JSONDecodeError):
-            existing = {}
-    existing["locale"] = normalize_locale(locale) or FALLBACK_LOCALE
-    with path.open("w", encoding="utf-8") as handle:
-        handle.write(json.dumps(existing, ensure_ascii=False, indent=2))
-        handle.write("\n")
-    return path
-
-
-# ---------------------------------------------------------------------------
-# Translation lookup
-# ---------------------------------------------------------------------------
-
-
-def _lookup(catalog: dict[str, Any], dotted_key: str) -> Any:
-    """Drill into a nested catalog by dotted key path."""
-    node: Any = catalog
-    for part in dotted_key.split("."):
-        if isinstance(node, dict) and part in node:
-            node = node[part]
-        else:
-            return None
-    return node
-
-
-def _format(template: str, kwargs: dict[str, Any]) -> str:
-    if not kwargs:
-        return template
-    try:
-        return template.format(**kwargs)
-    except (KeyError, IndexError):
-        # Unknown placeholder — return the raw template so the user
-        # can spot the typo.
-        return template
-
-
-def t(key: str, **kwargs: Any) -> str:
-    """Translate a dotted key for the active locale.
-
-    Resolution:
-        1. Active locale catalog (``loopos.i18n.<locale>.json``).
-        2. English catalog fallback.
-        3. The key itself, formatted with ``kwargs``.
-
-    ``**kwargs`` substitutes ``{name}`` placeholders in the translated
-    string. Unknown placeholders are left as-is rather than raising
-    so a half-translated string still prints something useful.
-    """
-    active = get_locale()
-    for locale in (active, FALLBACK_LOCALE):
-        catalog = load_catalog(locale)
-        value = _lookup(catalog, key)
-        if isinstance(value, str):
-            return _format(value, kwargs)
-    # Nothing matched — emit the key so it's obvious in the output.
-    return _format(key, kwargs)
+# Re-export the simple_yaml parser under its private name for
+# backward compat with anything that imported it from __init__.
+_parse_simple_yaml = parse_simple_yaml
 
 
 __all__ = [
     "FALLBACK_LOCALE",
+    "PACKAGE_DIR",
     "SUPPORTED_LOCALES",
+    "_autodetect_locale",
+    "_clear_catalog_cache",
+    "_config_path",
+    "_read_catalog_file",
+    "_read_persisted_locale",
     "active_source",
     "get_locale",
     "init_locale",
     "load_catalog",
     "normalize_locale",
+    "parse_simple_yaml",
     "persist_locale",
     "resolve_locale",
     "set_locale",
     "supported_locales",
     "t",
+    "validate_locale",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Translation
+# ---------------------------------------------------------------------------
+
+
+_ACTIVE_LOCALE: str = FALLBACK_LOCALE
+_ACTIVE_SOURCE: str = "default"
+
+
+def get_locale() -> str:  # noqa: F811 -- re-exported above; here for type
+    """Return the active locale id (``"en"`` / ``"zh"`` / etc.)."""
+    return _ACTIVE_LOCALE
+
+
+def active_source() -> str:  # noqa: F811
+    """Return the source of the active locale (for diagnostics).
+
+    Possible values: ``"default"`` | ``"manual"`` | ``"env"`` |
+    ``"flag"`` | ``"persisted"`` | ``"system"`` | ``"fallback"``.
+    """
+    return _ACTIVE_SOURCE
+
+
+def set_locale(locale: str, *, source: str = "manual") -> None:  # noqa: F811
+    """Set the active locale (idempotent). ``source`` is recorded for
+    diagnostics and the ``active_source()`` getter.
+    """
+    global _ACTIVE_LOCALE, _ACTIVE_SOURCE
+    normalized = normalize_locale(locale)
+    if normalized in SUPPORTED_LOCALES:
+        _ACTIVE_LOCALE = normalized
+    else:
+        _ACTIVE_LOCALE = FALLBACK_LOCALE
+    _ACTIVE_SOURCE = source
+
+
+def t(key: str, **kwargs: Any) -> str:
+    """Translate ``key`` (a dotted path like ``"panel.run.title"``).
+
+    Resolution order: active locale → English fallback → key
+    verbatim. Missing keys never raise; they degrade gracefully.
+    Optional ``kwargs`` are substituted into the translated string
+    via :func:`str.format`.
+    """
+    raw = _lookup(_ACTIVE_LOCALE, key)
+    if raw is None:
+        raw = _lookup(FALLBACK_LOCALE, key)
+    if raw is None:
+        return key
+    if not kwargs:
+        return raw
+    try:
+        return raw.format(**kwargs)
+    except (KeyError, IndexError, ValueError):
+        return raw
+
+
+def _lookup(locale: str, key: str) -> str | None:
+    """Walk the dotted key path through the catalog tree.
+
+    Returns ``None`` if any segment is missing, so the caller can
+    fall through to the next locale.
+    """
+    catalog = load_catalog(locale)
+    node: Any = catalog
+    for segment in key.split("."):
+        if not isinstance(node, dict):
+            return None
+        if segment not in node:
+            return None
+        node = node[segment]
+    if not isinstance(node, str):
+        return None
+    return node

@@ -15,7 +15,13 @@ from loopos.cli.fallback import fallback_main
 def test_locale_list_json(capsys: pytest.CaptureFixture[str]) -> None:
     assert locale_command("list", json_output=True) == 0
     payload = json.loads(capsys.readouterr().out)
-    assert {item["id"] for item in payload["locales"]} == {"zh", "en", "ru"}
+    # v0.4.x: 16 supported locales (3 legacy JSON + 13 new YAML drafts).
+    ids = {item["id"] for item in payload["locales"]}
+    assert {"zh", "en", "ru"} <= ids  # legacy subset still present
+    assert "zh-hant" in ids  # Traditional Chinese
+    assert "de" in ids  # German
+    assert "ja" in ids  # Japanese
+    assert len(ids) >= 16
 
 
 def test_extract_lang_flag_cleans_argv(monkeypatch: pytest.MonkeyPatch) -> None:

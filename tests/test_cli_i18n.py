@@ -57,10 +57,12 @@ class TestNormalizeLocale:
         assert normalize_locale("English") == "en"
         assert normalize_locale("Russian") == "ru"
 
-    def test_unknown_returns_input_unchanged(self) -> None:
-        assert normalize_locale("ja") == "ja"
-        assert normalize_locale("xx-YY") == "xx-yy"
-        assert normalize_locale("") == ""
+    def test_unknown_returns_fallback(self) -> None:
+        # v0.4.x: ja is now a real locale; the only unknown is "xx-YY"
+        # and "" (empty).
+        assert normalize_locale("ja") == "ja"  # real locale, kept
+        assert normalize_locale("xx-YY") == "en"  # unknown -> fallback
+        assert normalize_locale("") == "en"  # empty -> fallback
 
 
 class TestTranslation:
@@ -70,18 +72,22 @@ class TestTranslation:
         assert t("panel.run.title") != catalog_text("en", "panel.run.title")
 
     def test_english_fallback_when_active_key_is_missing(self) -> None:
-        import loopos.i18n as i18n
+        # v0.4.x: catalog cache lives in ``_catalogs``; we clear it
+        # so the next ``load_catalog`` call rebuilds from disk.
+        from loopos.i18n import _clear_catalog_cache
+        from loopos.i18n._catalogs import _CATALOGS
 
-        original = i18n._CATALOGS.get("zh")
-        i18n._CATALOGS["zh"] = {"_meta": {"locale": "zh"}}
+        original = _CATALOGS.get("zh")
+        _CATALOGS["zh"] = {"_meta": {"locale": "zh"}}
         try:
             set_locale("zh", source="test")
             assert t("panel.run.title") == catalog_text("en", "panel.run.title")
         finally:
             if original is None:
-                i18n._CATALOGS.pop("zh", None)
+                _CATALOGS.pop("zh", None)
             else:
-                i18n._CATALOGS["zh"] = original
+                _CATALOGS["zh"] = original
+            _clear_catalog_cache()
 
     def test_key_verbatim_when_key_is_missing_everywhere(self) -> None:
         set_locale("zh", source="test")
@@ -121,7 +127,9 @@ class TestCatalog:
         assert next(item for item in out if item["id"] == "en")["draft"] == ""
 
     def test_unknown_locale_returns_empty_catalog(self) -> None:
-        assert load_catalog("ja") == {}
+        # v0.4.x: ja is now a real locale (YAML draft). Pick a
+        # locale that does NOT exist on disk.
+        assert load_catalog("xx-nonexistent") == {}
 
 
 class TestResolveLocale:
@@ -144,7 +152,7 @@ class TestResolveLocale:
         monkeypatch.setattr("loopos.i18n._autodetect_locale", lambda: "ru")
         locale, source = resolve_locale(flag=None)
         assert locale == "zh"
-        assert "config" in source
+        assert "persisted" in source
 
     def test_fallback_when_nothing_matches(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr("loopos.i18n._read_persisted_locale", lambda: "")
