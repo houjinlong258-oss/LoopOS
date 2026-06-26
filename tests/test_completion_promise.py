@@ -13,7 +13,6 @@ bounded by ``max_iterations`` (the outer budget gate still applies).
 """
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
@@ -158,8 +157,16 @@ class TestLoopStatePromise:
 class TestLoopRunWithPromise:
     """Smoke test: drive the LoopEngine end-to-end with a promise."""
 
-    def test_promise_match_short_circuits(self, tmp_path: Path) -> None:
-        os.chdir(tmp_path)
+    def test_promise_match_short_circuits(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Use ``monkeypatch.chdir`` rather than ``os.chdir`` so the
+        # original working directory is restored at test end. A raw
+        # ``os.chdir`` would leak to subsequent tests in the run and
+        # break any test that uses relative paths (e.g. the
+        # ``Path("loopos/...")`` assertions in
+        # ``test_fusion_router_kernel_wiring.py``).
+        monkeypatch.chdir(tmp_path)
         from loopos.loop_engine.loop import LoopEngine
         engine = LoopEngine()
         # Inject a custom builder whose summary contains the promise
@@ -198,8 +205,12 @@ class TestLoopRunWithPromise:
         assert last.convergence.status == "deliver"
         assert "completion_promise" in (last.convergence.reason or "")
 
-    def test_no_match_runs_full_budget(self, tmp_path: Path) -> None:
-        os.chdir(tmp_path)
+    def test_no_match_runs_full_budget(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # See test_promise_match_short_circuits for why we use
+        # ``monkeypatch.chdir`` rather than ``os.chdir``.
+        monkeypatch.chdir(tmp_path)
         from loopos.loop_engine.loop import LoopEngine
         engine = LoopEngine()
         state = engine.run(
@@ -215,8 +226,12 @@ class TestLoopRunWithPromise:
         assert len(state.iterations) == 3
         assert state.current_status == "initialized"
 
-    def test_no_promise_means_no_short_circuit(self, tmp_path: Path) -> None:
-        os.chdir(tmp_path)
+    def test_no_promise_means_no_short_circuit(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # See test_promise_match_short_circuits for why we use
+        # ``monkeypatch.chdir`` rather than ``os.chdir``.
+        monkeypatch.chdir(tmp_path)
         from loopos.loop_engine.loop import LoopEngine
         engine = LoopEngine()
         state = engine.run(

@@ -14,7 +14,11 @@ import json
 from pathlib import Path
 from typing import Any
 
-I18N_DIR = Path(r"D:\LoopOS\loopos\i18n")
+# ``I18N_DIR`` is resolved relative to this script's location, NOT
+# hardcoded to an absolute dev path, so the file passes the strict
+# release readiness check (LEAKED_DEV_PATH) on every contributor's
+# machine.
+I18N_DIR = Path(__file__).resolve().parent.parent / "loopos" / "i18n"
 
 # Source: English catalog (canonical).
 with (I18N_DIR / "en.json").open(encoding="utf-8") as f:
