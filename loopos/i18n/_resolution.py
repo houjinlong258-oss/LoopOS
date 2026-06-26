@@ -22,7 +22,6 @@ from __future__ import annotations
 import json
 import os
 import sys
-from pathlib import Path
 from typing import Optional
 
 from loopos.i18n._catalogs import (
@@ -71,11 +70,21 @@ def normalize_locale(value: str) -> str:
 
 
 def _read_persisted_locale() -> Optional[str]:
-    """Read the persisted locale from ``~/.loopos/config.json``.
+    """Read the persisted locale from ``loopos.i18n._config_path()``.
 
     Returns the ``locale`` field if present, else ``None``.
+
+    The path is resolved lazily through the public
+    ``loopos.i18n`` namespace so the same helper that
+    :func:`persist_locale` writes to is the helper this function
+    reads from. Tests can therefore monkeypatch
+    ``loopos.i18n._config_path`` and have both directions agree.
     """
-    config_path = Path.home() / ".loopos" / "config.json"
+    # Lazy import: keep this module independent of the public
+    # ``__init__`` at import time, and pick up test-time
+    # monkeypatches of ``loopos.i18n._config_path``.
+    import loopos.i18n as _i18n
+    config_path = _i18n._config_path()
     if not config_path.exists():
         return None
     try:
